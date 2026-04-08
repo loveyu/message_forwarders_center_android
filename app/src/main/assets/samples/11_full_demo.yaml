@@ -1,0 +1,220 @@
+# 完整演示配置
+# 演示：所有功能模块的联合配置，模拟智能家居数据采集与转发
+
+version: "2.0"
+
+# ============================================
+# 链接配置（支持 MQTT / WebSocket / TCP）
+# ============================================
+links:
+  # 主 MQTT Broker（仅 WiFi 环境）
+  - id: main_mqtt
+    type: mqtt
+    broker: tcp://mqtt.home.local:1883
+    clientId: home_forwarder
+    reconnect:
+      enabled: true
+      interval: 5s
+      maxInterval: 60s
+    enabledWhen:
+      network:
+        type: wifi
+        ipRanges: ["192.168.1.0/24"]
+      wifi:
+        ssid: ["HomeWiFi", "~HomeWiFi-.*"]
+
+  # 备用移动网络 MQTT
+  - id: mobile_mqtt
+    type: mqtt
+    broker: tcp://backup.example.com:1883
+    clientId: mobile_backup
+    reconnect:
+      enabled: true
+      interval: 10s
+      maxInterval: 120s
+    enabledWhen:
+      network:
+        type: mobile
+
+  # WebSocket 服务器
+  - id: ws_server
+    type: websocket
+    url: ws://api.example.com/ws
+    reconnect:
+      enabled: true
+
+  # 局域网 TCP 设备
+  - id: tcp_device
+    type: tcp
+    host: 192.168.1.50
+    port: 9000
+
+# ============================================
+# 输入配置
+# ============================================
+inputs:
+  http:
+    # HTTP Webhook 接收口
+    - name: http_webhook
+      listen: "0.0.0.0"
+      port: 8080
+      path: /webhook/sensor
+      auth:
+        type: bearer
+        bearer:
+          token: secure-webhook-token
+
+  link:
+    # 从主 MQTT 订阅传感器数据
+    - name: mqtt_sensors
+      linkId: main_mqtt
+      role: consumer
+      topic: home/sensors/#
+      qos: 1
+
+    # 从 WebSocket 接收远程命令
+    - name: ws_commands
+      linkId: ws_server
+      role: consumer
+
+    # 从 TCP 设备读取数据
+    - name: tcp_sensor
+      linkId: tcp_device
+      role: consumer
+
+# ============================================
+# 队列配置
+# ============================================
+queues:
+  memory:
+    # 高速缓存队列
+    sensor_buffer:
+      capacity: 5000
+      workers: 4
+      overflow: dropOldest
+
+  sqlite:
+    # 持久化存储队列
+    sensor_archive:
+      path: /data/queues/sensors.db
+      batchSize: 50
+      retryInterval: 5s
+      maxRetry: 10
+      backoff:
+        type: exponential
+        initial: 2s
+        max: 5m
+      cleanup:
+        maxAge: 30d
+
+# ============================================
+# 输出配置
+# ============================================
+outputs:
+  http:
+    # 转发到云端 API
+    - name: cloud_api
+      url: https://api.example.com/v2/data
+      method: POST
+      timeout: 10s
+      retry:
+        maxAttempts: 3
+        interval: 2s
+      queue:
+        sqliteQueue: sensor_archive
+
+  link:
+    # 通过 TCP 发送到设备
+    - name: device_control
+      linkId: tcp_device
+      role: producer
+
+    # 通过 WebSocket 发送
+    - name: ws_feedback
+      linkId: ws_server
+      role: producer
+
+  internal:
+    # 复制到剪贴板（调试用）
+    - name: debug_clipboard
+      type: clipboard
+
+    # 保存原始数据到文件
+    - name: raw_data_log
+      type: file
+      basePath: /data/logs/raw
+      options:
+        auto_extension: true
+
+    # 应用内广播
+    - name: app_broadcast
+      type: broadcast
+      channel: sensor_events
+
+# ============================================
+# 规则配置
+# ============================================
+rules:
+  # 处理 HTTP Webhook 传感器数据
+  - name: process_http_sensor
+    from: http_webhook
+    pipeline:
+      - transform:
+          extract: "data"           # 提取 data 字段
+          filter: "len(data) > 0"   # 过滤空数据
+        to: [cloud_api, raw_data_log]
+
+  # 处理 MQTT 传感器数据
+  - name: process_mqtt_sensor
+    from: mqtt_sensors
+    pipeline:
+      - transform:
+          extract: "temperature"
+          filter: "temperature > 0"
+        to: [cloud_api, debug_clipboard]
+    onError:
+      - to: [raw_data_log]
+
+  # 处理 TCP 设备数据
+  - name: process_tcp_data
+    from: tcp_sensor
+    pipeline:
+      - transform:
+          detect: "json"
+        to: [cloud_api, app_broadcast]
+
+  # 处理 WebSocket 命令
+  - name: process_ws_command
+    from: ws_commands
+    pipeline:
+      - transform:
+          extract: "command"
+        to: [device_control, debug_clipboard]
+
+  # 媒体类型过滤
+  - name: image_only
+    from: http_webhook
+    pipeline:
+      - transform:
+          detect: "image"           # 只处理图片
+        to: [raw_data_log]
+
+  # JSON 验证
+  - name: json_validation
+    from: http_webhook
+    pipeline:
+      - transform:
+          detect: "json"            # 只处理 JSON
+        to: [cloud_api]
+    onError:
+      - to: [debug_clipboard]
+
+# ============================================
+# 死信队列配置
+# ============================================
+deadLetter:
+  enabled: true
+  maxRetry: 5
+  action:
+    # 失败后保存到独立文件
+    - to: [raw_data_log]

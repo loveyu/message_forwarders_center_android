@@ -1,0 +1,39 @@
+# MQTT 基础连接示例
+# 演示：基本 MQTT 链接配置，包含重连和 TLS 支持
+
+version: "2.0"
+
+links:
+  - id: local_mqtt
+    type: mqtt
+    broker: tcp://localhost:1883
+    clientId: client_001
+    reconnect:
+      enabled: true
+      interval: 5s
+      maxInterval: 60s
+    tls:
+      # ca: /path/to/ca.pem      # CA 证书
+      # cert: /path/to/cert.pem  # 客户端证书
+      # key: /path/to/key.pem    # 客户端私钥
+
+inputs:
+  link:
+    - name: mqtt_consumer
+      linkId: local_mqtt
+      role: consumer
+      topic: sensor/data
+      qos: 1
+
+outputs:
+  link:
+    - name: mqtt_producer
+      linkId: local_mqtt
+      role: producer
+      topic: actuator/commands
+
+rules:
+  - name: mqtt_forward
+    from: mqtt_consumer
+    pipeline:
+      - to: [mqtt_producer]

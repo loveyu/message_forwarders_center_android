@@ -1,0 +1,113 @@
+# 规则引擎示例
+# 演示：JSON 数据提取、过滤、媒体类型检测
+
+version: "2.0"
+
+links:
+  - id: mqtt_broker
+    type: mqtt
+    broker: tcp://localhost:1883
+
+inputs:
+  link:
+    - name: sensor_data
+      linkId: mqtt_broker
+      role: consumer
+      topic: sensors/#
+
+outputs:
+  http:
+    - name: api_server
+      url: http://api.example.com/data
+      method: POST
+
+  internal:
+    - name: clipboard_out
+      type: clipboard
+
+rules:
+  # 示例1：基础 JSON 字段提取
+  - name: extract_temperature
+    from: sensor_data
+    pipeline:
+      - transform:
+          extract: "data.temperature"    # 提取 JSON 路径
+        to: [api_server]
+
+  # 示例2：提取后过滤（数组长度）
+  - name: filter_by_array_length
+    from: sensor_data
+    pipeline:
+      - transform:
+          extract: "data.devices"
+          filter: "len(data.devices) > 0"  # 只处理有设备的
+        to: [api_server]
+
+  # 示例3：字段值比较过滤
+  - name: filter_by_value
+    from: sensor_data
+    pipeline:
+      - transform:
+          extract: "$raw"                # $raw 表示整个 JSON 对象
+          filter: "data.status == active"  # 只处理 active 状态
+        to: [api_server]
+
+  # 示例4：数值比较过滤
+  - name: filter_by_number
+    from: sensor_data
+    pipeline:
+      - transform:
+          extract: "data.temperature"
+          filter: "data.temperature > 25"   # 温度大于 25
+        to: [clipboard_out]
+
+  # 示例5：多媒体类型检测
+  - name: detect_image
+    from: sensor_data
+    pipeline:
+      - transform:
+          detect: "image"                # 检测是否为图片
+        to: [clipboard_out]
+
+  # 示例6：JSON 类型检测
+  - name: detect_json
+    from: sensor_data
+    pipeline:
+      - transform:
+          detect: "json"                 # 检测是否为 JSON
+        to: [api_server]
+
+  # 示例7：文本类型检测
+  - name: detect_text
+    from: sensor_data
+    pipeline:
+      - transform:
+          detect: "text"                 # 检测是否为文本
+        to: [clipboard_out]
+
+  # 示例8：完整变换链（提取 -> 过滤 -> 发送）
+  - name: full_pipeline
+    from: sensor_data
+    pipeline:
+      - transform:
+          extract: "data.payload"
+          filter: "data.type == sensor"
+          detect: "json"
+        to: [api_server, clipboard_out]
+
+  # 示例9：错误处理链
+  - name: with_error_handling
+    from: sensor_data
+    pipeline:
+      - transform:
+          extract: "data.value"
+        to: [api_server]
+    onError:
+      - to: [clipboard_out]             # 处理失败时复制到剪贴板
+
+# 死信队列配置
+deadLetter:
+  enabled: true
+  maxRetry: 3
+  action:
+    - to: [clipboard_out]               # 重试失败后保存到剪贴板

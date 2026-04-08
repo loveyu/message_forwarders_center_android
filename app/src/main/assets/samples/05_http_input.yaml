@@ -1,0 +1,56 @@
+# HTTP 输入示例
+# 演示：NanoHTTPD 内置 HTTP 服务器，接收来自传感器或第三方的 HTTP 请求
+
+version: "2.0"
+
+inputs:
+  http:
+    # 示例1：基础 HTTP 服务
+    - name: http_basic
+      listen: "0.0.0.0"
+      port: 8080
+      path: /webhook
+
+    # 示例2：带 Basic 认证
+    - name: http_basic_auth
+      listen: "0.0.0.0"
+      port: 8081
+      path: /api/data
+      auth:
+        type: basic
+        basic:
+          username: admin
+          password: secret123
+
+    # 示例3：带 Bearer Token 认证
+    - name: http_bearer_auth
+      listen: "0.0.0.0"
+      port: 8082
+      path: /api/secure
+      auth:
+        type: bearer
+        bearer:
+          token: your-secret-token-here
+
+    # 示例4：带 Query 参数认证
+    - name: http_query_auth
+      listen: "0.0.0.0"
+      port: 8083
+      path: /api/v2/data
+      auth:
+        type: query
+        query:
+          key: apikey
+          value: your-api-key
+
+outputs:
+  internal:
+    - name: log_to_file
+      type: file
+      basePath: /data/logs/http_input
+
+rules:
+  - name: http_webhook
+    from: http_basic
+    pipeline:
+      - to: [log_to_file]

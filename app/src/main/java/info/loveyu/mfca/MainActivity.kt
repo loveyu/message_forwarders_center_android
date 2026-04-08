@@ -17,6 +17,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,9 +28,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.service.ForwardService
+import info.loveyu.mfca.config.ConfigLoader
+import info.loveyu.mfca.ui.HelpScreen
 import info.loveyu.mfca.util.ConfigBackupManager
 import info.loveyu.mfca.util.ConfigDownloader
-import info.loveyu.mfca.util.ConfigValidator
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
 import kotlinx.coroutines.launch
@@ -66,10 +69,16 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme {
-                MainScreen(
-                    onStartServer = { startServer() },
-                    onStopServer = { stopServer() }
-                )
+                var showHelp by remember { mutableStateOf(false) }
+                if (showHelp) {
+                    HelpScreen(onBack = { showHelp = false })
+                } else {
+                    MainScreen(
+                        onStartServer = { startServer() },
+                        onStopServer = { stopServer() },
+                        onShowHelp = { showHelp = true }
+                    )
+                }
             }
         }
     }
@@ -109,7 +118,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainScreen(
     onStartServer: () -> Unit,
-    onStopServer: () -> Unit
+    onStopServer: () -> Unit,
+    onShowHelp: () -> Unit
 ) {
     val context = LocalContext.current
     val preferences = remember { Preferences(context) }
@@ -181,28 +191,35 @@ fun MainScreen(
             isLoading = false
             result.fold(
                 onSuccess = { content ->
-                    LogManager.appendLog("CONFIG", "配置下载成功，开始校验...")
+                    LogManager.appendLog("CONFIG", "配置下载成功，开始解析...")
 
-                    val validation = ConfigValidator.validate(content)
-                    if (validation.isValid) {
-                        ConfigBackupManager.backupCurrentConfig(context, preferences.toJsonString())
-                        LogManager.appendLog("CONFIG", "原配置已备份")
+                    try {
+                        // Parse YAML config
+                        val config = ConfigLoader.loadConfig(content)
+                        LogManager.appendLog("CONFIG", "配置解析成功，版本: ${config.version}")
 
-                        if (preferences.loadConfigFromJson(content)) {
-                            preferences.saveFullConfig(content)
-                            preferences.configFilePath = configUrl
-                            port = preferences.port
-                            forwardTarget = preferences.forwardTarget
-                            autoStart = preferences.autoStart
+                        // Backup current config if exists
+                        val currentConfig = preferences.loadFullConfig()
+                        if (currentConfig != null) {
+                            ConfigBackupManager.backupCurrentConfig(context, currentConfig)
+                            LogManager.appendLog("CONFIG", "原配置已备份")
+                        }
 
-                            LogManager.appendLog("CONFIG", "配置应用成功")
+                        // Save config
+                        preferences.saveFullConfig(content)
+                        preferences.configFilePath = configUrl
+
+                        // Try to start with new config via ForwardService
+                        val success = ForwardService.loadConfig(content)
+                        if (success) {
+                            LogManager.appendLog("CONFIG", "YAML配置应用成功")
                             Toast.makeText(context, R.string.config_download_success, Toast.LENGTH_SHORT).show()
                         } else {
-                            LogManager.appendLog("CONFIG", "配置解析失败")
+                            LogManager.appendLog("CONFIG", "配置加载失败")
                             Toast.makeText(context, R.string.config_validate_failed, Toast.LENGTH_SHORT).show()
                         }
-                    } else {
-                        LogManager.appendLog("CONFIG", "配置校验失败: ${validation.errorMessage}")
+                    } catch (e: Exception) {
+                        LogManager.appendLog("CONFIG", "配置解析失败: ${e.message}")
                         Toast.makeText(context, R.string.config_validate_failed, Toast.LENGTH_SHORT).show()
                     }
                 },
@@ -217,14 +234,20 @@ fun MainScreen(
     fun handleReloadConfig() {
         val savedConfig = preferences.loadFullConfig()
         if (savedConfig != null) {
-            if (preferences.loadConfigFromJson(savedConfig)) {
-                port = preferences.port
-                forwardTarget = preferences.forwardTarget
-                autoStart = preferences.autoStart
-                LogManager.appendLog("CONFIG", "配置重载成功")
-                Toast.makeText(context, R.string.config_reload_success, Toast.LENGTH_SHORT).show()
-            } else {
-                LogManager.appendLog("CONFIG", "配置重载失败")
+            try {
+                val config = ConfigLoader.loadConfig(savedConfig)
+                LogManager.appendLog("CONFIG", "配置解析成功")
+
+                val success = ForwardService.loadConfig(savedConfig)
+                if (success) {
+                    LogManager.appendLog("CONFIG", "配置重载成功")
+                    Toast.makeText(context, R.string.config_reload_success, Toast.LENGTH_SHORT).show()
+                } else {
+                    LogManager.appendLog("CONFIG", "配置重载失败")
+                    Toast.makeText(context, R.string.config_reload_failed, Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                LogManager.appendLog("CONFIG", "配置重载失败: ${e.message}")
                 Toast.makeText(context, R.string.config_reload_failed, Toast.LENGTH_SHORT).show()
             }
         } else {
@@ -236,17 +259,26 @@ fun MainScreen(
     fun handleRestoreBackup(backup: ConfigBackupManager.BackupInfo) {
         val content = ConfigBackupManager.restoreBackup(backup)
         if (content != null) {
-            ConfigBackupManager.backupCurrentConfig(context, preferences.toJsonString())
+            // Backup current config
+            val currentConfig = preferences.loadFullConfig()
+            if (currentConfig != null) {
+                ConfigBackupManager.backupCurrentConfig(context, currentConfig)
+            }
 
-            if (preferences.loadConfigFromJson(content)) {
+            try {
+                val config = ConfigLoader.loadConfig(content)
                 preferences.saveFullConfig(content)
-                port = preferences.port
-                forwardTarget = preferences.forwardTarget
-                autoStart = preferences.autoStart
-                LogManager.appendLog("CONFIG", "已恢复备份: ${backup.displayName}")
-                Toast.makeText(context, R.string.config_restore_success, Toast.LENGTH_SHORT).show()
-            } else {
-                LogManager.appendLog("CONFIG", "备份恢复失败")
+
+                val success = ForwardService.loadConfig(content)
+                if (success) {
+                    LogManager.appendLog("CONFIG", "已恢复备份: ${backup.displayName}")
+                    Toast.makeText(context, R.string.config_restore_success, Toast.LENGTH_SHORT).show()
+                } else {
+                    LogManager.appendLog("CONFIG", "备份恢复失败")
+                    Toast.makeText(context, R.string.config_restore_failed, Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                LogManager.appendLog("CONFIG", "备份恢复失败: ${e.message}")
                 Toast.makeText(context, R.string.config_restore_failed, Toast.LENGTH_SHORT).show()
             }
         } else {
@@ -270,7 +302,15 @@ fun MainScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.app_name)) }
+                title = { Text(stringResource(R.string.app_name)) },
+                actions = {
+                    IconButton(onClick = onShowHelp) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "帮助"
+                        )
+                    }
+                }
             )
         }
     ) { padding ->

@@ -1,0 +1,63 @@
+# 配置示例说明
+
+本文档包含 Message Forwarders Center Android 的完整配置示例。
+
+## 文件列表
+
+| 文件 | 说明 |
+|------|------|
+| `01_basic_mqtt.yaml` | MQTT 基础连接 - 基本链接配置、重连、TLS |
+| `02_websocket_link.yaml` | WebSocket 连接 - WS/WSS 配置 |
+| `03_tcp_link.yaml` | TCP 连接 - Socket 配置 |
+| `04_network_conditions.yaml` | **网络条件控制** - WiFi SSID/BSSID、IP 段 |
+| `05_http_input.yaml` | HTTP 输入 - NanoHTTPD、认证方式 |
+| `06_link_input_output.yaml` | Link 输入输出 - 订阅/发布示例 |
+| `07_memory_queue.yaml` | 内存队列 - 高性能临时缓冲 |
+| `08_sqlite_queue.yaml` | SQLite 持久化队列 - 重试、清理 |
+| `09_outputs.yaml` | 输出模块 - HTTP/Link/Internal |
+| `10_rules.yaml` | 规则引擎 - 提取、过滤、检测 |
+| `11_full_demo.yaml` | **完整演示** - 智能家居场景 |
+
+## 网络条件配置说明
+
+`enabledWhen` 字段支持以下条件组合：
+
+```yaml
+enabledWhen:
+  network:
+    type: wifi      # mobile | wifi | any
+    ipRanges:       # IP 段列表，支持 CIDR
+      - "192.168.1.0/24"
+      - "10.0.0.5"
+  wifi:
+    ssid:           # WiFi 名称列表，支持正则（~开头）
+      - "MyWiFi"
+      - "~MyWiFi-.*"
+    bssid:          # WiFi MAC 地址列表
+      - "AA:BB:CC:DD:EE:FF"
+```
+
+## 规则引擎语法
+
+### 提取 (extract)
+- `"field"` - 提取字段
+- `"data.nested.field"` - 嵌套路径
+- `"data.list[0]"` - 数组索引
+- `"$raw"` - 整个 JSON 对象
+
+### 过滤 (filter)
+- `"len(path) > N"` - 数组/字符串长度
+- `"path == value"` - 相等比较
+- `"path != value"` - 不等比较
+- `"path > N"` - 数值比较
+
+### 检测 (detect)
+- `"image"` - PNG/JPEG/GIF/BMP/WebP
+- `"json"` - JSON 格式
+- `"text"` - 文本内容
+
+## 使用方法
+
+1. 复制示例文件到配置目录
+2. 根据实际环境修改地址、端口、凭证
+3. 通过 UI 加载配置或使用文件路径

@@ -14,8 +14,18 @@ import android.os.IBinder
 import android.util.Log
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
+import info.loveyu.mfca.config.AppConfig
+import info.loveyu.mfca.config.ConfigLoader
+import info.loveyu.mfca.deadletter.DeadLetterHandler
+import info.loveyu.mfca.input.InputManager
+import info.loveyu.mfca.input.InputMessage
+import info.loveyu.mfca.link.LinkManager
+import info.loveyu.mfca.pipeline.RuleEngine
+import info.loveyu.mfca.queue.QueueManager
+import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.server.HttpServer
 import info.loveyu.mfca.server.MessageForwarder
+import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
 import java.io.IOException
 
@@ -30,6 +40,7 @@ class ForwardService : Service() {
         const val ACTION_STOP = "info.loveyu.mfca.action.STOP"
         const val ACTION_TOGGLE_RECEIVE = "info.loveyu.mfca.action.TOGGLE_RECEIVE"
         const val ACTION_TOGGLE_FORWARD = "info.loveyu.mfca.action.TOGGLE_FORWARD"
+        const val ACTION_RELOAD_CONFIG = "info.loveyu.mfca.action.RELOAD_CONFIG"
 
         @Volatile
         var isRunning = false
@@ -55,15 +66,36 @@ class ForwardService : Service() {
 
         private var serviceInstance: ForwardService? = null
 
+        // Current loaded config
+        @Volatile
+        var currentConfig: AppConfig? = null
+            private set
+
         fun isServiceAlive(): Boolean = serviceInstance != null
 
         fun refreshNotification() {
             serviceInstance?.updateNotification()
         }
+
+        fun loadConfig(yamlContent: String): Boolean {
+            return try {
+                val config = ConfigLoader.loadConfig(yamlContent)
+                serviceInstance?.applyConfig(config)
+                true
+            } catch (e: Exception) {
+                LogManager.appendLog("CONFIG", "Failed to load config: ${e.message}")
+                false
+            }
+        }
     }
 
     private var httpServer: HttpServer? = null
+    private var legacyMode = true
     private lateinit var preferences: Preferences
+
+    // New architecture components
+    private var ruleEngine: RuleEngine? = null
+    private var deadLetterHandler: DeadLetterHandler? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -75,7 +107,7 @@ class ForwardService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
-                stopHttpServer()
+                stopAll()
                 updateNotification()
                 onStatsChanged?.invoke()
                 return START_STICKY
@@ -94,6 +126,10 @@ class ForwardService : Service() {
                 onStatsChanged?.invoke()
                 return START_STICKY
             }
+            ACTION_RELOAD_CONFIG -> {
+                reloadConfig()
+                return START_STICKY
+            }
         }
 
         isReceivingEnabled = preferences.receivingEnabled
@@ -106,8 +142,8 @@ class ForwardService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        if (intent?.action == ACTION_START && httpServer == null) {
-            startHttpServer()
+        if (intent?.action == ACTION_START) {
+            start()
         }
 
         return START_STICKY
@@ -117,12 +153,29 @@ class ForwardService : Service() {
 
     override fun onDestroy() {
         serviceInstance = null
-        stopHttpServer()
+        stopAll()
         super.onDestroy()
     }
 
-    private fun startHttpServer() {
-        if (httpServer != null) return
+    private fun start() {
+        // Try to load YAML config if available
+        val savedConfig = preferences.loadFullConfig()
+        if (savedConfig != null && savedConfig.isNotBlank()) {
+            try {
+                val config = ConfigLoader.loadConfig(savedConfig)
+                applyConfig(config)
+                return
+            } catch (e: Exception) {
+                LogManager.appendLog("CONFIG", "Failed to load saved config, falling back to legacy mode: ${e.message}")
+            }
+        }
+
+        // Fall back to legacy mode
+        startLegacyMode()
+    }
+
+    private fun startLegacyMode() {
+        if (legacyMode) return
 
         try {
             val port = preferences.port
@@ -146,20 +199,118 @@ class ForwardService : Service() {
             }
             httpServer?.startServer()
             isRunning = true
-            Log.i(TAG, "Forward service started on port $port")
+            LogManager.appendLog("SERVICE", "Legacy mode started on port $port")
         } catch (e: IOException) {
-            Log.e(TAG, "Failed to start HTTP server", e)
+            LogManager.appendLog("SERVICE", "Failed to start HTTP server: ${e.message}")
             stopSelf()
         }
     }
 
-    private fun stopHttpServer() {
+    private fun stopLegacyMode() {
         httpServer?.stopServer()
         httpServer = null
         isRunning = false
         receivedCount = 0
         forwardedCount = 0
-        Log.i(TAG, "Forward service stopped")
+    }
+
+    private fun applyConfig(config: AppConfig) {
+        LogManager.appendLog("CONFIG", "Applying new configuration...")
+
+        // Stop existing components
+        stopAll()
+
+        currentConfig = config
+        legacyMode = false
+
+        // Initialize components in order
+        try {
+            // 1. Initialize Links
+            LogManager.appendLog("CONFIG", "Initializing links...")
+            LinkManager.setContext(this)
+            LinkManager.initialize(config)
+
+            // 2. Initialize Queues
+            LogManager.appendLog("CONFIG", "Initializing queues...")
+            QueueManager.initialize(this, config)
+
+            // 3. Initialize Outputs
+            LogManager.appendLog("CONFIG", "Initializing outputs...")
+            OutputManager.initialize(this, config)
+
+            // 4. Initialize Dead Letter Handler
+            deadLetterHandler = DeadLetterHandler(config.deadLetter)
+
+            // 5. Initialize Rule Engine
+            LogManager.appendLog("CONFIG", "Initializing rule engine...")
+            ruleEngine = RuleEngine(config)
+
+            // 6. Initialize Inputs with message handler
+            LogManager.appendLog("CONFIG", "Initializing inputs...")
+            InputManager.initialize(config) { message ->
+                handleMessage(message)
+            }
+
+            // 7. Start all components
+            LinkManager.connectAll()
+            QueueManager.startAll()
+            InputManager.startAll()
+
+            isRunning = true
+            LogManager.appendLog("CONFIG", "Configuration applied successfully. Service started.")
+            updateNotification()
+        } catch (e: Exception) {
+            LogManager.appendLog("CONFIG", "Failed to apply config: ${e.message}")
+            e.printStackTrace()
+            // Fall back to legacy mode
+            legacyMode = true
+            startLegacyMode()
+        }
+    }
+
+    private fun handleMessage(message: InputMessage) {
+        if (!isReceivingEnabled) return
+
+        receivedCount++
+        onStatsChanged?.invoke()
+        updateNotification()
+
+        // Process through rule engine
+        ruleEngine?.process(message)
+
+        LogManager.appendLog("MESSAGE", "Processed: ${message.source} -> ${String(message.data).take(100)}")
+    }
+
+    private fun reloadConfig() {
+        val savedConfig = preferences.loadFullConfig()
+        if (savedConfig != null && savedConfig.isNotBlank()) {
+            try {
+                val config = ConfigLoader.loadConfig(savedConfig)
+                applyConfig(config)
+                LogManager.appendLog("CONFIG", "Config reloaded successfully")
+            } catch (e: Exception) {
+                LogManager.appendLog("CONFIG", "Failed to reload config: ${e.message}")
+            }
+        } else {
+            LogManager.appendLog("CONFIG", "No saved config to reload")
+        }
+    }
+
+    private fun stopAll() {
+        if (legacyMode) {
+            stopLegacyMode()
+        } else {
+            InputManager.stopAll()
+            QueueManager.stopAll()
+            LinkManager.disconnectAll()
+            OutputManager.clear()
+            isRunning = false
+            receivedCount = 0
+            forwardedCount = 0
+            ruleEngine = null
+            deadLetterHandler = null
+        }
+        LogManager.appendLog("SERVICE", "All components stopped")
     }
 
     private fun createNotificationChannel() {
@@ -179,12 +330,9 @@ class ForwardService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val modeText = if (legacyMode) "Legacy" else "Pipeline"
         val statusText = if (isRunning) {
-            val receiveStatus = if (isReceivingEnabled) getString(R.string.notification_receive_on)
-            else getString(R.string.notification_receive_off)
-            val forwardStatus = if (isForwardingEnabled) getString(R.string.notification_forward_on)
-            else getString(R.string.notification_forward_off)
-            "$receiveStatus · $forwardStatus"
+            "$modeText · ${getString(R.string.server_running)}"
         } else {
             getString(R.string.server_stopped)
         }
@@ -211,6 +359,15 @@ class ForwardService : Service() {
         val forwardTitle = if (isForwardingEnabled) getString(R.string.notification_action_stop_forward)
         else getString(R.string.notification_action_resume_forward)
 
+        // Reload config action
+        val reloadIntent = Intent(this, ForwardService::class.java).apply {
+            action = ACTION_RELOAD_CONFIG
+        }
+        val reloadPendingIntent = PendingIntent.getService(
+            this, 3, reloadIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.service_notification_title))
             .setContentText(statusText)
@@ -226,6 +383,11 @@ class ForwardService : Service() {
                 Icon.createWithResource(this, R.drawable.ic_notification_forward),
                 forwardTitle,
                 forwardPendingIntent
+            ).build())
+            .addAction(Notification.Action.Builder(
+                Icon.createWithResource(this, R.drawable.ic_notification_reload),
+                "Reload",
+                reloadPendingIntent
             ).build())
             .build()
     }

@@ -1,0 +1,54 @@
+# Link 输入输出示例
+# 演示：MQTT/WebSocket/TCP 作为数据源或目标
+
+version: "2.0"
+
+links:
+  - id: mqtt_broker
+    type: mqtt
+    broker: tcp://localhost:1883
+    clientId: forwarder_client
+
+  - id: ws_server
+    type: websocket
+    url: ws://localhost:8080/ws
+
+inputs:
+  link:
+    # 从 MQTT 订阅消息
+    - name: mqtt_sensors
+      linkId: mqtt_broker
+      role: consumer
+      topic: sensors/#
+      qos: 1
+
+    # 从 WebSocket 接收消息
+    - name: ws_messages
+      linkId: ws_server
+      role: consumer
+
+outputs:
+  link:
+    # 向 MQTT 发布消息
+    - name: mqtt_commands
+      linkId: mqtt_broker
+      role: producer
+      topic: actuators/commands
+
+    # 向 WebSocket 发送消息
+    - name: ws_response
+      linkId: ws_server
+      role: producer
+
+rules:
+  # 传感器数据转发到 MQTT
+  - name: sensor_to_mqtt
+    from: mqtt_sensors
+    pipeline:
+      - to: [mqtt_commands]
+
+  # WebSocket 消息转发
+  - name: ws_echo
+    from: ws_messages
+    pipeline:
+      - to: [ws_response]

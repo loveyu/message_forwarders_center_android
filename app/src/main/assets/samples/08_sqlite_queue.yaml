@@ -1,0 +1,64 @@
+# SQLite 持久化队列示例
+# 演示：磁盘持久化队列，支持重试和自动清理
+
+version: "2.0"
+
+queues:
+  sqlite:
+    # 基础持久化队列
+    persistent_queue:
+      path: /data/queues/main.db
+      batchSize: 20           # 批量处理大小
+      retryInterval: 5s       # 重试间隔
+      maxRetry: 10            # 最大重试次数
+      backoff:
+        type: exponential     # 指数退避
+        initial: 2s
+        max: 5m
+      cleanup:
+        maxAge: 7d            # 7天后自动清理
+
+    # 快速批量写入队列
+    batch_queue:
+      path: /data/queues/batch.db
+      batchSize: 100
+      retryInterval: 1s
+      maxRetry: 5
+
+    # 线性退避队列
+    linear_retry_queue:
+      path: /data/queues/linear.db
+      batchSize: 20
+      retryInterval: 3s
+      maxRetry: 15
+      backoff:
+        type: linear          # 线性退避
+        initial: 1s
+        max: 10m
+
+links:
+  - id: mqtt_broker
+    type: mqtt
+    broker: tcp://localhost:1883
+
+inputs:
+  link:
+    - name: data_input
+      linkId: mqtt_broker
+      role: consumer
+      topic: data/#
+
+outputs:
+  link:
+    - name: data_output
+      linkId: mqtt_broker
+      role: producer
+      topic: data/processed
+      queue:
+        sqliteQueue: persistent_queue
+
+rules:
+  - name: persist_and_forward
+    from: data_input
+    pipeline:
+      - to: [data_output]

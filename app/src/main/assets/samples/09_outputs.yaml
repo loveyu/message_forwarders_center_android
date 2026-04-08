@@ -1,0 +1,93 @@
+# 输出模块示例
+# 演示：HTTP 输出、Link 输出、Internal 输出（剪贴板/文件/广播）
+
+version: "2.0"
+
+links:
+  - id: mqtt_broker
+    type: mqtt
+    broker: tcp://localhost:1883
+
+inputs:
+  http:
+    - name: http_in
+      listen: "0.0.0.0"
+      port: 8080
+      path: /webhook
+
+outputs:
+  # HTTP 输出
+  http:
+    - name: http_post
+      url: http://api.example.com/webhook
+      method: POST
+      timeout: 5s
+      retry:
+        maxAttempts: 3
+        interval: 1s
+
+    - name: http_put
+      url: http://api.example.com/update
+      method: PUT
+      timeout: 10s
+
+  # Link 输出（发布到 MQTT）
+  link:
+    - name: mqtt_out
+      linkId: mqtt_broker
+      role: producer
+      topic: output/topic
+
+  # 内部输出 - 剪贴板
+  internal:
+    - name: copy_clipboard
+      type: clipboard
+
+    # 内部输出 - 文件
+    - name: save_file
+      type: file
+      basePath: /data/output
+      options:
+        auto_extension: true   # 自动添加 .dat 扩展名
+
+    # 内部输出 - 广播
+    - name: local_broadcast
+      type: broadcast
+      channel: app_events      # 广播通道名称
+
+rules:
+  # 复制到剪贴板
+  - name: copy_to_clipboard
+    from: http_in
+    pipeline:
+      - to: [copy_clipboard]
+
+  # 保存到文件
+  - name: save_incoming
+    from: http_in
+    pipeline:
+      - to: [save_file]
+
+  # 发送 HTTP POST
+  - name: forward_to_api
+    from: http_in
+    pipeline:
+      - to: [http_post]
+
+  # 发布到 MQTT
+  - name: publish_mqtt
+    from: http_in
+    pipeline:
+      - to: [mqtt_out]
+
+  # 发送广播
+  - name: broadcast_event
+    from: http_in
+    pipeline:
+      - to: [local_broadcast]
+
+  # 多输出链
+  - name: multi_output
+    from: http_in
+    pipeline:
+      - to: [save_file, copy_clipboard, http_post]

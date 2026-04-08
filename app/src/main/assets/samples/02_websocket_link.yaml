@@ -1,0 +1,37 @@
+# WebSocket 连接示例
+# 演示：WebSocket 链接配置，适用于 H5 应用或 WS 服务器
+
+version: "2.0"
+
+links:
+  - id: ws_server
+    type: websocket
+    url: ws://localhost:8080/ws
+    reconnect:
+      enabled: true
+      interval: 3s
+      maxInterval: 30s
+
+  - id: wss_server
+    type: websocket
+    url: wss://secure.example.com/ws
+    tls:
+      ca: /data/certs/ca.pem
+
+inputs:
+  link:
+    - name: ws_input
+      linkId: ws_server
+      role: consumer
+
+outputs:
+  link:
+    - name: ws_output
+      linkId: ws_server
+      role: producer
+
+rules:
+  - name: ws_echo
+    from: ws_input
+    pipeline:
+      - to: [ws_output]

@@ -1,0 +1,51 @@
+# 内存队列示例
+# 演示：高性能内存队列，适用于临时缓冲或高频数据
+
+version: "2.0"
+
+queues:
+  memory:
+    # 高性能内存队列
+    fast_queue:
+      capacity: 10000          # 最大容量
+      workers: 4               # 并行工作线程数
+      overflow: dropOldest    # 满时丢弃最旧消息
+
+    # 阻塞队列（防止数据丢失）
+    reliable_queue:
+      capacity: 1000
+      workers: 2
+      overflow: block          # 满时阻塞等待
+
+    # 丢弃最新消息队列
+    latest_only:
+      capacity: 100
+      workers: 1
+      overflow: dropNew       # 满时丢弃新消息
+
+links:
+  - id: local_mqtt
+    type: mqtt
+    broker: tcp://localhost:1883
+
+inputs:
+  link:
+    - name: sensor_input
+      linkId: local_mqtt
+      role: consumer
+      topic: sensors/data
+
+outputs:
+  link:
+    - name: mqtt_output
+      linkId: local_mqtt
+      role: producer
+      topic: processed/data
+      queue:
+        memoryQueue: fast_queue  # 引用内存队列
+
+rules:
+  - name: process_fast
+    from: sensor_input
+    pipeline:
+      - to: [mqtt_output]
