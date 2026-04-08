@@ -19,4 +19,12 @@ class Preferences(context: Context) {
     var autoStart: Boolean
         get() = prefs.getBoolean("auto_start", false)
         set(value) = prefs.edit().putBoolean("auto_start", value).apply()
+
+    var receivingEnabled: Boolean
+        get() = prefs.getBoolean("receiving_enabled", true)
+        set(value) = prefs.edit().putBoolean("receiving_enabled", value).apply()
+
+    var forwardingEnabled: Boolean
+        get() = prefs.getBoolean("forwarding_enabled", true)
+        set(value) = prefs.edit().putBoolean("forwarding_enabled", value).apply()
 }

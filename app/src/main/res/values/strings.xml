@@ -15,4 +15,12 @@
     <string name="messages_received">已接收消息</string>
     <string name="messages_forwarded">已转发消息</string>
     <string name="no_forward_target">未设置转发目标</string>
+    <string name="notification_action_stop_receive">停止接收</string>
+    <string name="notification_action_resume_receive">恢复接收</string>
+    <string name="notification_action_stop_forward">停止转发</string>
+    <string name="notification_action_resume_forward">恢复转发</string>
+    <string name="notification_receive_on">接收: 开</string>
+    <string name="notification_receive_off">接收: 关</string>
+    <string name="notification_forward_on">转发: 开</string>
+    <string name="notification_forward_off">转发: 关</string>
 </resources>
