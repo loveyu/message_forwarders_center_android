@@ -1,11 +1,16 @@
 # SQLite 持久化队列示例
 # 演示：磁盘持久化队列，支持重试和自动清理
+#
+# 路径协议说明:
+# - /absolute/path.db     - 绝对路径（需应用有权限）
+# - data://relative.db    - 应用私有数据目录 (context.filesDir)
+# - sdcard://relative.db  - 外部存储目录 (context.getExternalFilesDir)
 
 version: "2.0"
 
 queues:
   sqlite:
-    # 基础持久化队列
+    # 基础持久化队列（使用绝对路径）
     persistent_queue:
       path: /data/queues/main.db
       batchSize: 20           # 批量处理大小
@@ -18,16 +23,32 @@ queues:
       cleanup:
         maxAge: 7d            # 7天后自动清理
 
+    # 应用私有目录队列（使用 data:// 协议）
+    internal_queue:
+      path: data://queues/internal.db
+      batchSize: 20
+      retryInterval: 5s
+      maxRetry: 10
+
+    # 外部存储队列（使用 sdcard:// 协议）
+    external_queue:
+      path: sdcard://backups/queue.db
+      batchSize: 50
+      retryInterval: 3s
+      maxRetry: 5
+      cleanup:
+        maxAge: 30d           # 30天后自动清理
+
     # 快速批量写入队列
     batch_queue:
-      path: /data/queues/batch.db
+      path: data://queues/batch.db
       batchSize: 100
       retryInterval: 1s
       maxRetry: 5
 
     # 线性退避队列
     linear_retry_queue:
-      path: /data/queues/linear.db
+      path: sdcard://logs/linear.db
       batchSize: 20
       retryInterval: 3s
       maxRetry: 15

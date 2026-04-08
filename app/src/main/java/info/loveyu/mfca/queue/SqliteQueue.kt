@@ -30,10 +30,40 @@ class SqliteQueue(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     init {
-        val dbFile = File(config.path)
+        val dbPath = resolvePath(config.path)
+        val dbFile = File(dbPath)
         dbFile.parentFile?.mkdirs()
         dbHelper = QueueDbHelper(context, dbFile.absolutePath)
         initializeCounter()
+    }
+
+    /**
+     * 解析路径协议
+     * 支持:
+     * - data:// - 应用私有数据目录
+     * - sdcard:// - 外部存储卡目录
+     * - 空协议或无协议 - 绝对路径
+     */
+    private fun resolvePath(path: String): String {
+        return when {
+            path.startsWith("data://") -> {
+                // 应用私有数据目录
+                val relativePath = path.removePrefix("data://")
+                File(context.filesDir, relativePath).absolutePath
+            }
+            path.startsWith("sdcard://") -> {
+                // 外部存储卡
+                val relativePath = path.removePrefix("sdcard://")
+                val externalDir = context.getExternalFilesDir(null)
+                if (externalDir != null) {
+                    File(externalDir, relativePath).absolutePath
+                } else {
+                    LogManager.appendLog("QUEUE", "External storage not available, falling back to internal")
+                    File(context.filesDir, relativePath).absolutePath
+                }
+            }
+            else -> path
+        }
     }
 
     private fun initializeCounter() {
