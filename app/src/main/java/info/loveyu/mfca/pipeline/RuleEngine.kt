@@ -6,12 +6,15 @@ import info.loveyu.mfca.input.InputMessage
 import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.util.LogManager
+import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 
 /**
  * 规则引擎
+ * 使用预编译表达式和 Worker 线程执行模型
  */
 class RuleEngine(
     private val config: AppConfig
@@ -19,11 +22,38 @@ class RuleEngine(
     private val rules = mutableMapOf<String, RuleConfig>()
     private val inputRulesMap = ConcurrentHashMap<String, MutableList<RuleConfig>>()
 
+    // 表达式引擎
+    private val expressionEngine = ExpressionEngine()
+
+    // Worker 线程池
+    private val workerPool = Executors.newFixedThreadPool(4).asCoroutineDispatcher()
+    private val scope = CoroutineScope(workerPool + SupervisorJob())
+
     init {
         config.rules.forEach { rule ->
             rules[rule.name] = rule
             inputRulesMap.getOrPut(rule.from) { mutableListOf() }.add(rule)
         }
+
+        // 预编译所有规则中的表达式
+        precompileExpressions()
+    }
+
+    /**
+     * 预编译所有表达式
+     */
+    private fun precompileExpressions() {
+        val expressions = mutableListOf<String>()
+
+        config.rules.forEach { rule ->
+            rule.pipeline.forEach { step ->
+                step.transform?.extract?.let { expressions.add(it) }
+                step.transform?.filter?.let { expressions.add(it) }
+            }
+        }
+
+        expressionEngine.precompileExpressions(expressions)
+        LogManager.appendLog("RULE", "Precompiled ${expressions.size} expressions")
     }
 
     /**
@@ -33,8 +63,26 @@ class RuleEngine(
         val matchingRules = inputRulesMap[inputMessage.source] ?: return
 
         matchingRules.forEach { rule ->
+            scope.launch {
+                try {
+                    processRule(rule, inputMessage)
+                } catch (e: Exception) {
+                    LogManager.appendLog("RULE", "Error processing rule ${rule.name}: ${e.message}")
+                    handleError(rule, inputMessage, e)
+                }
+            }
+        }
+    }
+
+    /**
+     * 同步处理（用于测试）
+     */
+    fun processSync(inputMessage: InputMessage) {
+        val matchingRules = inputRulesMap[inputMessage.source] ?: return
+
+        matchingRules.forEach { rule ->
             try {
-                processRule(rule, inputMessage)
+                processRuleSync(rule, inputMessage)
             } catch (e: Exception) {
                 LogManager.appendLog("RULE", "Error processing rule ${rule.name}: ${e.message}")
                 handleError(rule, inputMessage, e)
@@ -42,7 +90,7 @@ class RuleEngine(
         }
     }
 
-    private fun processRule(rule: RuleConfig, inputMessage: InputMessage) {
+    private suspend fun processRule(rule: RuleConfig, inputMessage: InputMessage) {
         LogManager.appendLog("RULE", "Processing rule: ${rule.name}")
 
         var currentData = inputMessage.data
@@ -72,7 +120,68 @@ class RuleEngine(
 
             // Apply filter if present
             if (!skipStep && transform?.filter != null) {
-                if (!evaluateFilter(transform.filter, currentData)) {
+                val passed = withContext(Dispatchers.Default) {
+                    evaluateFilter(transform.filter!!, currentData)
+                }
+                if (!passed) {
+                    LogManager.appendLog("RULE", "Filter rejected message")
+                    skipStep = true
+                }
+            }
+
+            if (skipStep) {
+                continue
+            }
+
+            // Send to outputs (async)
+            step.to.forEach { outputName ->
+                val output = OutputManager.getOutput(outputName)
+                if (output != null) {
+                    val item = QueueItem(
+                        data = currentData,
+                        metadata = mapOf("rule" to rule.name)
+                    )
+                    output.send(item) { success ->
+                        LogManager.appendLog("RULE", "Output $outputName: ${if (success) "OK" else "FAILED"}")
+                    }
+                } else {
+                    LogManager.appendLog("RULE", "Output not found: $outputName")
+                }
+            }
+        }
+    }
+
+    private fun processRuleSync(rule: RuleConfig, inputMessage: InputMessage) {
+        LogManager.appendLog("RULE", "Processing rule: ${rule.name}")
+
+        var currentData = inputMessage.data
+
+        for (step in rule.pipeline) {
+            val transform = step.transform
+            var skipStep = false
+
+            // Apply detect first if specified
+            if (transform?.detect != null) {
+                if (!detectMedia(currentData, transform.detect)) {
+                    LogManager.appendLog("RULE", "Detect failed for ${transform.detect}")
+                    skipStep = true
+                }
+            }
+
+            // Apply transform if present
+            if (!skipStep && transform != null) {
+                val transformed = applyTransform(transform, currentData, inputMessage)
+                if (transformed == null) {
+                    LogManager.appendLog("RULE", "Transform returned null, skipping")
+                    skipStep = true
+                } else {
+                    currentData = transformed
+                }
+            }
+
+            // Apply filter if present
+            if (!skipStep && transform?.filter != null) {
+                if (!evaluateFilter(transform.filter!!, currentData)) {
                     LogManager.appendLog("RULE", "Filter rejected message")
                     skipStep = true
                 }
@@ -115,9 +224,9 @@ class RuleEngine(
             return null
         }
 
-        // Extract
+        // Extract using GJSON path
         transform.extract?.let { path ->
-            val extracted = extractFromJson(json, path)
+            val extracted = expressionEngine.extract(json, path)
             if (extracted != null) {
                 return when (extracted) {
                     is String -> extracted.toByteArray()
@@ -125,6 +234,7 @@ class RuleEngine(
                     is Boolean -> extracted.toString().toByteArray()
                     is JSONArray -> extracted.toString().toByteArray()
                     is JSONObject -> extracted.toString().toByteArray()
+                    is List<*> -> extracted.toString().toByteArray()
                     else -> extracted.toString().toByteArray()
                 }
             }
@@ -133,120 +243,8 @@ class RuleEngine(
         return data
     }
 
-    private fun extractFromJson(json: JSONObject, path: String): Any? {
-        // Handle $raw special case
-        if (path == "\$raw") {
-            return json.toString()
-        }
-
-        // Handle array access like "data.list[0]"
-        val arrayMatch = Regex("(.*)\\[(\\d+)\\]").find(path)
-        if (arrayMatch != null) {
-            val objPath = arrayMatch.groupValues[1]
-            val index = arrayMatch.groupValues[2].toIntOrNull() ?: return null
-
-            val obj = if (objPath.isEmpty()) json else navigatePath(json, objPath)
-            if (obj is JSONArray) {
-                return obj.opt(index)
-            }
-            return null
-        }
-
-        return navigatePath(json, path)
-    }
-
-    private fun navigatePath(json: JSONObject, path: String): Any? {
-        val parts = path.split(".")
-        var current: Any? = json
-        for (part in parts) {
-            if (part.isEmpty()) continue
-            current = when (current) {
-                is JSONObject -> (current as JSONObject).opt(part)
-                is JSONArray -> (current as JSONArray).opt(part.toIntOrNull() ?: 0)
-                else -> null
-            }
-            if (current == null) break
-        }
-        return current
-    }
-
     private fun evaluateFilter(filter: String, data: ByteArray): Boolean {
-        // Try to parse as JSON
-        val json = try {
-            JSONObject(String(data))
-        } catch (e: Exception) {
-            // If not JSON, just return true
-            return true
-        }
-
-        return evaluateJsonFilter(filter, json)
-    }
-
-    private fun evaluateJsonFilter(filter: String, json: JSONObject): Boolean {
-        // Simple expression parser
-        // Supports: len(path) > N, path == value, path != value, path > N, path < N
-
-        try {
-            // len() function
-            val lenMatch = Regex("""len\(([^)]+)\)\s*(\S+)\s*(\d+)""").find(filter)
-            if (lenMatch != null) {
-                val path = lenMatch.groupValues[1]
-                val op = lenMatch.groupValues[2]
-                val value = lenMatch.groupValues[3].toIntOrNull() ?: return true
-
-                val extracted = extractFromJson(json, path)
-                val length = when (extracted) {
-                    is JSONArray -> extracted.length()
-                    is String -> extracted.length
-                    is Collection<*> -> extracted.size
-                    else -> return true
-                }
-
-                return when (op) {
-                    ">" -> length > value
-                    ">=" -> length >= value
-                    "<" -> length < value
-                    "<=" -> length <= value
-                    "==" -> length == value
-                    "!=" -> length != value
-                    else -> true
-                }
-            }
-
-            // Comparison operators: path op value
-            val compMatch = Regex("""([^!=<>\s]+)\s*(!=|==|>=|<=|>|<)\s*(.+)""").find(filter)
-            if (compMatch != null) {
-                val path = compMatch.groupValues[1].trim()
-                val op = compMatch.groupValues[2]
-                val value = compMatch.groupValues[3].trim().removeSurrounding("\"")
-
-                val extracted = extractFromJson(json, path)
-                val extractedStr = extracted?.toString() ?: ""
-
-                return when (op) {
-                    "==" -> extractedStr == value
-                    "!=" -> extractedStr != value
-                    ">" -> (extracted as? Number)?.toDouble()?.let { it > value.toDouble() } ?: false
-                    "<" -> (extracted as? Number)?.toDouble()?.let { it < value.toDouble() } ?: false
-                    ">=" -> (extracted as? Number)?.toDouble()?.let { it >= value.toDouble() } ?: false
-                    "<=" -> (extracted as? Number)?.toDouble()?.let { it <= value.toDouble() } ?: false
-                    else -> true
-                }
-            }
-
-            // Equality check without operator
-            val eqMatch = Regex("""([^=\s]+)\s*==\s*(.+)""").find(filter)
-            if (eqMatch != null) {
-                val path = eqMatch.groupValues[1].trim()
-                val value = eqMatch.groupValues[2].trim().removeSurrounding("\"")
-                val extracted = extractFromJson(json, path)
-                return extracted?.toString() == value
-            }
-        } catch (e: Exception) {
-            LogManager.appendLog("RULE", "Filter evaluation error: ${e.message}")
-        }
-
-        return true // Default to pass
+        return expressionEngine.executeFilter(filter, data)
     }
 
     private fun detectMedia(data: ByteArray, type: String): Boolean {
@@ -340,4 +338,18 @@ class RuleEngine(
     }
 
     fun getAllRules(): Map<String, RuleConfig> = rules.toMap()
+
+    /**
+     * 获取表达式引擎（用于调试）
+     */
+    fun getExpressionEngine(): ExpressionEngine = expressionEngine
+
+    /**
+     * 关闭引擎
+     */
+    fun shutdown() {
+        scope.cancel()
+        workerPool.close()
+        expressionEngine.shutdown()
+    }
 }
