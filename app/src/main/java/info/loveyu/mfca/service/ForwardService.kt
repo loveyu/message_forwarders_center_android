@@ -25,6 +25,7 @@ class ForwardService : Service() {
         private const val TAG = "ForwardService"
         const val CHANNEL_ID = "forward_service_channel"
         const val NOTIFICATION_ID = 1
+        const val ACTION_INIT = "info.loveyu.mfca.action.INIT"
         const val ACTION_START = "info.loveyu.mfca.action.START"
         const val ACTION_STOP = "info.loveyu.mfca.action.STOP"
         const val ACTION_TOGGLE_RECEIVE = "info.loveyu.mfca.action.TOGGLE_RECEIVE"
@@ -54,15 +55,10 @@ class ForwardService : Service() {
 
         private var serviceInstance: ForwardService? = null
 
+        fun isServiceAlive(): Boolean = serviceInstance != null
+
         fun refreshNotification() {
-            serviceInstance?.let { service ->
-                val notification = service.createNotification()
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    service.startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-                } else {
-                    service.startForeground(NOTIFICATION_ID, notification)
-                }
-            }
+            serviceInstance?.updateNotification()
         }
     }
 
@@ -79,8 +75,10 @@ class ForwardService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
-                stopSelf()
-                return START_NOT_STICKY
+                stopHttpServer()
+                updateNotification()
+                onStatsChanged?.invoke()
+                return START_STICKY
             }
             ACTION_TOGGLE_RECEIVE -> {
                 isReceivingEnabled = !isReceivingEnabled
@@ -107,7 +105,11 @@ class ForwardService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
-        startHttpServer()
+
+        if (intent?.action == ACTION_START && httpServer == null) {
+            startHttpServer()
+        }
+
         return START_STICKY
     }
 
@@ -177,11 +179,15 @@ class ForwardService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val receiveStatus = if (isReceivingEnabled) getString(R.string.notification_receive_on)
-        else getString(R.string.notification_receive_off)
-        val forwardStatus = if (isForwardingEnabled) getString(R.string.notification_forward_on)
-        else getString(R.string.notification_forward_off)
-        val statusText = "$receiveStatus · $forwardStatus"
+        val statusText = if (isRunning) {
+            val receiveStatus = if (isReceivingEnabled) getString(R.string.notification_receive_on)
+            else getString(R.string.notification_receive_off)
+            val forwardStatus = if (isForwardingEnabled) getString(R.string.notification_forward_on)
+            else getString(R.string.notification_forward_off)
+            "$receiveStatus · $forwardStatus"
+        } else {
+            getString(R.string.server_stopped)
+        }
 
         // Toggle receive action
         val receiveIntent = Intent(this, ForwardService::class.java).apply {

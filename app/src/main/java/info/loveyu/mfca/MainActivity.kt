@@ -55,11 +55,13 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        ensureServiceRunning()
+
         setContent {
             MaterialTheme {
                 MainScreen(
-                    onStartService = { startForwardService() },
-                    onStopService = { stopForwardService() }
+                    onStartServer = { startServer() },
+                    onStopServer = { stopServer() }
                 )
             }
         }
@@ -67,19 +69,28 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (ForwardService.isRunning) {
+        ensureServiceRunning()
+    }
+
+    private fun ensureServiceRunning() {
+        if (!ForwardService.isServiceAlive()) {
+            val intent = Intent(this, ForwardService::class.java).apply {
+                action = ForwardService.ACTION_INIT
+            }
+            startForegroundService(intent)
+        } else {
             ForwardService.refreshNotification()
         }
     }
 
-    private fun startForwardService() {
+    private fun startServer() {
         val intent = Intent(this, ForwardService::class.java).apply {
             action = ForwardService.ACTION_START
         }
         startForegroundService(intent)
     }
 
-    private fun stopForwardService() {
+    private fun stopServer() {
         val intent = Intent(this, ForwardService::class.java).apply {
             action = ForwardService.ACTION_STOP
         }
@@ -90,8 +101,8 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
-    onStartService: () -> Unit,
-    onStopService: () -> Unit
+    onStartServer: () -> Unit,
+    onStopServer: () -> Unit
 ) {
     val context = LocalContext.current
     val preferences = remember { Preferences(context) }
@@ -167,11 +178,11 @@ fun MainScreen(
                             style = MaterialTheme.typography.titleMedium
                         )
                         if (isRunning) {
-                            Button(onClick = onStopService) {
+                            Button(onClick = onStopServer) {
                                 Text(context.getString(R.string.stop_server))
                             }
                         } else {
-                            Button(onClick = onStartService) {
+                            Button(onClick = onStartServer) {
                                 Text(context.getString(R.string.start_server))
                             }
                         }
