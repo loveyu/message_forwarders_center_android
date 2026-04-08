@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +31,7 @@ import androidx.core.content.ContextCompat
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.config.ConfigLoader
 import info.loveyu.mfca.ui.HelpScreen
+import info.loveyu.mfca.ui.SettingsScreen
 import info.loveyu.mfca.util.ConfigBackupManager
 import info.loveyu.mfca.util.ConfigDownloader
 import info.loveyu.mfca.util.LogManager
@@ -70,14 +72,23 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 var showHelp by remember { mutableStateOf(false) }
-                if (showHelp) {
-                    HelpScreen(onBack = { showHelp = false })
-                } else {
-                    MainScreen(
-                        onStartServer = { startServer() },
-                        onStopServer = { stopServer() },
-                        onShowHelp = { showHelp = true }
-                    )
+                var showSettings by remember { mutableStateOf(false) }
+
+                when {
+                    showSettings -> {
+                        SettingsScreen(onBack = { showSettings = false })
+                    }
+                    showHelp -> {
+                        HelpScreen(onBack = { showHelp = false })
+                    }
+                    else -> {
+                        MainScreen(
+                            onStartServer = { startServer() },
+                            onStopServer = { stopServer() },
+                            onShowHelp = { showHelp = true },
+                            onShowSettings = { showSettings = true }
+                        )
+                    }
                 }
             }
         }
@@ -119,7 +130,8 @@ class MainActivity : ComponentActivity() {
 fun MainScreen(
     onStartServer: () -> Unit,
     onStopServer: () -> Unit,
-    onShowHelp: () -> Unit
+    onShowHelp: () -> Unit,
+    onShowSettings: () -> Unit
 ) {
     val context = LocalContext.current
     val preferences = remember { Preferences(context) }
@@ -304,6 +316,12 @@ fun MainScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
                 actions = {
+                    IconButton(onClick = onShowSettings) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "设置"
+                        )
+                    }
                     IconButton(onClick = onShowHelp) {
                         Icon(
                             imageVector = Icons.Default.Info,

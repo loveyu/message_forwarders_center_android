@@ -60,4 +60,11 @@
     <string name="status_stopped">已停止</string>
     <string name="start_service">启动</string>
     <string name="stop_service">停止</string>
+    <string name="export_zip">导出 ZIP</string>
+    <string name="exporting">导出中…</string>
+    <string name="export_success">导出成功: %1$s</string>
+    <string name="export_failed">导出失败</string>
+    <string name="clear_all_backups">清空所有备份</string>
+    <string name="clear_success">清空成功</string>
+    <string name="clear_failed">清空失败</string>
 </resources>
