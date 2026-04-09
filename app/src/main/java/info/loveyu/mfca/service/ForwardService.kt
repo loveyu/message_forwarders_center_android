@@ -28,6 +28,10 @@ import info.loveyu.mfca.server.MessageForwarder
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
 import java.io.IOException
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 
 class ForwardService : Service() {
 
@@ -62,6 +66,19 @@ class ForwardService : Service() {
         var isForwardingEnabled = true
             private set
 
+        // 简写首字母统计
+        @Volatile
+        var linkCount = 0
+            private set
+
+        @Volatile
+        var inputCount = 0
+            private set
+
+        @Volatile
+        var outputCount = 0
+            private set
+
         var onStatsChanged: (() -> Unit)? = null
 
         private var serviceInstance: ForwardService? = null
@@ -75,6 +92,13 @@ class ForwardService : Service() {
 
         fun refreshNotification() {
             serviceInstance?.updateNotification()
+        }
+
+        fun refreshStats() {
+            linkCount = LinkManager.getAllLinks().size
+            inputCount = InputManager.getAllInputs().size
+            outputCount = OutputManager.getAllOutputs().size
+            onStatsChanged?.invoke()
         }
 
         fun loadConfig(yamlContent: String): Boolean {
@@ -97,11 +121,22 @@ class ForwardService : Service() {
     private var ruleEngine: RuleEngine? = null
     private var deadLetterHandler: DeadLetterHandler? = null
 
+    // Stats refresh scheduler (5s)
+    private val statsScheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
+    private var statsFuture: ScheduledFuture<*>? = null
+
     override fun onCreate() {
         super.onCreate()
         serviceInstance = this
         preferences = Preferences(this)
         createNotificationChannel()
+
+        // Start periodic stats refresh (5s)
+        statsFuture = statsScheduler.scheduleAtFixedRate({
+            if (isRunning) {
+                refreshStats()
+            }
+        }, 5, 5, TimeUnit.SECONDS)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -152,6 +187,8 @@ class ForwardService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        statsFuture?.cancel(false)
+        statsScheduler.shutdown()
         serviceInstance = null
         stopAll()
         super.onDestroy()
@@ -330,11 +367,11 @@ class ForwardService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val modeText = if (legacyMode) "Legacy" else "Pipeline"
-        val statusText = if (isRunning) {
-            "$modeText · ${getString(R.string.server_running)}"
+        // 状态栏显示: L链路数 I输入数 O输出数 R接收 S发送
+        val statsText = if (isRunning) {
+            "L${linkCount} I${inputCount} O${outputCount} · R${receivedCount} S${forwardedCount}"
         } else {
-            getString(R.string.server_stopped)
+            "已停止"
         }
 
         // Toggle receive action
@@ -370,7 +407,7 @@ class ForwardService : Service() {
 
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.service_notification_title))
-            .setContentText(statusText)
+            .setContentText(statsText)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
