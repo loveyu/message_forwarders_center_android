@@ -284,6 +284,7 @@ class ForwardService : Service() {
 
             // 6. Initialize Inputs with message handler
             LogManager.appendLog("CONFIG", "Initializing inputs...")
+            InputManager.setContext(this)
             InputManager.initialize(config) { message ->
                 handleMessage(message)
             }
