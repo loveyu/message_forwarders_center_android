@@ -108,6 +108,7 @@ class MainActivity : ComponentActivity() {
 
                 // Check config existence on startup
                 LaunchedEffect(Unit) {
+                    LogManager.init(this@MainActivity, preferences)
                     if (!ForwardService.isServiceAlive() && !preferences.hasConfig()) {
                         Toast.makeText(
                             this@MainActivity,
@@ -216,6 +217,7 @@ fun MainScreen(
     var receivedCount by remember { mutableIntStateOf(ForwardService.receivedCount) }
     var forwardedCount by remember { mutableIntStateOf(ForwardService.forwardedCount) }
     var isPaused by remember { mutableStateOf(LogManager.isPaused()) }
+    var isFileLogging by remember { mutableStateOf(LogManager.isFileLoggingEnabled()) }
 
     val logs by LogManager.logs.collectAsState()
     val listState = rememberLazyListState()
@@ -409,16 +411,21 @@ fun MainScreen(
                             }
                             TextButton(
                                 onClick = {
-                                    val path = LogManager.saveLogsToFile(context)
-                                    if (path != null) {
-                                        Toast.makeText(context, R.string.log_saved, Toast.LENGTH_SHORT).show()
-                                        LogManager.appendLog("APP", "日志已保存: $path")
+                                    if (isFileLogging) {
+                                        LogManager.setFileLoggingEnabled(false, preferences)
+                                        isFileLogging = false
+                                        Toast.makeText(context, "已停止保存日志", Toast.LENGTH_SHORT).show()
                                     } else {
-                                        Toast.makeText(context, R.string.log_save_failed, Toast.LENGTH_SHORT).show()
+                                        LogManager.setFileLoggingEnabled(true, preferences)
+                                        isFileLogging = true
+                                        Toast.makeText(context, "已开始保存日志到文件", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             ) {
-                                Text(stringResource(R.string.save_log))
+                                Text(
+                                    if (isFileLogging) stringResource(R.string.cancel_save_log)
+                                    else stringResource(R.string.save_log)
+                                )
                             }
                         }
                     }

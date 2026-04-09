@@ -33,6 +33,22 @@ class Preferences(context: Context) {
         get() = prefs.getString("config_file_path", "") ?: ""
         set(value) = prefs.edit().putString("config_file_path", value).apply()
 
+    var logLevel: String
+        get() = prefs.getString("log_level", "INFO") ?: "INFO"
+        set(value) = prefs.edit().putString("log_level", value).apply()
+
+    var logToFile: Boolean
+        get() = prefs.getBoolean("log_to_file", false)
+        set(value) = prefs.edit().putBoolean("log_to_file", value).apply()
+
+    var logToLogcatAll: Boolean
+        get() = prefs.getBoolean("log_to_logcat_all", false)
+        set(value) = prefs.edit().putBoolean("log_to_logcat_all", value).apply()
+
+    var maxLogLines: Int
+        get() = prefs.getInt("max_log_lines", 1000)
+        set(value) = prefs.edit().putInt("max_log_lines", value).apply()
+
     fun saveFullConfig(configJson: String) {
         prefs.edit().putString("full_config", configJson).apply()
     }

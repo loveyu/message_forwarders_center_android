@@ -28,12 +28,16 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -54,7 +58,9 @@ import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.R
 import info.loveyu.mfca.util.AppStatusManager
 import info.loveyu.mfca.util.ConfigBackupManager
+import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
+import info.loveyu.mfca.util.Preferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -76,6 +82,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val preferences = remember { Preferences(context) }
 
     var backupCount by remember { mutableIntStateOf(0) }
     var isExporting by remember { mutableStateOf(false) }
@@ -323,6 +330,127 @@ fun SettingsScreen(
                                 LogManager.appendLog("SETTINGS", "Auto-start ${if (enabled) "enabled" else "disabled"}")
                             }
                         )
+                    }
+                }
+            }
+
+            // 日志设置
+            item {
+                Text(
+                    text = "日志设置",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // 日志等级
+                        var selectedLogLevel by remember { mutableStateOf(LogManager.getLogLevel()) }
+                        var expandedLogLevel by remember { mutableStateOf(false) }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("日志等级")
+                        }
+                        ExposedDropdownMenuBox(
+                            expanded = expandedLogLevel,
+                            onExpandedChange = { expandedLogLevel = it }
+                        ) {
+                            OutlinedTextField(
+                                value = selectedLogLevel.name,
+                                onValueChange = {},
+                                readOnly = true,
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedLogLevel) },
+                                modifier = Modifier
+                                    .menuAnchor()
+                                    .fillMaxWidth()
+                            )
+                            ExposedDropdownMenu(
+                                expanded = expandedLogLevel,
+                                onDismissRequest = { expandedLogLevel = false }
+                            ) {
+                                LogLevel.entries.forEach { level ->
+                                    DropdownMenuItem(
+                                        text = { Text(level.name) },
+                                        onClick = {
+                                            selectedLogLevel = level
+                                            LogManager.setLogLevel(level, preferences)
+                                            expandedLogLevel = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        HorizontalDivider()
+
+                        // 日志输出到文件
+                        var logToFile by remember { mutableStateOf(LogManager.isFileLoggingEnabled()) }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("日志保存到文件")
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "启用后日志将持续写入文件",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Switch(
+                                checked = logToFile,
+                                onCheckedChange = { enabled ->
+                                    logToFile = enabled
+                                    LogManager.setFileLoggingEnabled(enabled, preferences)
+                                }
+                            )
+                        }
+
+                        HorizontalDivider()
+
+                        // 所有日志记录到logcat
+                        var logToLogcatAll by remember { mutableStateOf(LogManager.isAllLogcatEnabled()) }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("所有日志记录到Logcat")
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "默认WARN及以上记录到Logcat",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Switch(
+                                checked = logToLogcatAll,
+                                onCheckedChange = { enabled ->
+                                    logToLogcatAll = enabled
+                                    LogManager.setAllLogcatEnabled(enabled, preferences)
+                                }
+                            )
+                        }
                     }
                 }
             }
