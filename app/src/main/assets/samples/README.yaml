@@ -50,11 +50,47 @@ enabledWhen:
 - `"path == value"` - 相等比较
 - `"path != value"` - 不等比较
 - `"path > N"` - 数值比较
+- `"$headers.mqtt_topic == topic"` - Headers 访问（MQTT Topic 等）
 
 ### 检测 (detect)
 - `"image"` - PNG/JPEG/GIF/BMP/WebP
 - `"json"` - JSON 格式
 - `"text"` - 文本内容
+
+## 输入配置
+
+### 多主题订阅
+```yaml
+inputs:
+  link:
+    - name: multi_topic
+      linkId: mqtt_broker
+      role: consumer
+      topics:
+        - sensors/#
+        - devices/+
+      qos: 1
+```
+
+### 主题排除
+```yaml
+inputs:
+  link:
+    - name: exclude_example
+      linkId: mqtt_broker
+      role: consumer
+      topic: phone-clipboard/#
+      excludeTopics:
+        - phone-clipboard/system
+      qos: 1
+```
+
+## 剪贴板输出
+
+剪贴板输出（clipboard）支持自动解析 JSON 格式消息：
+- 消息格式: `{"type": "text", "content": "base64编码内容"}`
+- 自动过滤 `type != text` 的消息
+- 自动对 `content` 字段进行 Base64 解码后写入剪贴板
 
 ## 使用方法
 

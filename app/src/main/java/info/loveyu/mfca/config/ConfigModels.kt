@@ -121,6 +121,8 @@ data class LinkInputConfig(
     val linkId: String,
     val role: LinkRole,
     val topic: String? = null,
+    val topics: List<String>? = null,
+    val excludeTopics: List<String>? = null,
     val qos: Int? = null
 )
 

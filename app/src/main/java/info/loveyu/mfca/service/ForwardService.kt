@@ -345,7 +345,11 @@ class ForwardService : Service() {
         // Process through rule engine
         ruleEngine?.process(message)
 
-        LogManager.appendLog("MESSAGE", "Processed: ${message.source} -> ${String(message.data).take(100)}")
+        // Record headers
+        if (message.headers.isNotEmpty()) {
+            LogManager.appendLog("MESSAGE", "Headers: ${message.headers}")
+        }
+        LogManager.appendLog("MESSAGE", "Processed: ${message.source} -> ${String(message.data).take(1000)}")
     }
 
     private fun reloadConfig() {

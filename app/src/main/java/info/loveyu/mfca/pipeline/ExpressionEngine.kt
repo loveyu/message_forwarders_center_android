@@ -87,6 +87,15 @@ class ExpressionEngine {
             args.getOrNull(0)?.toString()?.trim() ?: ""
         }
 
+        builtinFunctions["base64Decode"] = BuiltinFunction("base64Decode", 1) { args ->
+            val str = args.getOrNull(0)?.toString() ?: ""
+            try {
+                android.util.Base64.decode(str, android.util.Base64.DEFAULT).toString(Charsets.UTF_8)
+            } catch (e: Exception) {
+                str
+            }
+        }
+
         builtinFunctions["replace"] = BuiltinFunction("replace", 3) { args ->
             val str = args.getOrNull(0)?.toString() ?: ""
             val target = args.getOrNull(1)?.toString() ?: ""
@@ -199,8 +208,9 @@ class ExpressionEngine {
      * - data.@values - 获取所有值
      * - data.@len - 获取长度
      * - data.@this - 当前对象
+     * - $headers.mqtt_topic - 获取 headers 中的 mqtt_topic
      */
-    fun extractPath(json: Any?, path: String): Any? {
+    fun extractPath(json: Any?, path: String, headers: Map<String, String>? = null): Any? {
         if (path.isEmpty() || json == null) return json
         if (path == "\$" || path == "@this") return json
 
@@ -213,6 +223,12 @@ class ExpressionEngine {
                 is JSONArray -> json.toString()
                 else -> json.toString()
             }
+        }
+
+        // 处理 $headers.* 访问
+        if (trimmedPath.startsWith("\$headers.")) {
+            val headerKey = trimmedPath.substring(9)
+            return headers?.get(headerKey)
         }
 
         return when (json) {
@@ -609,8 +625,11 @@ class ExpressionEngine {
 
     /**
      * 执行过滤器
+     * @param expression 过滤器表达式
+     * @param data 消息数据
+     * @param headers 可选的 Headers Map，用于 $headers.mqtt_topic 等访问
      */
-    fun executeFilter(expression: String, data: ByteArray): Boolean {
+    fun executeFilter(expression: String, data: ByteArray, headers: Map<String, String>? = null): Boolean {
         val json = try {
             JSONObject(String(data))
         } catch (e: Exception) {
@@ -620,18 +639,18 @@ class ExpressionEngine {
         val compiled = compileFilter(expression)
         if (compiled.error != null) return true
 
-        return evaluateCompiledFilter(compiled.parsed!!, json)
+        return evaluateCompiledFilter(compiled.parsed!!, json, headers)
     }
 
-    private fun evaluateCompiledFilter(filter: ParsedFilter, json: JSONObject): Boolean {
+    private fun evaluateCompiledFilter(filter: ParsedFilter, json: JSONObject, headers: Map<String, String>?): Boolean {
         return when (filter.type) {
             ParsedNodeType.CONSTANT -> filter.constantValue == true
             ParsedNodeType.PATH -> {
-                val extracted = extractPath(json, filter.path ?: "")
+                val extracted = extractPath(json, filter.path ?: "", headers)
                 extracted != null && extracted != JSONObject.NULL
             }
             ParsedNodeType.COMPARISON -> {
-                val extracted = extractPath(json, filter.path ?: "")
+                val extracted = extractPath(json, filter.path ?: "", headers)
                 val value = filter.value ?: ""
 
                 when (filter.operator) {
@@ -645,26 +664,26 @@ class ExpressionEngine {
                 }
             }
             ParsedNodeType.AND -> {
-                val left = filter.left?.let { evaluateCompiledFilter(it, json) } ?: true
-                val right = filter.right?.let { evaluateCompiledFilter(it, json) } ?: true
+                val left = filter.left?.let { evaluateCompiledFilter(it, json, headers) } ?: true
+                val right = filter.right?.let { evaluateCompiledFilter(it, json, headers) } ?: true
                 left && right
             }
             ParsedNodeType.OR -> {
-                val left = filter.left?.let { evaluateCompiledFilter(it, json) } ?: false
-                val right = filter.right?.let { evaluateCompiledFilter(it, json) } ?: false
+                val left = filter.left?.let { evaluateCompiledFilter(it, json, headers) } ?: false
+                val right = filter.right?.let { evaluateCompiledFilter(it, json, headers) } ?: false
                 left || right
             }
             ParsedNodeType.FUNCTION -> {
-                evaluateFunction(filter.path ?: "", filter.args ?: emptyList(), json)
+                evaluateFunction(filter.path ?: "", filter.args ?: emptyList(), json, headers)
             }
             else -> true
         }
     }
 
-    private fun evaluateFunction(name: String, args: List<String>, json: JSONObject): Boolean {
+    private fun evaluateFunction(name: String, args: List<String>, json: JSONObject, headers: Map<String, String>?): Boolean {
         val fn = builtinFunctions[name] ?: return true
         val evaluatedArgs = args.map { arg ->
-            extractPath(json, arg)
+            extractPath(json, arg, headers)
         }.toTypedArray()
 
         val result = fn.invoke(evaluatedArgs)
@@ -700,6 +719,76 @@ class ExpressionEngine {
             is List<*> -> extracted.toString().toByteArray()
             else -> extracted.toString().toByteArray()
         }
+    }
+
+    /**
+     * 评估提取表达式，支持函数调用
+     * 例如: base64Decode(content), toUpperCase(name)
+     */
+    fun evaluateExtractExpression(json: Any?, expression: String, headers: Map<String, String>? = null): ByteArray? {
+        val trimmed = expression.trim()
+
+        // 检查是否是函数调用
+        val funcMatch = Regex("""^(\w+)\((.*)\)$""").find(trimmed)
+        if (funcMatch != null) {
+            val funcName = funcMatch.groupValues[1]
+            val argsStr = funcMatch.groupValues[2]
+            val fn = builtinFunctions[funcName]
+
+            if (fn != null) {
+                // 解析参数
+                val args = parseFunctionArgs(argsStr).map { arg ->
+                    extractPath(json, arg.trim(), headers)
+                }.toTypedArray()
+
+                val result = fn.invoke(args)
+                return when (result) {
+                    is String -> result.toByteArray()
+                    is Number -> result.toString().toByteArray()
+                    is Boolean -> result.toString().toByteArray()
+                    null -> null
+                    else -> result.toString().toByteArray()
+                }
+            }
+        }
+
+        // 否则作为普通路径处理
+        return extractAndTransform(json, trimmed)
+    }
+
+    private fun parseFunctionArgs(argsStr: String): List<String> {
+        if (argsStr.isEmpty()) return emptyList()
+
+        val args = mutableListOf<String>()
+        var current = StringBuilder()
+        var depth = 0
+        var inQuote = false
+        var quoteChar = ' '
+
+        for (c in argsStr) {
+            when {
+                (c == '"' || c == '\'') && !inQuote -> {
+                    inQuote = true
+                    quoteChar = c
+                    current.append(c)
+                }
+                c == quoteChar && inQuote -> {
+                    inQuote = false
+                    current.append(c)
+                }
+                c == '(' && !inQuote -> depth++
+                c == ')' && !inQuote -> depth--
+                c == ',' && depth == 0 && !inQuote -> {
+                    args.add(current.toString())
+                    current = StringBuilder()
+                }
+                else -> current.append(c)
+            }
+        }
+        if (current.isNotEmpty()) {
+            args.add(current.toString())
+        }
+        return args
     }
 
     /**

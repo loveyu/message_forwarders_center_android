@@ -2,6 +2,8 @@ package info.loveyu.mfca.output
 
 import android.content.Context
 import info.loveyu.mfca.config.AppConfig
+import info.loveyu.mfca.config.InternalOutputConfig
+import info.loveyu.mfca.config.InternalOutputType
 import info.loveyu.mfca.util.LogManager
 
 /**
@@ -31,7 +33,7 @@ object OutputManager {
 
         // Internal outputs
         config.outputs.internal.forEach { internalConfig ->
-            val output = InternalOutput(ctx, internalConfig.name, internalConfig)
+            val output = createInternalOutput(ctx, internalConfig)
             outputs[internalConfig.name] = output
             LogManager.appendLog("OUTPUT", "Registered internal output: ${internalConfig.name} (${internalConfig.type})")
         }
@@ -42,6 +44,12 @@ object OutputManager {
     fun getHttpOutput(name: String): HttpOutput? = outputs[name] as? HttpOutput
 
     fun getInternalOutput(name: String): InternalOutput? = outputs[name] as? InternalOutput
+
+    fun getClipboardOutput(name: String): ClipboardOutput? = outputs[name] as? ClipboardOutput
+
+    fun getFileOutput(name: String): FileOutput? = outputs[name] as? FileOutput
+
+    fun getBroadcastOutput(name: String): BroadcastOutput? = outputs[name] as? BroadcastOutput
 
     fun clear() {
         outputs.clear()
@@ -58,6 +66,14 @@ object OutputManager {
             config.linkId.contains("mqtt", ignoreCase = true) -> MqttOutput(config.name, config)
             config.linkId.contains("ws", ignoreCase = true) -> WebSocketOutput(config.name, config)
             else -> TcpOutput(config.name, config)
+        }
+    }
+
+    private fun createInternalOutput(ctx: Context, config: InternalOutputConfig): InternalOutput {
+        return when (config.type) {
+            InternalOutputType.clipboard -> ClipboardOutput(ctx, config.name, config)
+            InternalOutputType.file -> FileOutput(ctx, config.name, config)
+            InternalOutputType.broadcast -> BroadcastOutput(ctx, config.name, config)
         }
     }
 }

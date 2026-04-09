@@ -1,5 +1,5 @@
 # 规则引擎示例
-# 演示：JSON 数据提取、过滤、媒体类型检测
+# 演示：JSON 数据提取、过滤、媒体类型检测、Headers 访问、Base64 解码
 
 version: "0.1"
 
@@ -10,10 +10,23 @@ links:
 
 inputs:
   link:
+    # 示例：订阅多个主题
     - name: sensor_data
       linkId: mqtt_broker
       role: consumer
-      topic: sensors/#
+      topics:
+        - sensors/#
+        - devices/+
+      qos: 1
+
+    # 示例：排除特定主题
+    - name: filtered_clipboard
+      linkId: mqtt_broker
+      role: consumer
+      topic: phone-clipboard/#
+      excludeTopics:
+        - phone-clipboard/system
+      qos: 1
 
 outputs:
   http:
@@ -85,7 +98,23 @@ rules:
           detect: "text"                 # 检测是否为文本
         to: [clipboard_out]
 
-  # 示例8：完整变换链（提取 -> 过滤 -> 发送）
+  # 示例8：Headers 过滤 - 按 MQTT Topic 过滤
+  - name: filter_by_mqtt_topic
+    from: filtered_clipboard
+    pipeline:
+      - transform:
+          filter: "$headers.mqtt_topic startsWith phone-clipboard/user"  # 只处理用户剪贴板
+        to: [clipboard_out]
+
+  # 示例9：Headers 过滤 - 排除特定 Topic
+  - name: exclude_by_topic
+    from: filtered_clipboard
+    pipeline:
+      - transform:
+          filter: "$headers.mqtt_topic != phone-clipboard/system"  # 排除系统剪贴板
+        to: [clipboard_out]
+
+  # 示例10：完整变换链（提取 -> 过滤 -> 发送）
   - name: full_pipeline
     from: sensor_data
     pipeline:
@@ -95,7 +124,27 @@ rules:
           detect: "json"
         to: [api_server, clipboard_out]
 
-  # 示例9：错误处理链
+  # 示例11：剪贴板内容读取（type=text + base64 decode）
+  # 输入消息格式: {"type": "text", "content": "base64编码内容"}
+  # filter 过滤 type!=text 的消息，extract 使用 base64Decode 函数解码 content 后写入剪贴板
+  - name: clipboard_text_write
+    from: filtered_clipboard
+    pipeline:
+      - transform:
+          extract: "base64Decode(content)"
+          filter: "type == text"
+        to: [clipboard_out]
+
+  # 示例12：直接从 content 字段提取（不解码）
+  - name: clipboard_content_only
+    from: filtered_clipboard
+    pipeline:
+      - transform:
+          extract: "content"
+          filter: "type == text"
+        to: [clipboard_out]
+
+  # 示例13：错误处理链
   - name: with_error_handling
     from: sensor_data
     pipeline:

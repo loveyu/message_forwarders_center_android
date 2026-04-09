@@ -1,0 +1,43 @@
+# 剪贴板转发示例
+# 场景：订阅 MQTT 剪贴板消息过滤 type=text，解码 content 后写入本地剪贴板
+
+version: "0.1"
+
+links:
+  - id: mqtt_zzc
+    type: mqtt
+    # 请修改为实际的 broker 地址、用户名、密码
+    broker: mqtt://mobile-k50:Qibh0c6fDH9DXHF8@10.4.125.53:1883?connectTimeout=3&keepAliveInterval=60&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60
+    client_id: mobile-k50-msg-farward-center
+
+inputs:
+  link:
+    # 订阅剪贴板主题（共享订阅）
+    - name: mqtt_zzc_clipboard
+      link_id: mqtt_zzc
+      role: consumer
+      topic: $share/phone-k50/phone-clipboard/#
+      # 可选：排除特定设备主题
+      # excludeTopics:
+      #   - phone-clipboard/22081212C
+      qos: 1
+
+outputs:
+  internal:
+    - name: clipboard_write
+      type: clipboard
+
+rules:
+  # 剪贴板文本写入
+  # 输入消息格式: {"time":..., "uuid":..., "deviceName":"...", "type":"text", "content":"base64编码文本"}
+  # - filter: 只处理 type=text 的消息
+  # - extract: 提取 content 字段并 base64 解码
+  # - 写入剪贴板（相同内容 30 秒内不重复写入）
+  - name: clipboard_text_write
+    from: mqtt_zzc_clipboard
+    pipeline:
+      - transform:
+          extract: "base64Decode(content)"  # 提取并解码
+          filter: "type == text"            # 只处理文本类型
+        to:
+          - clipboard_write

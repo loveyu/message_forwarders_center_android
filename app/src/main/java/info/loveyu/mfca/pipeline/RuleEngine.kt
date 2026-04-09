@@ -127,7 +127,7 @@ class RuleEngine(
             // Apply filter if present
             if (!skipStep && transform?.filter != null) {
                 val passed = withContext(Dispatchers.Default) {
-                    evaluateFilter(transform.filter!!, currentData)
+                    evaluateFilter(transform.filter!!, currentData, inputMessage.headers)
                 }
                 if (!passed) {
                     LogManager.appendLog("RULE", "Filter rejected message")
@@ -187,7 +187,7 @@ class RuleEngine(
 
             // Apply filter if present
             if (!skipStep && transform?.filter != null) {
-                if (!evaluateFilter(transform.filter!!, currentData)) {
+                if (!evaluateFilter(transform.filter!!, currentData, inputMessage.headers)) {
                     LogManager.appendLog("RULE", "Filter rejected message")
                     skipStep = true
                 }
@@ -230,27 +230,19 @@ class RuleEngine(
             return null
         }
 
-        // Extract using GJSON path
+        // Extract using GJSON path or function expression
         transform.extract?.let { path ->
-            val extracted = expressionEngine.extract(json, path)
+            val extracted = expressionEngine.evaluateExtractExpression(json, path, inputMessage.headers)
             if (extracted != null) {
-                return when (extracted) {
-                    is String -> extracted.toByteArray()
-                    is Number -> extracted.toString().toByteArray()
-                    is Boolean -> extracted.toString().toByteArray()
-                    is JSONArray -> extracted.toString().toByteArray()
-                    is JSONObject -> extracted.toString().toByteArray()
-                    is List<*> -> extracted.toString().toByteArray()
-                    else -> extracted.toString().toByteArray()
-                }
+                return extracted
             }
         }
 
         return data
     }
 
-    private fun evaluateFilter(filter: String, data: ByteArray): Boolean {
-        return expressionEngine.executeFilter(filter, data)
+    private fun evaluateFilter(filter: String, data: ByteArray, headers: Map<String, String>?): Boolean {
+        return expressionEngine.executeFilter(filter, data, headers)
     }
 
     private fun detectMedia(data: ByteArray, type: String): Boolean {

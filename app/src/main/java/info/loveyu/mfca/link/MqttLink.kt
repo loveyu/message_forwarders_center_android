@@ -27,7 +27,7 @@ class MqttLink(override val config: LinkConfig) : Link {
     private var client: MqttAsyncClient? = null
     @Volatile private var connected = false
     @Volatile private var connecting = false
-    private var messageListener: ((ByteArray) -> Unit)? = null
+    private var messageListener: ((String, MqttMessage) -> Unit)? = null
     private var errorListener: ((Exception) -> Unit)? = null
 
     private val topics = mutableMapOf<String, Int>() // topic -> qos
@@ -119,7 +119,7 @@ class MqttLink(override val config: LinkConfig) : Link {
                 override fun messageArrived(topic: String?, message: MqttMessage?) {
                     topic?.let { t ->
                         message?.let { msg ->
-                            messageListener?.invoke(msg.payload)
+                            messageListener?.invoke(t, msg)
                             LogManager.appendLog("MQTT", "Message received on $t: ${String(msg.payload).take(100)}")
                         }
                     }
@@ -239,6 +239,10 @@ class MqttLink(override val config: LinkConfig) : Link {
     override fun send(text: String): Boolean = send(text.toByteArray())
 
     override fun setOnMessageListener(listener: (ByteArray) -> Unit) {
+        messageListener = { _, msg -> listener(msg.payload) }
+    }
+
+    fun setOnMqttMessageListener(listener: (String, MqttMessage) -> Unit) {
         messageListener = listener
     }
 
