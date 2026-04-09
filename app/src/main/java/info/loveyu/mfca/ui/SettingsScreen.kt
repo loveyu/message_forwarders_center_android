@@ -274,15 +274,12 @@ fun SettingsScreen(
                                             dataDir
                                         )
                                         val intent = Intent(Intent.ACTION_VIEW).apply {
-                                            setDataAndType(uri, "resource/folder")
+                                            setDataAndType(uri, "vnd.android.document/directory")
                                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                         }
                                         context.startActivity(Intent.createChooser(intent, "打开数据目录"))
                                     } catch (e: Exception) {
-                                        // Fallback: copy path to clipboard
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("数据目录", dataDir.absolutePath))
-                                        Toast.makeText(context, "已复制路径: ${dataDir.absolutePath}", Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, "无法打开: ${e.message}", Toast.LENGTH_SHORT).show()
                                     }
                                 } else {
                                     Toast.makeText(context, "外部存储不可用", Toast.LENGTH_SHORT).show()

@@ -25,11 +25,15 @@ class MqttLink(override val config: LinkConfig) : Link {
     override val id: String = config.id
 
     private var client: MqttAsyncClient? = null
-    private var connected = false
+    @Volatile private var connected = false
+    @Volatile private var connecting = false
     private var messageListener: ((ByteArray) -> Unit)? = null
     private var errorListener: ((Exception) -> Unit)? = null
 
     private val topics = mutableMapOf<String, Int>() // topic -> qos
+
+    private var consecutiveFailures = 0
+    private var lastConnectAttempt = 0L
 
     init {
         if (config.type != LinkType.mqtt) {
@@ -37,8 +41,29 @@ class MqttLink(override val config: LinkConfig) : Link {
         }
     }
 
+    companion object {
+        private const val MAX_CONSECUTIVE_FAILURES = 5
+        private const val MIN_RETRY_INTERVAL_MS = 10_000L // 10 seconds
+    }
+
+    @Synchronized
     override fun connect(): Boolean {
         if (connected) return true
+        if (connecting) return false
+
+        // Backoff: too many consecutive failures
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+            LogManager.appendLog("MQTT", "Skipping connect for $id: too many failures ($consecutiveFailures), waiting for next health check")
+            return false
+        }
+
+        // Backoff: don't retry too fast
+        val now = System.currentTimeMillis()
+        if (now - lastConnectAttempt < MIN_RETRY_INTERVAL_MS) {
+            return false
+        }
+        lastConnectAttempt = now
+        connecting = true
 
         val broker = config.broker ?: return false
         val clientId = config.clientId ?: "mfca_${System.currentTimeMillis()}"
@@ -61,22 +86,21 @@ class MqttLink(override val config: LinkConfig) : Link {
             val options = MqttConnectOptions().apply {
                 isCleanSession = params["cleanSession"]?.toBoolean() ?: true
 
-                // Reconnect: priority to URL params, then config, then defaults
-                val autoReconnectEnabled = params["automaticReconnect"]?.toBoolean()
-                    ?: config.reconnect?.enabled ?: true
-                isAutomaticReconnect = autoReconnectEnabled
-
-                if (autoReconnectEnabled) {
-                    // Paho MQTT's setAutomaticReconnect only takes boolean, reconnect timing is internal
-                    setAutomaticReconnect(true)
-                }
+                // Disable Paho's auto-reconnect; LinkManager handles reconnection
+                isAutomaticReconnect = false
 
                 connectionTimeout = params["connectTimeout"]?.toIntOrNull() ?: 10
                 keepAliveInterval = params["keepAliveInterval"]?.toIntOrNull() ?: 60
 
-                // User credentials from query parameters
-                params["username"]?.let { userName = it }
-                params["password"]?.let { password = it.toCharArray() }
+                // User credentials: priority to URL params, then URL userinfo
+                val user = params["username"]
+                val pass = params["password"]
+                if (user != null) {
+                    userName = user
+                }
+                if (pass != null) {
+                    password = pass.toCharArray()
+                }
 
                 // TLS: mqtts:// scheme or explicit tls config
                 val isMqtts = rawBroker.startsWith("mqtts://")
@@ -111,6 +135,7 @@ class MqttLink(override val config: LinkConfig) : Link {
 
             if (client?.isConnected == true) {
                 connected = true
+                consecutiveFailures = 0
                 LogManager.appendLog("MQTT", "Connected successfully")
 
                 // Re-subscribe to topics
@@ -119,28 +144,51 @@ class MqttLink(override val config: LinkConfig) : Link {
                 }
                 return true
             } else {
-                LogManager.appendLog("MQTT", "Connection failed: ${result?.exception?.message}")
+                consecutiveFailures++
+                LogManager.appendLog("MQTT", "Connection failed ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): ${result?.exception?.message}")
+                cleanupClient()
                 return false
             }
         } catch (e: Exception) {
-            LogManager.appendLog("MQTT", "Connection error: ${e.message}")
+            consecutiveFailures++
+            LogManager.appendLog("MQTT", "Connection error ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): ${e.message}")
             errorListener?.invoke(e)
+            cleanupClient()
             return false
+        } finally {
+            connecting = false
         }
     }
 
+    @Synchronized
     override fun disconnect() {
+        connecting = false
+        consecutiveFailures = 0
+        cleanupClient()
+        LogManager.appendLog("MQTT", "Disconnected: $id")
+    }
+
+    private fun cleanupClient() {
         try {
-            client?.disconnect()
-            client?.close()
-            connected = false
-            LogManager.appendLog("MQTT", "Disconnected: $id")
-        } catch (e: Exception) {
-            LogManager.appendLog("MQTT", "Disconnect error: ${e.message}")
+            client?.disconnect(0)
+        } catch (_: Exception) {
         }
+        try {
+            client?.close()
+        } catch (_: Exception) {
+        }
+        client = null
+        connected = false
     }
 
     override fun isConnected(): Boolean = connected
+
+    /**
+     * Reset failure count so the next health check cycle can retry.
+     */
+    fun resetFailureCount() {
+        consecutiveFailures = 0
+    }
 
     override fun send(data: ByteArray): Boolean {
         if (!connected) {
@@ -199,32 +247,57 @@ class MqttLink(override val config: LinkConfig) : Link {
     }
 
     /**
-     * Parse broker URL and extract connection parameters from query string.
+     * Parse broker URL and extract connection parameters from query string and userinfo.
      * Example: mqtt://admin:123456@10.4.125.53:1883?connectTimeout=3&keepAliveInterval=60
      * Returns pair of (cleanBrokerUrl, paramsMap)
      */
     private fun parseBrokerUrl(broker: String): Pair<String, Map<String, String>> {
         val params = mutableMapOf<String, String>()
 
+        // Extract query string parameters first
         val queryStart = broker.indexOf('?')
-        if (queryStart == -1) {
-            return Pair(broker, params)
-        }
+        val urlWithoutQuery = if (queryStart == -1) broker else broker.substring(0, queryStart)
 
-        // Extract query string and parse parameters
-        val queryString = broker.substring(queryStart + 1)
-        val cleanBroker = broker.substring(0, queryStart)
-
-        queryString.split('&').forEach { param ->
-            val kv = param.split('=', limit = 2)
-            if (kv.size == 2) {
-                val key = URLDecoder.decode(kv[0], "UTF-8")
-                val value = URLDecoder.decode(kv[1], "UTF-8")
-                params[key] = value
+        if (queryStart != -1) {
+            val queryString = broker.substring(queryStart + 1)
+            queryString.split('&').forEach { param ->
+                val kv = param.split('=', limit = 2)
+                if (kv.size == 2) {
+                    val key = URLDecoder.decode(kv[0], "UTF-8")
+                    val value = URLDecoder.decode(kv[1], "UTF-8")
+                    params[key] = value
+                }
             }
         }
 
-        return Pair(cleanBroker, params)
+        // Extract userinfo (user:pass@host) from URL, only if not already in query params
+        // Format: scheme://user:pass@host:port
+        val schemeEnd = urlWithoutQuery.indexOf("://")
+        if (schemeEnd != -1) {
+            val scheme = urlWithoutQuery.substring(0, schemeEnd + 3)
+            val rest = urlWithoutQuery.substring(schemeEnd + 3)
+
+            val atIndex = rest.lastIndexOf('@')
+            if (atIndex != -1) {
+                val userInfo = rest.substring(0, atIndex)
+                val hostPort = rest.substring(atIndex + 1)
+
+                val colonIndex = userInfo.indexOf(':')
+                if (colonIndex != -1) {
+                    // Only set from URL if not already provided via query params
+                    if (!params.containsKey("username")) {
+                        params["username"] = URLDecoder.decode(userInfo.substring(0, colonIndex), "UTF-8")
+                    }
+                    if (!params.containsKey("password")) {
+                        params["password"] = URLDecoder.decode(userInfo.substring(colonIndex + 1), "UTF-8")
+                    }
+                }
+
+                return Pair(scheme + hostPort, params)
+            }
+        }
+
+        return Pair(urlWithoutQuery, params)
     }
 
     private fun createSslSocketFactory(tls: info.loveyu.mfca.config.TlsConfig?): javax.net.SocketFactory {

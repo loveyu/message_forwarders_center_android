@@ -252,7 +252,7 @@ fun ConfigScreen(
                 OutlinedButton(
                     onClick = { handleDownloadConfig() },
                     modifier = Modifier.weight(1f),
-                    enabled = !isLoading && !ForwardService.isRunning
+                    enabled = !isLoading
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(

@@ -39,6 +39,8 @@ object LinkManager {
     private var isNetworkAvailable = false
     @Volatile
     private var currentNetworkType = NetworkType.UNKNOWN
+    @Volatile
+    private var lastReconnectTime = 0L
 
     enum class NetworkType {
         WIFI, MOBILE, ETHERNET, UNKNOWN
@@ -159,6 +161,10 @@ object LinkManager {
 
             // Try to reconnect if disconnected
             if (!link.isConnected()) {
+                // Reset failure count so the link can try again this cycle
+                if (link is MqttLink) {
+                    link.resetFailureCount()
+                }
                 LogManager.appendLog("LINK", "Reconnecting ${link.id}...")
                 try {
                     link.connect()
@@ -170,10 +176,13 @@ object LinkManager {
     }
 
     /**
-     * 异步重连所有链路
+     * 异步重连所有链路（带防抖）
      */
     private fun reconnectAllAsync() {
         linkScheduler.execute {
+            val now = System.currentTimeMillis()
+            if (now - lastReconnectTime < 5_000L) return@execute
+            lastReconnectTime = now
             reconnectAll()
         }
     }
@@ -225,8 +234,9 @@ object LinkManager {
 
             try {
                 if (!link.isConnected()) {
-                    link.connect()
-                    LogManager.appendLog("LINK", "Reconnected ${link.id}")
+                    if (link.connect()) {
+                        LogManager.appendLog("LINK", "Reconnected ${link.id}")
+                    }
                 }
             } catch (e: Exception) {
                 LogManager.appendLog("LINK", "Failed to reconnect ${link.id}: ${e.message}")

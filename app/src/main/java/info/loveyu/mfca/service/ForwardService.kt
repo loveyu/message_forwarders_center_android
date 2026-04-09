@@ -105,6 +105,7 @@ class ForwardService : Service() {
             inputCount = InputManager.getAllInputs().size
             outputCount = OutputManager.getAllOutputs().size
             onStatsChanged?.invoke()
+            serviceInstance?.updateNotification()
         }
 
         fun loadConfig(yamlContent: String, configUrl: String = ""): Boolean {
@@ -312,6 +313,7 @@ class ForwardService : Service() {
             InputManager.startAll()
 
             isRunning = true
+            refreshStats()
             saveStatus()
             LogManager.appendLog("CONFIG", "Configuration applied successfully. Service started.")
             updateNotification()
