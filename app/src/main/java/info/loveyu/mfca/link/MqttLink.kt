@@ -5,12 +5,12 @@ import info.loveyu.mfca.config.LinkType
 import info.loveyu.mfca.util.LogManager
 import org.eclipse.paho.client.mqttv3.*
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
-import java.security.KeyStore
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
 import java.io.File
+import java.net.URLDecoder
 import java.security.KeyStore as CertKeyStore
 
 /**
@@ -40,20 +40,42 @@ class MqttLink(override val config: LinkConfig) : Link {
         val clientId = config.clientId ?: "mfca_${System.currentTimeMillis()}"
 
         try {
-            LogManager.appendLog("MQTT", "Connecting to $broker as $clientId")
+            // Parse broker URL to extract connection parameters from query string
+            val (parsedBroker, params) = parseBrokerUrl(broker)
+
+            LogManager.appendLog("MQTT", "Connecting to $parsedBroker as $clientId")
 
             val persistence = MemoryPersistence()
-            client = MqttAsyncClient(broker, clientId, persistence)
+            client = MqttAsyncClient(parsedBroker, clientId, persistence)
 
             val options = MqttConnectOptions().apply {
-                isCleanSession = true
-                isAutomaticReconnect = config.reconnect?.enabled ?: true
-                connectionTimeout = 10
-                keepAliveInterval = 60
+                isCleanSession = params["cleanSession"]?.toBoolean() ?: true
 
-                // TLS configuration
-                if (config.tls != null) {
-                    socketFactory = createSslSocketFactory(config.tls!!)
+                // Reconnect: priority to URL params, then config, then defaults
+                val autoReconnectEnabled = params["automaticReconnect"]?.toBoolean()
+                    ?: config.reconnect?.enabled ?: true
+                isAutomaticReconnect = autoReconnectEnabled
+
+                if (autoReconnectEnabled) {
+                    // setAutomaticReconnect(initialDelay, maxDelay) - Paho uses seconds
+                    val initialDelay = params["reconnectInterval"]?.toLongOrNull()
+                        ?: config.reconnect?.interval?.timeUnit?.toSeconds(config.reconnect?.interval?.millis ?: 5000) ?: 5L
+                    val maxDelay = params["reconnectMaxInterval"]?.toLongOrNull()
+                        ?: config.reconnect?.maxInterval?.timeUnit?.toSeconds(config.reconnect?.maxInterval?.millis ?: 60000) ?: 60L
+                    setAutomaticReconnect(initialDelay, maxDelay)
+                }
+
+                connectionTimeout = params["connectTimeout"]?.toIntOrNull() ?: 10
+                keepAliveInterval = params["keepAliveInterval"]?.toIntOrNull() ?: 60
+
+                // User credentials from query parameters
+                params["username"]?.let { userName = it }
+                params["password"]?.let { password = it.toCharArray() }
+
+                // TLS: mqtts:// scheme or explicit tls config
+                val isMqtts = parsedBroker.startsWith("mqtts://")
+                if (isMqtts || config.tls != null) {
+                    socketFactory = createSslSocketFactory(config.tls)
                 }
             }
 
@@ -170,7 +192,36 @@ class MqttLink(override val config: LinkConfig) : Link {
         errorListener = listener
     }
 
-    private fun createSslSocketFactory(tls: info.loveyu.mfca.config.TlsConfig): javax.net.SocketFactory {
+    /**
+     * Parse broker URL and extract connection parameters from query string.
+     * Example: mqtt://admin:123456@10.4.125.53:1883?connectTimeout=3&keepAliveInterval=60
+     * Returns pair of (cleanBrokerUrl, paramsMap)
+     */
+    private fun parseBrokerUrl(broker: String): Pair<String, Map<String, String>> {
+        val params = mutableMapOf<String, String>()
+
+        val queryStart = broker.indexOf('?')
+        if (queryStart == -1) {
+            return Pair(broker, params)
+        }
+
+        // Extract query string and parse parameters
+        val queryString = broker.substring(queryStart + 1)
+        val cleanBroker = broker.substring(0, queryStart)
+
+        queryString.split('&').forEach { param ->
+            val kv = param.split('=', limit = 2)
+            if (kv.size == 2) {
+                val key = URLDecoder.decode(kv[0], "UTF-8")
+                val value = URLDecoder.decode(kv[1], "UTF-8")
+                params[key] = value
+            }
+        }
+
+        return Pair(cleanBroker, params)
+    }
+
+    private fun createSslSocketFactory(tls: info.loveyu.mfca.config.TlsConfig?): javax.net.SocketFactory {
         try {
             val certFactory = CertificateFactory.getInstance("X.509")
 
@@ -180,7 +231,7 @@ class MqttLink(override val config: LinkConfig) : Link {
             keyStore.load(null, null)
 
             // Load CA certificate if provided
-            tls.ca?.let { caPath ->
+            tls?.ca?.let { caPath ->
                 val caFile = File(caPath)
                 if (caFile.exists()) {
                     val caCert = certFactory.generateCertificate(caFile.inputStream()) as X509Certificate

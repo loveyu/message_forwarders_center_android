@@ -8,10 +8,17 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.Socket
 import java.net.SocketException
+import java.net.URI
+import java.net.URLDecoder
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * TCP 连接实现
+ * Broker URL 格式: tcp://host:port[?param1=value1&...]
+ * URL 参数支持：
+ *   connectTimeout (秒), soTimeout (秒)
+ *   keepAlive (true/false), noDelay (true/false)
+ *   automaticReconnect, reconnectInterval, reconnectMaxInterval (秒)
  */
 class TcpLink(override val config: LinkConfig) : Link {
 
@@ -24,28 +31,64 @@ class TcpLink(override val config: LinkConfig) : Link {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var readerJob: Job? = null
+    private var reconnectJob: Job? = null
 
-    private val host: String = config.host ?: "127.0.0.1"
-    private val port: Int = config.port ?: 6000
+    private var params: Map<String, String> = emptyMap()
+    private var autoReconnect = true
+    private var reconnectDelay = 5L
+    private var maxReconnectDelay = 60L
+
+    // Resolved host/port from config or broker URL
+    private val host: String
+    private val port: Int
 
     init {
         if (config.type != LinkType.tcp) {
             throw IllegalArgumentException("TcpLink requires tcp type config")
         }
+
+        // Parse broker URL if provided, otherwise use host/port
+        val broker = config.broker
+        if (broker != null) {
+            val (cleanBroker, parsedParams) = parseUrlParams(broker)
+            params = parsedParams
+            val uri = URI(cleanBroker)
+            host = uri.host ?: "127.0.0.1"
+            port = uri.port ?: 6000
+        } else {
+            host = config.host ?: "127.0.0.1"
+            port = config.port ?: 6000
+        }
+
+        // Reconnect settings from params or config
+        autoReconnect = params["automaticReconnect"]?.toBoolean()
+            ?: (config.reconnect?.enabled ?: true)
+        reconnectDelay = params["reconnectInterval"]?.toLongOrNull()
+            ?: config.reconnect?.interval?.timeUnit?.toSeconds(config.reconnect?.interval?.millis ?: 5000) ?: 5L
+        maxReconnectDelay = params["reconnectMaxInterval"]?.toLongOrNull()
+            ?: config.reconnect?.maxInterval?.timeUnit?.toSeconds(config.reconnect?.maxInterval?.millis ?: 60000) ?: 60L
     }
 
     override fun connect(): Boolean {
         if (connected.get()) return true
 
         try {
+            val connectTimeout = params["connectTimeout"]?.toIntOrNull() ?: 10
+            val soTimeout = params["soTimeout"]?.toIntOrNull() ?: 30
+            val keepAlive = params["keepAlive"]?.toBoolean() ?: true
+            val noDelay = params["noDelay"]?.toBoolean() ?: true
+
             LogManager.appendLog("TCP", "Connecting to $host:$port")
 
-            socket = Socket(host, port).apply {
-                soTimeout = 30000
-                keepAlive = true
+            socket = Socket().apply {
+                connect(java.net.InetSocketAddress(host, port), connectTimeout * 1000)
+                soTimeout = soTimeout * 1000
+                this.keepAlive = keepAlive
+                this.tcpNoDelay = noDelay
             }
 
             connected.set(true)
+            reconnectJob?.cancel()
             LogManager.appendLog("TCP", "Connected: $id")
 
             startReading()
@@ -54,11 +97,25 @@ class TcpLink(override val config: LinkConfig) : Link {
             LogManager.appendLog("TCP", "Connection error: ${e.message}")
             errorListener?.invoke(e)
             connected.set(false)
+            scheduleReconnect()
             return false
         }
     }
 
+    private fun scheduleReconnect() {
+        if (!autoReconnect) return
+
+        reconnectJob?.cancel()
+        reconnectJob = scope.launch {
+            kotlinx.coroutines.delay(reconnectDelay * 1000)
+            LogManager.appendLog("TCP", "Attempting reconnect: $id")
+            connect()
+        }
+    }
+
     override fun disconnect() {
+        autoReconnect = false
+        reconnectJob?.cancel()
         try {
             connected.set(false)
             readerJob?.cancel()
@@ -108,12 +165,14 @@ class TcpLink(override val config: LinkConfig) : Link {
                         } else if (bytesRead == -1) {
                             LogManager.appendLog("TCP", "Server closed connection")
                             connected.set(false)
+                            scheduleReconnect()
                             break
                         }
                     } catch (e: SocketException) {
                         if (connected.get()) {
                             LogManager.appendLog("TCP", "Read error: ${e.message}")
                             errorListener?.invoke(e)
+                            scheduleReconnect()
                         }
                         break
                     }
@@ -122,6 +181,7 @@ class TcpLink(override val config: LinkConfig) : Link {
                 if (connected.get()) {
                     LogManager.appendLog("TCP", "Read error: ${e.message}")
                     errorListener?.invoke(e)
+                    scheduleReconnect()
                 }
             }
         }
@@ -133,5 +193,24 @@ class TcpLink(override val config: LinkConfig) : Link {
 
     override fun setOnErrorListener(listener: (Exception) -> Unit) {
         errorListener = listener
+    }
+
+    private fun parseUrlParams(url: String): Pair<String, Map<String, String>> {
+        val params = mutableMapOf<String, String>()
+        val queryStart = url.indexOf('?')
+        if (queryStart == -1) {
+            return Pair(url, params)
+        }
+        val queryString = url.substring(queryStart + 1)
+        val cleanUrl = url.substring(0, queryStart)
+        queryString.split('&').forEach { param ->
+            val kv = param.split('=', limit = 2)
+            if (kv.size == 2) {
+                val key = URLDecoder.decode(kv[0], "UTF-8")
+                val value = URLDecoder.decode(kv[1], "UTF-8")
+                params[key] = value
+            }
+        }
+        return Pair(cleanUrl, params)
     }
 }

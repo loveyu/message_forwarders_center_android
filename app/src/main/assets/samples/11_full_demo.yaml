@@ -5,17 +5,14 @@ version: "2.0"
 
 # ============================================
 # 链接配置（支持 MQTT / WebSocket / TCP）
+# 所有连接参数通过 URL query 部分传递
 # ============================================
 links:
   # 主 MQTT Broker（仅 WiFi 环境）
   - id: main_mqtt
     type: mqtt
-    broker: tcp://mqtt.home.local:1883
+    broker: mqtt://mqtt.home.local:1883?connectTimeout=10&keepAliveInterval=60&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60
     clientId: home_forwarder
-    reconnect:
-      enabled: true
-      interval: 5s
-      maxInterval: 60s
     enabledWhen:
       network:
         type: wifi
@@ -26,12 +23,8 @@ links:
   # 备用移动网络 MQTT
   - id: mobile_mqtt
     type: mqtt
-    broker: tcp://backup.example.com:1883
+    broker: mqtt://backup.example.com:1883?connectTimeout=10&keepAliveInterval=60&automaticReconnect=true&reconnectInterval=10&reconnectMaxInterval=120
     clientId: mobile_backup
-    reconnect:
-      enabled: true
-      interval: 10s
-      maxInterval: 120s
     enabledWhen:
       network:
         type: mobile
@@ -39,15 +32,12 @@ links:
   # WebSocket 服务器
   - id: ws_server
     type: websocket
-    url: ws://api.example.com/ws
-    reconnect:
-      enabled: true
+    url: ws://api.example.com/ws?readTimeout=30&writeTimeout=30&pingInterval=30&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=30
 
   # 局域网 TCP 设备
   - id: tcp_device
     type: tcp
-    host: 192.168.1.50
-    port: 9000
+    broker: tcp://192.168.1.50:9000?connectTimeout=5&soTimeout=30&keepAlive=true&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60
 
 # ============================================
 # 输入配置

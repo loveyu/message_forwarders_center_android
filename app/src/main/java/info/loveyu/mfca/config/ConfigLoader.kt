@@ -53,7 +53,7 @@ object ConfigLoader {
                     url = map["url"] as? String,
                     host = map["host"] as? String,
                     port = (map["port"] as? Number)?.toInt(),
-                    reconnect = parseReconnect(map["reconnect"]),
+                    reconnect = null,  # Reconnect params now in broker URL query
                     tls = parseTls(map["tls"])
                 )
             }
@@ -67,16 +67,6 @@ object ConfigLoader {
             "tcp" -> LinkType.tcp
             else -> LinkType.mqtt
         }
-    }
-
-    private fun parseReconnect(reconnect: Any?): ReconnectConfig? {
-        if (reconnect == null) return null
-        val map = reconnect as Map<String, Any>
-        return ReconnectConfig(
-            enabled = map["enabled"] as? Boolean ?: true,
-            interval = Duration(map["interval"] as? String ?: "5s"),
-            maxInterval = Duration(map["max_interval"] as? String ?: "60s")
-        )
     }
 
     private fun parseTls(tls: Any?): TlsConfig? {

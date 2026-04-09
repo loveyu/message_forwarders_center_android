@@ -15,4 +15,5 @@
     <string name="messages_received">Messages Received</string>
     <string name="messages_forwarded">Messages Forwarded</string>
     <string name="no_forward_target">No forward target set</string>
+    <string name="config_not_found">Configuration not found, redirecting to config page</string>
 </resources>

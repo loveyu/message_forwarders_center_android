@@ -1,11 +1,16 @@
 package info.loveyu.mfca.ui
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,6 +25,7 @@ import info.loveyu.mfca.util.ConfigBackupManager
 import info.loveyu.mfca.util.ConfigDownloader
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,6 +39,40 @@ fun ConfigScreen(
     var isLoading by remember { mutableStateOf(false) }
     var showBackupDialog by remember { mutableStateOf(false) }
     var backupList by remember { mutableStateOf(ConfigBackupManager.listBackups(context)) }
+
+    // Open file with external editor
+    fun openFileWithEditor(file: File) {
+        try {
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/json")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(intent, "选择编辑器"))
+        } catch (e: Exception) {
+            Toast.makeText(context, "无法打开文件: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Open current config in external editor
+    fun openCurrentConfigInEditor() {
+        val currentConfig = preferences.loadFullConfig()
+        if (currentConfig.isNullOrBlank()) {
+            Toast.makeText(context, R.string.config_not_found, Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            val tempFile = File(context.cacheDir, "current_config.json")
+            tempFile.writeText(currentConfig)
+            openFileWithEditor(tempFile)
+        } catch (e: Exception) {
+            Toast.makeText(context, "无法打开文件: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     fun handleDownloadConfig() {
         if (configUrl.isBlank()) {
@@ -222,6 +262,20 @@ fun ConfigScreen(
                     Text(stringResource(R.string.restore_config))
                 }
             }
+
+            // Open current config in external editor
+            OutlinedButton(
+                onClick = { openCurrentConfigInEditor() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("用外部编辑器打开当前配置")
+            }
         }
     }
 
@@ -248,6 +302,11 @@ fun ConfigScreen(
                                     text = backup.displayName,
                                     modifier = Modifier.weight(1f)
                                 )
+                                TextButton(
+                                    onClick = { openFileWithEditor(backup.file) }
+                                ) {
+                                    Text("打开")
+                                }
                                 TextButton(
                                     onClick = { handleRestoreBackup(backup) }
                                 ) {

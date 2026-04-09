@@ -82,6 +82,7 @@ class ForwardService : Service() {
             private set
 
         var onStatsChanged: (() -> Unit)? = null
+        var onStartFailed: ((String) -> Unit)? = null
 
         private var serviceInstance: ForwardService? = null
 
@@ -232,35 +233,33 @@ class ForwardService : Service() {
 
     private fun startLegacyMode() {
         if (legacyMode) return
+        startLegacyModeInternal()
+    }
 
-        try {
-            val port = preferences.port
-            httpServer = HttpServer(port) { body ->
-                if (!isReceivingEnabled) return@HttpServer
+    private fun startLegacyModeInternal() {
+        val port = preferences.port
+        httpServer = HttpServer(port) { body ->
+            if (!isReceivingEnabled) return@HttpServer
 
-                receivedCount++
-                onStatsChanged?.invoke()
-                updateNotification()
+            receivedCount++
+            onStatsChanged?.invoke()
+            updateNotification()
 
-                val target = preferences.forwardTarget
-                if (target.isNotEmpty() && isForwardingEnabled) {
-                    MessageForwarder.forward(target, body) { success ->
-                        if (success) {
-                            forwardedCount++
-                            onStatsChanged?.invoke()
-                            updateNotification()
-                        }
+            val target = preferences.forwardTarget
+            if (target.isNotEmpty() && isForwardingEnabled) {
+                MessageForwarder.forward(target, body) { success ->
+                    if (success) {
+                        forwardedCount++
+                        onStatsChanged?.invoke()
+                        updateNotification()
                     }
                 }
             }
-            httpServer?.startServer()
-            isRunning = true
-            saveStatus()
-            LogManager.appendLog("SERVICE", "Legacy mode started on port $port")
-        } catch (e: IOException) {
-            LogManager.appendLog("SERVICE", "Failed to start HTTP server: ${e.message}")
-            stopSelf()
         }
+        httpServer?.startServer()
+        isRunning = true
+        saveStatus()
+        LogManager.appendLog("SERVICE", "Legacy mode started on port $port")
     }
 
     private fun stopLegacyMode() {
@@ -323,7 +322,13 @@ class ForwardService : Service() {
             e.printStackTrace()
             // Fall back to legacy mode
             legacyMode = true
-            startLegacyMode()
+            try {
+                startLegacyModeInternal()
+            } catch (ex: Exception) {
+                LogManager.appendLog("SERVICE", "Failed to start service: ${ex.message}")
+                isRunning = false
+                onStartFailed?.invoke("启动失败: ${ex.message}")
+            }
         }
     }
 

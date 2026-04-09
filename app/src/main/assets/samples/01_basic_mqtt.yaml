@@ -1,21 +1,26 @@
 # MQTT 基础连接示例
-# 演示：基本 MQTT 链接配置，包含重连和 TLS 支持
+# 演示：MQTT 链接配置，所有参数通过 broker URL 的 query 部分传递
 
 version: "2.0"
 
 links:
   - id: local_mqtt
     type: mqtt
-    broker: tcp://localhost:1883
+    # 所有连接参数通过 URL query 部分传递，支持 URL 编码
+    # 协议: mqtt:// (TCP), mqtts:// (TLS)
+    # 参数: connectTimeout, keepAliveInterval, automaticReconnect,
+    #       reconnectInterval, reconnectMaxInterval, username, password
+    broker: mqtt://admin:123456@localhost:1883?connectTimeout=3&keepAliveInterval=60&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60
     clientId: client_001
-    reconnect:
-      enabled: true
-      interval: 5s
-      maxInterval: 60s
-    tls:
-      # ca: /path/to/ca.pem      # CA 证书
-      # cert: /path/to/cert.pem  # 客户端证书
-      # key: /path/to/key.pem    # 客户端私钥
+
+  # TLS/SSL 连接示例 (mqtts:// 或带 tls 配置)
+  # - id: mqtts_broker
+  #   type: mqtt
+  #   broker: mqtts://localhost:8883?connectTimeout=10&keepAliveInterval=60
+  #   tls:
+  #     ca: /path/to/ca.pem      # CA 证书 (可选)
+  #     cert: /path/to/cert.pem  # 客户端证书 (可选)
+  #     key: /path/to/key.pem    # 客户端私钥 (可选)
 
 inputs:
   link:

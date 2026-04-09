@@ -1,22 +1,26 @@
 # TCP 连接示例
-# 演示：TCP Socket 链接配置，适用于自定义协议或串口转网口设备
+# 演示：TCP Socket 链接配置，支持 broker URL 格式和独立 host/port 格式
 
 version: "2.0"
 
 links:
+  # Broker URL 格式 - 所有参数通过 URL query 传递
   - id: tcp_device
     type: tcp
-    host: 192.168.1.100
-    port: 9000
-    reconnect:
-      enabled: true
-      interval: 5s
-      maxInterval: 60s
+    broker: tcp://192.168.1.100:9000?connectTimeout=5&soTimeout=30&keepAlive=true&noDelay=true&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60
 
+  # 独立配置格式 (host/port) - reconnect 参数也通过 URL query
   - id: tcp_server
     type: tcp
     host: api.example.com
     port: 9001
+
+  # TLS/SSL TCP 示例
+  # - id: tcp_tls
+  #   type: tcp
+  #   broker: tcps://192.168.1.100:9002?connectTimeout=10&keepAlive=true
+  #   tls:
+  #     ca: /data/certs/ca.pem
 
 inputs:
   link:

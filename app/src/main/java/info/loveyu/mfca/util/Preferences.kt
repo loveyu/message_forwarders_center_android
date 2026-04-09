@@ -41,6 +41,10 @@ class Preferences(context: Context) {
         return prefs.getString("full_config", null)
     }
 
+    fun hasConfig(): Boolean {
+        return prefs.contains("full_config") && prefs.getString("full_config", null)?.isNotBlank() == true
+    }
+
     fun loadConfigFromJson(jsonString: String): Boolean {
         return try {
             val json = JSONObject(jsonString)

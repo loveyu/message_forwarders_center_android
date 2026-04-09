@@ -68,13 +68,23 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        ensureServiceRunning()
-
         setContent {
             MaterialTheme {
                 val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
                 val scope = rememberCoroutineScope()
                 var currentScreen by remember { mutableStateOf<Screen?>(null) }
+
+                // Check config existence on startup
+                LaunchedEffect(Unit) {
+                    if (!ForwardService.isServiceAlive() && !Preferences(this@MainActivity).hasConfig()) {
+                        Toast.makeText(
+                            this@MainActivity,
+                            R.string.config_not_found,
+                            Toast.LENGTH_LONG
+                        ).show()
+                        currentScreen = Screen.Config
+                    }
+                }
 
                 when (currentScreen) {
                     Screen.Config -> ConfigScreen(onBack = { currentScreen = null })
@@ -185,6 +195,13 @@ fun MainScreen(
         }
     }
 
+    // Listen for start failures - runs on main thread
+    LaunchedEffect(Unit) {
+        ForwardService.onStartFailed = { errorMsg ->
+            Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
+        }
+    }
+
     val localIp = remember {
         try {
             val interfaces = NetworkInterface.getNetworkInterfaces()
@@ -222,8 +239,7 @@ fun MainScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // 顶部状态卡片
@@ -294,9 +310,11 @@ fun MainScreen(
                 }
             }
 
-            // 底部日志卡片
+            // 底部日志卡片 - 占据剩余全部位置
             Card(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),

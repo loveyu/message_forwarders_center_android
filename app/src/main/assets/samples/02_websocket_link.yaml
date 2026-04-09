@@ -1,22 +1,25 @@
 # WebSocket 连接示例
-# 演示：WebSocket 链接配置，适用于 H5 应用或 WS 服务器
+# 演示：WebSocket 链接配置，所有参数通过 URL query 部分传递
 
 version: "2.0"
 
 links:
+  # 标准 WebSocket - 参数通过 URL query 传递
   - id: ws_server
     type: websocket
-    url: ws://localhost:8080/ws
-    reconnect:
-      enabled: true
-      interval: 3s
-      maxInterval: 30s
+    url: ws://localhost:8080/ws?readTimeout=30&writeTimeout=30&pingInterval=30&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=30
 
+  # WSS (TLS) WebSocket
   - id: wss_server
     type: websocket
-    url: wss://secure.example.com/ws
+    url: wss://secure.example.com/ws?readTimeout=60&automaticReconnect=true
     tls:
       ca: /data/certs/ca.pem
+
+  # 带认证的 WebSocket
+  # - id: ws_auth
+  #   type: websocket
+  #   url: ws://localhost:8080/ws?username=admin&password=secret
 
 inputs:
   link:
