@@ -15,7 +15,8 @@ object AppStatusManager {
     private val yaml = Yaml(LoaderOptions())
 
     fun loadStatus(context: Context): AppStatusConfig {
-        val file = File(context.filesDir, STATUS_FILE_NAME)
+        val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
+        val file = File(baseDir, STATUS_FILE_NAME)
         if (!file.exists()) {
             return AppStatusConfig()
         }
@@ -60,7 +61,8 @@ object AppStatusManager {
             saveYaml.dump(data, writer)
             writer.close()
 
-            val file = File(context.filesDir, STATUS_FILE_NAME)
+            val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
+            val file = File(baseDir, STATUS_FILE_NAME)
             file.writeText(writer.toString())
             LogManager.appendLog("APP_STATUS", "Status saved")
         } catch (e: Exception) {

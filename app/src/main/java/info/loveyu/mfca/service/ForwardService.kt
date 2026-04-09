@@ -293,7 +293,7 @@ class ForwardService : Service() {
             OutputManager.initialize(this, config)
 
             // 4. Initialize Dead Letter Handler
-            deadLetterHandler = DeadLetterHandler(config.deadLetter)
+            deadLetterHandler = DeadLetterHandler(this, config.deadLetter)
 
             // 5. Initialize Rule Engine
             LogManager.appendLog("CONFIG", "Initializing rule engine...")

@@ -1,5 +1,7 @@
 package info.loveyu.mfca.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -263,14 +265,27 @@ fun SettingsScreen(
 
                         OutlinedButton(
                             onClick = {
-                                val intent = Intent(Intent.ACTION_VIEW).apply {
-                                    data = Uri.fromFile(context.filesDir)
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                                }
-                                try {
-                                    context.startActivity(Intent.createChooser(intent, "打开数据目录"))
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, "无法打开文件管理器", Toast.LENGTH_SHORT).show()
+                                val dataDir = context.getExternalFilesDir(null)
+                                if (dataDir != null) {
+                                    try {
+                                        val uri = androidx.core.content.FileProvider.getUriForFile(
+                                            context,
+                                            "${context.packageName}.fileprovider",
+                                            dataDir
+                                        )
+                                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                                            setDataAndType(uri, "resource/folder")
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(Intent.createChooser(intent, "打开数据目录"))
+                                    } catch (e: Exception) {
+                                        // Fallback: copy path to clipboard
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("数据目录", dataDir.absolutePath))
+                                        Toast.makeText(context, "已复制路径: ${dataDir.absolutePath}", Toast.LENGTH_LONG).show()
+                                    }
+                                } else {
+                                    Toast.makeText(context, "外部存储不可用", Toast.LENGTH_SHORT).show()
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
@@ -421,7 +436,7 @@ fun SettingsScreen(
 private suspend fun exportAppDataToZip(context: Context, outputUri: Uri): String? {
     return withContext(Dispatchers.IO) {
         try {
-            val filesDir = context.filesDir
+            val filesDir = context.getExternalFilesDir(null) ?: context.filesDir
             val outputStream = context.contentResolver.openOutputStream(outputUri) ?: return@withContext null
 
             ZipOutputStream(BufferedOutputStream(outputStream)).use { zipOut ->

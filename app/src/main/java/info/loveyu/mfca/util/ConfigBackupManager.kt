@@ -19,7 +19,8 @@ object ConfigBackupManager {
     )
 
     fun getBackupDir(context: Context): File {
-        val dir = File(context.filesDir, BACKUP_DIR)
+        val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
+        val dir = File(baseDir, BACKUP_DIR)
         if (!dir.exists()) {
             dir.mkdirs()
         }

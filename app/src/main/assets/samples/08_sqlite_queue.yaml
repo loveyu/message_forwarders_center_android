@@ -3,8 +3,8 @@
 #
 # 路径协议说明:
 # - /absolute/path.db     - 绝对路径（需应用有权限）
-# - data://relative.db    - 应用私有数据目录 (context.filesDir)
-# - sdcard://relative.db  - 外部存储目录 (context.getExternalFilesDir)
+# - data://relative.db    - 应用外部数据目录 (context.getExternalFilesDir)
+# - sdcard://relative.db  - 外部存储根目录 (Environment.getExternalStorageDirectory)
 
 version: "0.1"
 

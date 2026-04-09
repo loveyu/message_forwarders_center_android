@@ -43,7 +43,8 @@ object LogManager {
     fun isPaused(): Boolean = isPaused
 
     fun saveLogsToFile(context: Context): String? {
-        val logDir = File(context.filesDir, "logs")
+        val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
+        val logDir = File(baseDir, "logs")
         if (!logDir.exists()) {
             logDir.mkdirs()
         }
@@ -60,7 +61,8 @@ object LogManager {
     }
 
     fun getLogsDir(context: Context): File {
-        val logDir = File(context.filesDir, "logs")
+        val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
+        val logDir = File(baseDir, "logs")
         if (!logDir.exists()) {
             logDir.mkdirs()
         }

@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.os.Environment
 import info.loveyu.mfca.config.BackoffType
 import info.loveyu.mfca.config.SqliteQueueConfig
 import info.loveyu.mfca.util.LogManager
@@ -53,20 +54,20 @@ class SqliteQueue(
     private fun resolvePath(path: String): String {
         return when {
             path.startsWith("data://") -> {
-                // 应用私有数据目录
+                // 应用外部数据目录
                 val relativePath = path.removePrefix("data://")
-                File(context.filesDir, relativePath).absolutePath
-            }
-            path.startsWith("sdcard://") -> {
-                // 外部存储卡
-                val relativePath = path.removePrefix("sdcard://")
                 val externalDir = context.getExternalFilesDir(null)
                 if (externalDir != null) {
                     File(externalDir, relativePath).absolutePath
                 } else {
-                    LogManager.appendLog("QUEUE", "External storage not available, falling back to internal")
                     File(context.filesDir, relativePath).absolutePath
                 }
+            }
+            path.startsWith("sdcard://") -> {
+                // 外部存储根目录
+                val relativePath = path.removePrefix("sdcard://")
+                val sdcardDir = Environment.getExternalStorageDirectory()
+                File(sdcardDir, relativePath).absolutePath
             }
             else -> path
         }

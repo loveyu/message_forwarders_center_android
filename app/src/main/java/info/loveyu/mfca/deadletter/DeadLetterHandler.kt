@@ -1,5 +1,6 @@
 package info.loveyu.mfca.deadletter
 
+import android.content.Context
 import info.loveyu.mfca.config.DeadLetterConfig
 import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.queue.QueueItem
@@ -13,6 +14,7 @@ import java.util.Locale
  * 死信队列处理器
  */
 class DeadLetterHandler(
+    private val context: Context,
     private val config: DeadLetterConfig
 ) {
     private val deadLetterQueue = mutableListOf<DeadLetterItem>()
@@ -71,7 +73,7 @@ class DeadLetterHandler(
 
     private fun saveDeadLetterToFile(item: DeadLetterItem) {
         try {
-            val dir = File("/data/data/info.loveyu.mfca/files/dead_letters")
+            val dir = File(context.getExternalFilesDir(null) ?: context.filesDir, "dead_letters")
             if (!dir.exists()) {
                 dir.mkdirs()
             }

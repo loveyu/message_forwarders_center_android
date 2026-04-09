@@ -101,10 +101,11 @@ class MainActivity : ComponentActivity() {
                 val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
                 val scope = rememberCoroutineScope()
                 var currentScreen by remember { mutableStateOf<Screen?>(null) }
+                val preferences = remember { Preferences(this@MainActivity) }
 
                 // Check config existence on startup
                 LaunchedEffect(Unit) {
-                    if (!ForwardService.isServiceAlive() && !Preferences(this@MainActivity).hasConfig()) {
+                    if (!ForwardService.isServiceAlive() && !preferences.hasConfig()) {
                         Toast.makeText(
                             this@MainActivity,
                             R.string.config_not_found,
@@ -140,7 +141,18 @@ class MainActivity : ComponentActivity() {
                         ) {
                             MainScreen(
                                 onOpenDrawer = { scope.launch { drawerState.open() } },
-                                onStartServer = { startServer() },
+                                onStartServer = {
+                                    if (!preferences.hasConfig()) {
+                                        Toast.makeText(
+                                            this@MainActivity,
+                                            R.string.config_not_found,
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                        currentScreen = Screen.Config
+                                    } else {
+                                        startServer()
+                                    }
+                                },
                                 onStopServer = { stopServer() }
                             )
                         }
