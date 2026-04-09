@@ -31,6 +31,7 @@ import androidx.core.content.ContextCompat
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.config.ConfigLoader
 import info.loveyu.mfca.ui.HelpScreen
+import info.loveyu.mfca.ui.LicenseScreen
 import info.loveyu.mfca.ui.SettingsScreen
 import info.loveyu.mfca.util.ConfigBackupManager
 import info.loveyu.mfca.util.ConfigDownloader
@@ -73,10 +74,17 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 var showHelp by remember { mutableStateOf(false) }
                 var showSettings by remember { mutableStateOf(false) }
+                var showLicenses by remember { mutableStateOf(false) }
 
                 when {
+                    showLicenses -> {
+                        LicenseScreen(onBack = { showLicenses = false })
+                    }
                     showSettings -> {
-                        SettingsScreen(onBack = { showSettings = false })
+                        SettingsScreen(
+                            onBack = { showSettings = false },
+                            onOpenLicenses = { showLicenses = true }
+                        )
                     }
                     showHelp -> {
                         HelpScreen(onBack = { showHelp = false })

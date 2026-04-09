@@ -34,7 +34,8 @@ import java.util.zip.ZipOutputStream
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenLicenses: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -255,6 +256,13 @@ fun SettingsScreen(
                         ) {
                             Text("版本")
                             Text("0.1.0")
+                        }
+                        HorizontalDivider()
+                        TextButton(
+                            onClick = onOpenLicenses,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("开源许可")
                         }
                     }
                 }
