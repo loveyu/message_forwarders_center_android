@@ -1,6 +1,7 @@
 package info.loveyu.mfca.util
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,6 +22,7 @@ object LogManager {
         if (isPaused) return
         val timestamp = dateFormat.format(Date())
         val logLine = "[$timestamp] [$tag] $message"
+        Log.d(tag, message)
         _logs.value = _logs.value + logLine
     }
 

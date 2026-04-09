@@ -413,7 +413,7 @@ fun MainScreen(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(200.dp),
+                            .weight(1f),
                         state = listState
                     ) {
                         items(logs) { log ->

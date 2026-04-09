@@ -45,7 +45,13 @@ class MqttLink(override val config: LinkConfig) : Link {
 
         try {
             // Parse broker URL to extract connection parameters from query string
-            val (parsedBroker, params) = parseBrokerUrl(broker)
+            val (rawBroker, params) = parseBrokerUrl(broker)
+            // Paho MQTT requires tcp:// (non-TLS) or ssl:// (TLS), not mqtt:// / mqtts://
+            val parsedBroker = when {
+                rawBroker.startsWith("mqtts://") -> rawBroker.replaceFirst("mqtts://", "ssl://")
+                rawBroker.startsWith("mqtt://") -> rawBroker.replaceFirst("mqtt://", "tcp://")
+                else -> rawBroker
+            }
 
             LogManager.appendLog("MQTT", "Connecting to $parsedBroker as $clientId")
 
@@ -73,7 +79,7 @@ class MqttLink(override val config: LinkConfig) : Link {
                 params["password"]?.let { password = it.toCharArray() }
 
                 // TLS: mqtts:// scheme or explicit tls config
-                val isMqtts = parsedBroker.startsWith("mqtts://")
+                val isMqtts = rawBroker.startsWith("mqtts://")
                 if (isMqtts || config.tls != null) {
                     socketFactory = createSslSocketFactory(config.tls)
                 }
