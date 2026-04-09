@@ -82,6 +82,9 @@ class ForwardService : Service() {
         var onStatsChanged: (() -> Unit)? = null
         var onStartFailed: ((String) -> Unit)? = null
 
+        @Volatile
+        private var lastNotificationStats: String? = null
+
         private var serviceInstance: ForwardService? = null
 
         // Current loaded config
@@ -479,6 +482,13 @@ class ForwardService : Service() {
     }
 
     private fun updateNotification() {
+        val statsText = if (isRunning) {
+            "L${linkCount} I${inputCount} O${outputCount} · R${receivedCount} S${forwardedCount}"
+        } else {
+            "已停止"
+        }
+        if (statsText == lastNotificationStats) return
+        lastNotificationStats = statsText
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID, createNotification())
     }

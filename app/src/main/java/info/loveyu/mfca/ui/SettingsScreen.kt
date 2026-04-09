@@ -268,18 +268,17 @@ fun SettingsScreen(
                                 val dataDir = context.getExternalFilesDir(null)
                                 if (dataDir != null) {
                                     try {
-                                        val uri = androidx.core.content.FileProvider.getUriForFile(
-                                            context,
-                                            "${context.packageName}.fileprovider",
-                                            dataDir
-                                        )
-                                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                                            setDataAndType(uri, "vnd.android.document/directory")
-                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                            addCategory(Intent.CATEGORY_OPENABLE)
+                                            type = "*/*"
                                         }
-                                        context.startActivity(Intent.createChooser(intent, "打开数据目录"))
+                                        context.startActivity(Intent.createChooser(intent, "浏览数据文件"))
+                                        Toast.makeText(context, "数据目录: ${dataDir.absolutePath}", Toast.LENGTH_LONG).show()
                                     } catch (e: Exception) {
-                                        Toast.makeText(context, "无法打开: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        LogManager.appendLog("UI", "打开数据目录失败: ${e.message}")
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("数据目录", dataDir.absolutePath))
+                                        Toast.makeText(context, "已复制路径: ${dataDir.absolutePath}", Toast.LENGTH_LONG).show()
                                     }
                                 } else {
                                     Toast.makeText(context, "外部存储不可用", Toast.LENGTH_SHORT).show()
