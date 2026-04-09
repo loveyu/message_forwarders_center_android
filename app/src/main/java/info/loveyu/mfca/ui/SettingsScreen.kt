@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.ui.res.stringResource
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.R
+import info.loveyu.mfca.util.AppStatusManager
 import info.loveyu.mfca.util.ConfigBackupManager
 import info.loveyu.mfca.util.LogManager
 import kotlinx.coroutines.Dispatchers
@@ -45,10 +47,13 @@ fun SettingsScreen(
     var isClearing by remember { mutableStateOf(false) }
     var showClearConfirmDialog by remember { mutableStateOf(false) }
     var showExportSuccess by remember { mutableStateOf<String?>(null) }
+    var autoStart by remember { mutableStateOf(false) }
 
-    // Load backup count
+    // Load backup count and status
     LaunchedEffect(Unit) {
         backupCount = ConfigBackupManager.listBackups(context).size
+        val status = AppStatusManager.loadStatus(context)
+        autoStart = status.autoStart
     }
 
     // File export launcher using Storage Access Framework
@@ -226,6 +231,41 @@ fun SettingsScreen(
                 }
             }
 
+            // 系统设置
+            item {
+                Text(
+                    text = "系统设置",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("开机自启动")
+                        Switch(
+                            checked = autoStart,
+                            onCheckedChange = { enabled ->
+                                autoStart = enabled
+                                val currentStatus = AppStatusManager.loadStatus(context)
+                                val newStatus = currentStatus.copy(autoStart = enabled)
+                                AppStatusManager.saveStatus(context, newStatus)
+                                LogManager.appendLog("SETTINGS", "Auto-start ${if (enabled) "enabled" else "disabled"}")
+                            }
+                        )
+                    }
+                }
+            }
+
             // 关于
             item {
                 Text(
@@ -263,6 +303,15 @@ fun SettingsScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("开源许可")
+                        }
+                        TextButton(
+                            onClick = {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse("https://github.com/loveyu/message_forwarders_center_android"))
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(R.string.github))
                         }
                     }
                 }

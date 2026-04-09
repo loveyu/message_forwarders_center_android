@@ -67,4 +67,7 @@
     <string name="clear_all_backups">清空所有备份</string>
     <string name="clear_success">清空成功</string>
     <string name="clear_failed">清空失败</string>
+    <string name="sample_configs">示例配置</string>
+    <string name="system_settings">系统设置</string>
+    <string name="github">GitHub</string>
 </resources>

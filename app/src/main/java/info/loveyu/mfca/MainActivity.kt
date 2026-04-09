@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -18,23 +17,24 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import android.widget.Toast
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.service.ForwardService
-import info.loveyu.mfca.config.ConfigLoader
+import info.loveyu.mfca.ui.ConfigScreen
+import info.loveyu.mfca.ui.DrawerMenu
+import info.loveyu.mfca.ui.DrawerMenuItem
 import info.loveyu.mfca.ui.HelpScreen
 import info.loveyu.mfca.ui.LicenseScreen
 import info.loveyu.mfca.ui.SettingsScreen
-import info.loveyu.mfca.util.ConfigBackupManager
-import info.loveyu.mfca.util.ConfigDownloader
+import info.loveyu.mfca.util.AppStatusManager
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
 import kotlinx.coroutines.launch
@@ -72,30 +72,40 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme {
-                var showHelp by remember { mutableStateOf(false) }
-                var showSettings by remember { mutableStateOf(false) }
-                var showLicenses by remember { mutableStateOf(false) }
+                val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+                val scope = rememberCoroutineScope()
+                var currentScreen by remember { mutableStateOf<Screen?>(null) }
 
-                when {
-                    showLicenses -> {
-                        LicenseScreen(onBack = { showLicenses = false })
-                    }
-                    showSettings -> {
-                        SettingsScreen(
-                            onBack = { showSettings = false },
-                            onOpenLicenses = { showLicenses = true }
-                        )
-                    }
-                    showHelp -> {
-                        HelpScreen(onBack = { showHelp = false })
-                    }
-                    else -> {
-                        MainScreen(
-                            onStartServer = { startServer() },
-                            onStopServer = { stopServer() },
-                            onShowHelp = { showHelp = true },
-                            onShowSettings = { showSettings = true }
-                        )
+                when (currentScreen) {
+                    Screen.Config -> ConfigScreen(onBack = { currentScreen = null })
+                    Screen.Help -> HelpScreen(onBack = { currentScreen = null })
+                    Screen.Settings -> SettingsScreen(
+                        onBack = { currentScreen = null },
+                        onOpenLicenses = { currentScreen = Screen.Licenses }
+                    )
+                    Screen.Licenses -> LicenseScreen(onBack = { currentScreen = Screen.Settings })
+                    null -> {
+                        ModalNavigationDrawer(
+                            drawerState = drawerState,
+                            drawerContent = {
+                                DrawerMenu(
+                                    onItemClick = { item ->
+                                        scope.launch { drawerState.close() }
+                                        when (item) {
+                                            DrawerMenuItem.CONFIG -> currentScreen = Screen.Config
+                                            DrawerMenuItem.SAMPLES -> currentScreen = Screen.Help
+                                            DrawerMenuItem.SETTINGS -> currentScreen = Screen.Settings
+                                        }
+                                    }
+                                )
+                            }
+                        ) {
+                            MainScreen(
+                                onOpenDrawer = { scope.launch { drawerState.open() } },
+                                onStartServer = { startServer() },
+                                onStopServer = { stopServer() }
+                            )
+                        }
                     }
                 }
             }
@@ -109,8 +119,9 @@ class MainActivity : ComponentActivity() {
 
     private fun ensureServiceRunning() {
         if (!ForwardService.isServiceAlive()) {
+            val status = AppStatusManager.loadStatus(this)
             val intent = Intent(this, ForwardService::class.java).apply {
-                action = ForwardService.ACTION_INIT
+                action = if (status.isRunning) ForwardService.ACTION_START else ForwardService.ACTION_INIT
             }
             startForegroundService(intent)
         } else {
@@ -133,31 +144,25 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private enum class Screen {
+    Config, Help, Settings, Licenses
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
+    onOpenDrawer: () -> Unit,
     onStartServer: () -> Unit,
-    onStopServer: () -> Unit,
-    onShowHelp: () -> Unit,
-    onShowSettings: () -> Unit
+    onStopServer: () -> Unit
 ) {
     val context = LocalContext.current
     val preferences = remember { Preferences(context) }
-    val scope = rememberCoroutineScope()
 
     var isRunning by remember { mutableStateOf(ForwardService.isRunning) }
     var port by remember { mutableIntStateOf(preferences.port) }
-    var forwardTarget by remember { mutableStateOf(preferences.forwardTarget) }
-    var autoStart by remember { mutableStateOf(preferences.autoStart) }
     var receivedCount by remember { mutableIntStateOf(ForwardService.receivedCount) }
     var forwardedCount by remember { mutableIntStateOf(ForwardService.forwardedCount) }
-
-    var configUrl by remember { mutableStateOf(preferences.configFilePath) }
-    var isLoading by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(LogManager.isPaused()) }
-
-    var showBackupDialog by remember { mutableStateOf(false) }
-    var backupList by remember { mutableStateOf(ConfigBackupManager.listBackups(context)) }
 
     val logs by LogManager.logs.collectAsState()
     val listState = rememberLazyListState()
@@ -198,142 +203,15 @@ fun MainScreen(
         "0.0.0.0"
     }
 
-    fun handleDownloadConfig() {
-        if (configUrl.isBlank()) {
-            Toast.makeText(context, R.string.config_url_hint, Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        isLoading = true
-        LogManager.appendLog("CONFIG", "开始下载配置: $configUrl")
-
-        ConfigDownloader.downloadConfig(configUrl) { result ->
-            isLoading = false
-            result.fold(
-                onSuccess = { content ->
-                    LogManager.appendLog("CONFIG", "配置下载成功，开始解析...")
-
-                    try {
-                        // Parse YAML config
-                        val config = ConfigLoader.loadConfig(content)
-                        LogManager.appendLog("CONFIG", "配置解析成功，版本: ${config.version}")
-
-                        // Backup current config if exists
-                        val currentConfig = preferences.loadFullConfig()
-                        if (currentConfig != null) {
-                            ConfigBackupManager.backupCurrentConfig(context, currentConfig)
-                            LogManager.appendLog("CONFIG", "原配置已备份")
-                        }
-
-                        // Save config
-                        preferences.saveFullConfig(content)
-                        preferences.configFilePath = configUrl
-
-                        // Try to start with new config via ForwardService
-                        val success = ForwardService.loadConfig(content)
-                        if (success) {
-                            LogManager.appendLog("CONFIG", "YAML配置应用成功")
-                            Toast.makeText(context, R.string.config_download_success, Toast.LENGTH_SHORT).show()
-                        } else {
-                            LogManager.appendLog("CONFIG", "配置加载失败")
-                            Toast.makeText(context, R.string.config_validate_failed, Toast.LENGTH_SHORT).show()
-                        }
-                    } catch (e: Exception) {
-                        LogManager.appendLog("CONFIG", "配置解析失败: ${e.message}")
-                        Toast.makeText(context, R.string.config_validate_failed, Toast.LENGTH_SHORT).show()
-                    }
-                },
-                onFailure = { error ->
-                    LogManager.appendLog("CONFIG", "配置下载失败: ${error.message}")
-                    Toast.makeText(context, R.string.config_download_failed, Toast.LENGTH_SHORT).show()
-                }
-            )
-        }
-    }
-
-    fun handleReloadConfig() {
-        val savedConfig = preferences.loadFullConfig()
-        if (savedConfig != null) {
-            try {
-                val config = ConfigLoader.loadConfig(savedConfig)
-                LogManager.appendLog("CONFIG", "配置解析成功")
-
-                val success = ForwardService.loadConfig(savedConfig)
-                if (success) {
-                    LogManager.appendLog("CONFIG", "配置重载成功")
-                    Toast.makeText(context, R.string.config_reload_success, Toast.LENGTH_SHORT).show()
-                } else {
-                    LogManager.appendLog("CONFIG", "配置重载失败")
-                    Toast.makeText(context, R.string.config_reload_failed, Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                LogManager.appendLog("CONFIG", "配置重载失败: ${e.message}")
-                Toast.makeText(context, R.string.config_reload_failed, Toast.LENGTH_SHORT).show()
-            }
-        } else {
-            LogManager.appendLog("CONFIG", "无保存的配置")
-            Toast.makeText(context, R.string.config_reload_failed, Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    fun handleRestoreBackup(backup: ConfigBackupManager.BackupInfo) {
-        val content = ConfigBackupManager.restoreBackup(backup)
-        if (content != null) {
-            // Backup current config
-            val currentConfig = preferences.loadFullConfig()
-            if (currentConfig != null) {
-                ConfigBackupManager.backupCurrentConfig(context, currentConfig)
-            }
-
-            try {
-                val config = ConfigLoader.loadConfig(content)
-                preferences.saveFullConfig(content)
-
-                val success = ForwardService.loadConfig(content)
-                if (success) {
-                    LogManager.appendLog("CONFIG", "已恢复备份: ${backup.displayName}")
-                    Toast.makeText(context, R.string.config_restore_success, Toast.LENGTH_SHORT).show()
-                } else {
-                    LogManager.appendLog("CONFIG", "备份恢复失败")
-                    Toast.makeText(context, R.string.config_restore_failed, Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                LogManager.appendLog("CONFIG", "备份恢复失败: ${e.message}")
-                Toast.makeText(context, R.string.config_restore_failed, Toast.LENGTH_SHORT).show()
-            }
-        } else {
-            Toast.makeText(context, R.string.config_restore_failed, Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    fun handleDeleteBackup(backup: ConfigBackupManager.BackupInfo) {
-        if (ConfigBackupManager.deleteBackup(backup)) {
-            backupList = ConfigBackupManager.listBackups(context)
-            LogManager.appendLog("CONFIG", "已删除备份: ${backup.displayName}")
-        }
-    }
-
-    fun handleClearAllBackups() {
-        ConfigBackupManager.clearAllBackups(context)
-        backupList = ConfigBackupManager.listBackups(context)
-        LogManager.appendLog("CONFIG", "已清空所有备份")
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
-                actions = {
-                    IconButton(onClick = onShowSettings) {
+                navigationIcon = {
+                    IconButton(onClick = onOpenDrawer) {
                         Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "设置"
-                        )
-                    }
-                    IconButton(onClick = onShowHelp) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = "帮助"
+                            imageVector = Icons.Default.Menu,
+                            contentDescription = "菜单"
                         )
                     }
                 }
@@ -416,128 +294,6 @@ fun MainScreen(
                 }
             }
 
-            // 中部配置卡片
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.config_management),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-
-                    OutlinedTextField(
-                        value = configUrl,
-                        onValueChange = {
-                            configUrl = it
-                            preferences.configFilePath = it
-                        },
-                        label = { Text(stringResource(R.string.config_url)) },
-                        placeholder = { Text(stringResource(R.string.config_url_hint)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        enabled = !isLoading
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { handleDownloadConfig() },
-                            modifier = Modifier.weight(1f),
-                            enabled = !isLoading && !isRunning
-                        ) {
-                            if (isLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                Text(stringResource(R.string.download_config))
-                            }
-                        }
-
-                        OutlinedButton(
-                            onClick = { handleReloadConfig() },
-                            modifier = Modifier.weight(1f),
-                            enabled = !isLoading
-                        ) {
-                            Text(stringResource(R.string.reload_config))
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                backupList = ConfigBackupManager.listBackups(context)
-                                showBackupDialog = true
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(stringResource(R.string.restore_config))
-                        }
-                    }
-                }
-            }
-
-            // 设置卡片
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.settings),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-
-                    OutlinedTextField(
-                        value = port.toString(),
-                        onValueChange = {
-                            it.toIntOrNull()?.let { p ->
-                                port = p
-                                preferences.port = p
-                            }
-                        },
-                        label = { Text(stringResource(R.string.port)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !isRunning,
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value = forwardTarget,
-                        onValueChange = {
-                            forwardTarget = it
-                            preferences.forwardTarget = it
-                        },
-                        label = { Text(stringResource(R.string.forward_target)) },
-                        placeholder = { Text(stringResource(R.string.forward_target_hint)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(stringResource(R.string.settings))
-                        Switch(
-                            checked = autoStart,
-                            onCheckedChange = {
-                                autoStart = it
-                                preferences.autoStart = it
-                            }
-                        )
-                    }
-                }
-            }
-
             // 底部日志卡片
             Card(
                 modifier = Modifier.fillMaxWidth()
@@ -613,64 +369,6 @@ fun MainScreen(
                 }
             }
         }
-    }
-
-    // 备份恢复对话框
-    if (showBackupDialog) {
-        AlertDialog(
-            onDismissRequest = { showBackupDialog = false },
-            title = { Text(stringResource(R.string.backup_list_title)) },
-            text = {
-                if (backupList.isEmpty()) {
-                    Text(stringResource(R.string.backup_empty))
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.height(300.dp)
-                    ) {
-                        items(backupList) { backup ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = backup.displayName,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                TextButton(
-                                    onClick = { handleRestoreBackup(backup) }
-                                ) {
-                                    Text(stringResource(R.string.backup_restore))
-                                }
-                                TextButton(
-                                    onClick = { handleDeleteBackup(backup) }
-                                ) {
-                                    Text(stringResource(R.string.backup_delete))
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                if (backupList.isNotEmpty()) {
-                    TextButton(
-                        onClick = { handleClearAllBackups() }
-                    ) {
-                        Text(stringResource(R.string.backup_clear_all))
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showBackupDialog = false }
-                ) {
-                    Text(stringResource(R.string.cancel))
-                }
-            }
-        )
     }
 }
 

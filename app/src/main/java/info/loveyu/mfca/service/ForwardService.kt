@@ -15,6 +15,7 @@ import android.util.Log
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
 import info.loveyu.mfca.config.AppConfig
+import info.loveyu.mfca.config.AppStatusConfig
 import info.loveyu.mfca.config.ConfigLoader
 import info.loveyu.mfca.deadletter.DeadLetterHandler
 import info.loveyu.mfca.input.InputManager
@@ -25,6 +26,7 @@ import info.loveyu.mfca.queue.QueueManager
 import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.server.HttpServer
 import info.loveyu.mfca.server.MessageForwarder
+import info.loveyu.mfca.util.AppStatusManager
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
 import java.io.IOException
@@ -88,6 +90,11 @@ class ForwardService : Service() {
         var currentConfig: AppConfig? = null
             private set
 
+        // Current config URL
+        @Volatile
+        var currentConfigUrl: String = ""
+            private set
+
         fun isServiceAlive(): Boolean = serviceInstance != null
 
         fun refreshNotification() {
@@ -101,15 +108,21 @@ class ForwardService : Service() {
             onStatsChanged?.invoke()
         }
 
-        fun loadConfig(yamlContent: String): Boolean {
+        fun loadConfig(yamlContent: String, configUrl: String = ""): Boolean {
             return try {
                 val config = ConfigLoader.loadConfig(yamlContent)
                 serviceInstance?.applyConfig(config)
+                currentConfigUrl = configUrl
+                serviceInstance?.saveStatus()
                 true
             } catch (e: Exception) {
                 LogManager.appendLog("CONFIG", "Failed to load config: ${e.message}")
                 false
             }
+        }
+
+        fun updateStatus(configUrl: String = currentConfigUrl) {
+            serviceInstance?.saveStatus()
         }
     }
 
@@ -143,13 +156,17 @@ class ForwardService : Service() {
         when (intent?.action) {
             ACTION_STOP -> {
                 stopAll()
+                saveStatus()
                 updateNotification()
                 onStatsChanged?.invoke()
-                return START_STICKY
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                return START_NOT_STICKY
             }
             ACTION_TOGGLE_RECEIVE -> {
                 isReceivingEnabled = !isReceivingEnabled
                 preferences.receivingEnabled = isReceivingEnabled
+                saveStatus()
                 updateNotification()
                 onStatsChanged?.invoke()
                 return START_STICKY
@@ -157,6 +174,7 @@ class ForwardService : Service() {
             ACTION_TOGGLE_FORWARD -> {
                 isForwardingEnabled = !isForwardingEnabled
                 preferences.forwardingEnabled = isForwardingEnabled
+                saveStatus()
                 updateNotification()
                 onStatsChanged?.invoke()
                 return START_STICKY
@@ -167,8 +185,8 @@ class ForwardService : Service() {
             }
         }
 
-        isReceivingEnabled = preferences.receivingEnabled
-        isForwardingEnabled = preferences.forwardingEnabled
+        // Load status from YAML config
+        loadStatus()
 
         val notification = createNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -187,6 +205,7 @@ class ForwardService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        stopForeground(STOP_FOREGROUND_REMOVE)
         statsFuture?.cancel(false)
         statsScheduler.shutdown()
         serviceInstance = null
@@ -236,6 +255,7 @@ class ForwardService : Service() {
             }
             httpServer?.startServer()
             isRunning = true
+            saveStatus()
             LogManager.appendLog("SERVICE", "Legacy mode started on port $port")
         } catch (e: IOException) {
             LogManager.appendLog("SERVICE", "Failed to start HTTP server: ${e.message}")
@@ -295,6 +315,7 @@ class ForwardService : Service() {
             InputManager.startAll()
 
             isRunning = true
+            saveStatus()
             LogManager.appendLog("CONFIG", "Configuration applied successfully. Service started.")
             updateNotification()
         } catch (e: Exception) {
@@ -351,6 +372,37 @@ class ForwardService : Service() {
         LogManager.appendLog("SERVICE", "All components stopped")
     }
 
+    private fun saveStatus() {
+        try {
+            val status = AppStatusConfig(
+                configUrl = currentConfigUrl,
+                isRunning = isRunning,
+                isReceivingEnabled = isReceivingEnabled,
+                isForwardingEnabled = isForwardingEnabled,
+                autoStart = preferences.autoStart,
+                appAutoStartOnBoot = preferences.autoStart
+            )
+            AppStatusManager.saveStatus(this, status)
+        } catch (e: Exception) {
+            LogManager.appendLog("APP_STATUS", "Failed to save status: ${e.message}")
+        }
+    }
+
+    private fun loadStatus() {
+        try {
+            val status = AppStatusManager.loadStatus(this)
+            currentConfigUrl = status.configUrl
+            isReceivingEnabled = status.isReceivingEnabled
+            isForwardingEnabled = status.isForwardingEnabled
+            preferences.receivingEnabled = status.isReceivingEnabled
+            preferences.forwardingEnabled = status.isForwardingEnabled
+            preferences.autoStart = status.autoStart
+            LogManager.appendLog("APP_STATUS", "Status loaded: running=${status.isRunning}, receive=${status.isReceivingEnabled}, forward=${status.isForwardingEnabled}")
+        } catch (e: Exception) {
+            LogManager.appendLog("APP_STATUS", "Failed to load status: ${e.message}")
+        }
+    }
+
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
@@ -375,59 +427,50 @@ class ForwardService : Service() {
             "已停止"
         }
 
-        // Toggle receive action
-        val receiveIntent = Intent(this, ForwardService::class.java).apply {
-            action = ACTION_TOGGLE_RECEIVE
-        }
-        val receivePendingIntent = PendingIntent.getService(
-            this, 1, receiveIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        val receiveTitle = if (isReceivingEnabled) getString(R.string.notification_action_stop_receive)
-        else getString(R.string.notification_action_resume_receive)
-
-        // Toggle forward action
-        val forwardIntent = Intent(this, ForwardService::class.java).apply {
-            action = ACTION_TOGGLE_FORWARD
-        }
-        val forwardPendingIntent = PendingIntent.getService(
-            this, 2, forwardIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        val forwardTitle = if (isForwardingEnabled) getString(R.string.notification_action_stop_forward)
-        else getString(R.string.notification_action_resume_forward)
-
-        // Reload config action
-        val reloadIntent = Intent(this, ForwardService::class.java).apply {
-            action = ACTION_RELOAD_CONFIG
-        }
-        val reloadPendingIntent = PendingIntent.getService(
-            this, 3, reloadIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        return Notification.Builder(this, CHANNEL_ID)
+        val builder = Notification.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.service_notification_title))
             .setContentText(statsText)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
-            .addAction(Notification.Action.Builder(
+
+        // Only show action buttons when service is running
+        if (isRunning) {
+            // Toggle receive action
+            val receiveIntent = Intent(this, ForwardService::class.java).apply {
+                action = ACTION_TOGGLE_RECEIVE
+            }
+            val receivePendingIntent = PendingIntent.getService(
+                this, 1, receiveIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val receiveTitle = if (isReceivingEnabled) getString(R.string.notification_action_stop_receive)
+            else getString(R.string.notification_action_resume_receive)
+
+            // Toggle forward action
+            val forwardIntent = Intent(this, ForwardService::class.java).apply {
+                action = ACTION_TOGGLE_FORWARD
+            }
+            val forwardPendingIntent = PendingIntent.getService(
+                this, 2, forwardIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val forwardTitle = if (isForwardingEnabled) getString(R.string.notification_action_stop_forward)
+            else getString(R.string.notification_action_resume_forward)
+
+            builder.addAction(Notification.Action.Builder(
                 Icon.createWithResource(this, R.drawable.ic_notification_receive),
                 receiveTitle,
                 receivePendingIntent
             ).build())
-            .addAction(Notification.Action.Builder(
+            builder.addAction(Notification.Action.Builder(
                 Icon.createWithResource(this, R.drawable.ic_notification_forward),
                 forwardTitle,
                 forwardPendingIntent
             ).build())
-            .addAction(Notification.Action.Builder(
-                Icon.createWithResource(this, R.drawable.ic_notification_reload),
-                "Reload",
-                reloadPendingIntent
-            ).build())
-            .build()
+        }
+
+        return builder.build()
     }
 
     private fun updateNotification() {
