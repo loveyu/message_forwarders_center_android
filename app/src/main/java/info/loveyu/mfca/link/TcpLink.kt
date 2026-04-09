@@ -3,9 +3,12 @@ package info.loveyu.mfca.link
 import info.loveyu.mfca.config.LinkConfig
 import info.loveyu.mfca.config.LinkType
 import info.loveyu.mfca.util.LogManager
-import kotlinx.coroutines.*
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.net.Socket
 import java.net.SocketException
 import java.net.URI
@@ -82,7 +85,7 @@ class TcpLink(override val config: LinkConfig) : Link {
 
             socket = Socket().apply {
                 connect(java.net.InetSocketAddress(host, port), connectTimeout * 1000)
-                soTimeout = soTimeout * 1000
+                this.soTimeout = soTimeout * 1000
                 this.keepAlive = keepAlive
                 this.tcpNoDelay = noDelay
             }

@@ -3,7 +3,6 @@ package info.loveyu.mfca.server
 import android.util.Log
 import fi.iki.elonen.NanoHTTPD
 import info.loveyu.mfca.constants.ApiConstants
-import org.json.JSONObject
 import java.io.IOException
 
 class HttpServer(

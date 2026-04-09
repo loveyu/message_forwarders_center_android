@@ -6,7 +6,7 @@ import java.util.concurrent.TimeUnit
  * 应用完整配置
  */
 data class AppConfig(
-    val version: String = "2.0",
+    val version: String = "0.1",
     val links: List<LinkConfig> = emptyList(),
     val inputs: InputsConfig = InputsConfig(),
     val queues: QueuesConfig = QueuesConfig(),

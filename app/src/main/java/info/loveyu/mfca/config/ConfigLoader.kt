@@ -2,8 +2,6 @@ package info.loveyu.mfca.config
 
 import org.yaml.snakeyaml.LoaderOptions
 import org.yaml.snakeyaml.Yaml
-import org.yaml.snakeyaml.constructor.Constructor
-import org.yaml.snakeyaml.representer.Representer
 import java.io.File
 import java.io.StringReader
 
@@ -17,7 +15,7 @@ object ConfigLoader {
                 ?: throw IllegalArgumentException("Invalid YAML format")
 
             AppConfig(
-                version = data["version"] as? String ?: "2.0",
+                version = data["version"] as? String ?: "0.1",
                 links = parseLinks(data["links"]),
                 inputs = parseInputs(data["inputs"]),
                 queues = parseQueues(data["queues"]),
@@ -53,7 +51,7 @@ object ConfigLoader {
                     url = map["url"] as? String,
                     host = map["host"] as? String,
                     port = (map["port"] as? Number)?.toInt(),
-                    reconnect = null,  # Reconnect params now in broker URL query
+                    reconnect = null,
                     tls = parseTls(map["tls"])
                 )
             }

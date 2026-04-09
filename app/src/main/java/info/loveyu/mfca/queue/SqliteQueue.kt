@@ -7,7 +7,13 @@ import android.database.sqlite.SQLiteOpenHelper
 import info.loveyu.mfca.config.BackoffType
 import info.loveyu.mfca.config.SqliteQueueConfig
 import info.loveyu.mfca.util.LogManager
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger

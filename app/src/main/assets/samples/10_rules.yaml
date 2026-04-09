@@ -1,7 +1,7 @@
 # 规则引擎示例
 # 演示：JSON 数据提取、过滤、媒体类型检测
 
-version: "2.0"
+version: "0.1"
 
 links:
   - id: mqtt_broker

@@ -2,7 +2,6 @@ package info.loveyu.mfca.input
 
 import android.content.Context
 import info.loveyu.mfca.config.AppConfig
-import info.loveyu.mfca.link.Link
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.util.LogManager
 import java.util.concurrent.Executors

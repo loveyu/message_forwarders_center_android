@@ -3,14 +3,18 @@ package info.loveyu.mfca.link
 import info.loveyu.mfca.config.LinkConfig
 import info.loveyu.mfca.config.LinkType
 import info.loveyu.mfca.util.LogManager
-import org.eclipse.paho.client.mqttv3.*
+import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
+import org.eclipse.paho.client.mqttv3.MqttAsyncClient
+import org.eclipse.paho.client.mqttv3.MqttCallback
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions
+import org.eclipse.paho.client.mqttv3.MqttMessage
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
+import java.io.File
+import java.net.URLDecoder
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
-import java.io.File
-import java.net.URLDecoder
 import java.security.KeyStore as CertKeyStore
 
 /**
@@ -57,12 +61,8 @@ class MqttLink(override val config: LinkConfig) : Link {
                 isAutomaticReconnect = autoReconnectEnabled
 
                 if (autoReconnectEnabled) {
-                    // setAutomaticReconnect(initialDelay, maxDelay) - Paho uses seconds
-                    val initialDelay = params["reconnectInterval"]?.toLongOrNull()
-                        ?: config.reconnect?.interval?.timeUnit?.toSeconds(config.reconnect?.interval?.millis ?: 5000) ?: 5L
-                    val maxDelay = params["reconnectMaxInterval"]?.toLongOrNull()
-                        ?: config.reconnect?.maxInterval?.timeUnit?.toSeconds(config.reconnect?.maxInterval?.millis ?: 60000) ?: 60L
-                    setAutomaticReconnect(initialDelay, maxDelay)
+                    // Paho MQTT's setAutomaticReconnect only takes boolean, reconnect timing is internal
+                    setAutomaticReconnect(true)
                 }
 
                 connectionTimeout = params["connectTimeout"]?.toIntOrNull() ?: 10

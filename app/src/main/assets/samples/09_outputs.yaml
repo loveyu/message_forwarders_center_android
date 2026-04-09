@@ -1,7 +1,7 @@
 # 输出模块示例
 # 演示：HTTP 输出、Link 输出、Internal 输出（剪贴板/文件/广播）
 
-version: "2.0"
+version: "0.1"
 
 links:
   - id: mqtt_broker

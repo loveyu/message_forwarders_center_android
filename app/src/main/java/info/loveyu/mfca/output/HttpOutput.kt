@@ -1,11 +1,8 @@
 package info.loveyu.mfca.output
 
 import info.loveyu.mfca.config.HttpOutputConfig
-import info.loveyu.mfca.config.RetryConfig
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.util.LogManager
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.concurrent.thread

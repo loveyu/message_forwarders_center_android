@@ -1,7 +1,7 @@
 # 内存队列示例
 # 演示：高性能内存队列，适用于临时缓冲或高频数据
 
-version: "2.0"
+version: "0.1"
 
 queues:
   memory:

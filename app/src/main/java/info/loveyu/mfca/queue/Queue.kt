@@ -1,8 +1,5 @@
 package info.loveyu.mfca.queue
 
-import info.loveyu.mfca.config.MemoryQueueConfig
-import info.loveyu.mfca.config.SqliteQueueConfig
-
 /**
  * 队列接口
  */

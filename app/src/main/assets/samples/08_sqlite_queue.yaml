@@ -6,7 +6,7 @@
 # - data://relative.db    - 应用私有数据目录 (context.filesDir)
 # - sdcard://relative.db  - 外部存储目录 (context.getExternalFilesDir)
 
-version: "2.0"
+version: "0.1"
 
 queues:
   sqlite:

@@ -1,7 +1,7 @@
 # TCP 连接示例
 # 演示：TCP Socket 链接配置，支持 broker URL 格式和独立 host/port 格式
 
-version: "2.0"
+version: "0.1"
 
 links:
   # Broker URL 格式 - 所有参数通过 URL query 传递

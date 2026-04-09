@@ -1,7 +1,7 @@
 # HTTP 输入示例
 # 演示：NanoHTTPD 内置 HTTP 服务器，接收来自传感器或第三方的 HTTP 请求
 
-version: "2.0"
+version: "0.1"
 
 inputs:
   http:

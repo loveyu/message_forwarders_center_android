@@ -1,7 +1,7 @@
 # Link 输入输出示例
 # 演示：MQTT/WebSocket/TCP 作为数据源或目标
 
-version: "2.0"
+version: "0.1"
 
 links:
   - id: mqtt_broker

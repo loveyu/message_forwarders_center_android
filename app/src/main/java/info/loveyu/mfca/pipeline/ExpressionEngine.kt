@@ -1,12 +1,14 @@
 package info.loveyu.mfca.pipeline
 
 import info.loveyu.mfca.util.LogManager
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancel
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
-import java.util.regex.Pattern
 
 /**
  * 表达式引擎

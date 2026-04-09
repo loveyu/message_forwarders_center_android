@@ -11,7 +11,6 @@ import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.IBinder
-import android.util.Log
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
 import info.loveyu.mfca.config.AppConfig
@@ -21,15 +20,14 @@ import info.loveyu.mfca.deadletter.DeadLetterHandler
 import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.input.InputMessage
 import info.loveyu.mfca.link.LinkManager
+import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.pipeline.RuleEngine
 import info.loveyu.mfca.queue.QueueManager
-import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.server.HttpServer
 import info.loveyu.mfca.server.MessageForwarder
 import info.loveyu.mfca.util.AppStatusManager
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
-import java.io.IOException
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture

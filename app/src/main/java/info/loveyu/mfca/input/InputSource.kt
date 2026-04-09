@@ -1,8 +1,5 @@
 package info.loveyu.mfca.input
 
-import info.loveyu.mfca.config.HttpInputConfig
-import info.loveyu.mfca.config.LinkInputConfig
-
 /**
  * 输入源接口
  */

@@ -1,7 +1,7 @@
 # MQTT 基础连接示例
 # 演示：MQTT 链接配置，所有参数通过 broker URL 的 query 部分传递
 
-version: "2.0"
+version: "0.1"
 
 links:
   - id: local_mqtt

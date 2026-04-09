@@ -1,7 +1,7 @@
 # 网络条件控制示例
 # 演示：基于网络类型、WiFi SSID/BSSID、IP段的链接启用/禁用控制
 
-version: "2.0"
+version: "0.1"
 
 links:
   # 示例1：仅在 WiFi 环境下启用
