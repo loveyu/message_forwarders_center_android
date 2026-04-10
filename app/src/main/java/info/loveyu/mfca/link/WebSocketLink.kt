@@ -37,8 +37,10 @@ class WebSocketLink(override val config: LinkConfig) : Link {
     private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
 
     init {
-        if (config.type != LinkType.websocket) {
-            throw IllegalArgumentException("WebSocketLink requires websocket type config")
+        // Validate DSN protocol is ws or wss
+        val type = LinkType.fromDsn(config.dsn, config.url)
+        if (type != LinkType.websocket) {
+            throw IllegalArgumentException("WebSocketLink requires ws:// or wss:// DSN")
         }
     }
 

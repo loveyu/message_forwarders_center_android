@@ -1,18 +1,26 @@
 package info.loveyu.mfca.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -29,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -127,6 +136,8 @@ fun SampleDetailScreen(
     sampleFile: SampleFile,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -136,6 +147,19 @@ fun SampleDetailScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "返回"
+                        )
+                    }
+                },
+                actions = {
+                    // 复制按钮
+                    IconButton(
+                        onClick = {
+                            copyToClipboard(context, sampleFile.content, sampleFile.name)
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Share,
+                            contentDescription = "复制配置"
                         )
                     }
                 }
@@ -179,11 +203,29 @@ fun SampleDetailScreen(
     }
 }
 
+/**
+ * 复制文本到剪贴板
+ */
+private fun copyToClipboard(context: Context, content: String, fileName: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    val clip = ClipData.newPlainText(fileName, content)
+    clipboard.setPrimaryClip(clip)
+
+    // 显示 Toast 提示
+    Handler(Looper.getMainLooper()).post {
+        Toast.makeText(context, "已复制 $fileName 到剪贴板", Toast.LENGTH_SHORT).show()
+    }
+}
+
 private fun loadSampleFiles(context: Context): List<SampleFile> {
     val sampleList = listOf(
         SampleFileInfo(
+            fileName = "README.yaml",
+            description = "配置说明 - 完整配置语法和协议说明"
+        ),
+        SampleFileInfo(
             fileName = "01_basic_mqtt.yaml",
-            description = "MQTT 基础连接 - 基本链接配置、重连、TLS 支持"
+            description = "MQTT 基础连接 - DSN 格式、TLS 支持"
         ),
         SampleFileInfo(
             fileName = "02_websocket_link.yaml",
@@ -195,7 +237,7 @@ private fun loadSampleFiles(context: Context): List<SampleFile> {
         ),
         SampleFileInfo(
             fileName = "04_network_conditions.yaml",
-            description = "网络条件控制 - WiFi SSID/BSSID、IP 段限制"
+            description = "网络条件控制 - when/deny 条件"
         ),
         SampleFileInfo(
             fileName = "05_http_input.yaml",
@@ -224,6 +266,10 @@ private fun loadSampleFiles(context: Context): List<SampleFile> {
         SampleFileInfo(
             fileName = "11_full_demo.yaml",
             description = "完整演示 - 智能家居场景"
+        ),
+        SampleFileInfo(
+            fileName = "12_clipboard_forward.yaml",
+            description = "剪贴板转发 - MQTT 到本地剪贴板"
         )
     )
 

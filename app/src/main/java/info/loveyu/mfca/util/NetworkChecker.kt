@@ -6,38 +6,73 @@ import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import java.net.Inet4Address
 import java.net.NetworkInterface
+import java.net.URLDecoder
 
 /**
  * 网络状态检查器
+ *
+ * when/deny 条件格式 (URI query string):
+ *   network=wifi|mobile|any          - 网络类型
+ *   ssid=MyWiFi,~MyWiFi-.*          - WiFi名称，支持正则(前缀~)
+ *   bssid=AA:BB:CC:DD:EE:FF          - WiFi MAC地址
+ *   ipRanges=192.168.1.0/24,10.0.0.10 - IP段，逗号分隔
+ *
+ * 示例:
+ *   when: network=wifi
+ *   when: network=wifi,ssid=MyHomeWiFi
+ *   when: network=wifi,ipRanges=192.168.1.0/24
+ *   deny: network=mobile
  */
 object NetworkChecker {
 
     /**
      * 检查链接是否应该启用
      */
-    fun shouldEnable(context: Context, condition: info.loveyu.mfca.config.LinkEnabledCondition?): Boolean {
-        if (condition == null) return true
+    fun shouldEnable(context: Context, whenCondition: String?, denyCondition: String?): Boolean {
+        // First check deny conditions - if any matches, deny immediately
+        if (denyCondition != null && checkCondition(context, denyCondition)) {
+            return false
+        }
 
-        val networkCondition = condition.network
-        val wifiCondition = condition.wifi
+        // Then check when conditions - if specified and doesn't match, deny
+        if (whenCondition != null && !checkCondition(context, whenCondition)) {
+            return false
+        }
+
+        return true
+    }
+
+    /**
+     * 检查条件是否匹配
+     */
+    private fun checkCondition(context: Context, condition: String): Boolean {
+        // Parse query string format: key=value,key=value
+        val params = parseCondition(condition)
 
         // Check network type
-        if (networkCondition != null) {
-            if (!checkNetworkType(context, networkCondition)) {
+        params["network"]?.let { network ->
+            if (!checkNetworkType(context, network)) {
                 return false
-            }
-
-            // Check IP range if specified
-            if (networkCondition.ipRanges != null && networkCondition.ipRanges.isNotEmpty()) {
-                if (!checkIpRange(context, networkCondition.ipRanges)) {
-                    return false
-                }
             }
         }
 
-        // Check WiFi conditions
-        if (wifiCondition != null) {
-            if (!checkWifiCondition(context, wifiCondition)) {
+        // Check IP ranges
+        params["ipRanges"]?.let { ranges ->
+            if (!checkIpRange(context, ranges)) {
+                return false
+            }
+        }
+
+        // Check WiFi SSID
+        params["ssid"]?.let { ssid ->
+            if (!checkWifiSsid(context, ssid)) {
+                return false
+            }
+        }
+
+        // Check WiFi BSSID
+        params["bssid"]?.let { bssid ->
+            if (!checkWifiBssid(context, bssid)) {
                 return false
             }
         }
@@ -46,37 +81,56 @@ object NetworkChecker {
     }
 
     /**
+     * 解析条件字符串为 key=value map
+     * 格式: network=wifi,ssid=MyWiFi,~Regex.*
+     * 值如果是列表用逗号分隔，但等号后面的整个值作为一个值
+     */
+    private fun parseCondition(condition: String): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        val pairs = condition.split(",")
+        for (pair in pairs) {
+            val kv = pair.split("=", limit = 2)
+            if (kv.size == 2) {
+                val key = URLDecoder.decode(kv[0].trim(), "UTF-8")
+                val value = URLDecoder.decode(kv[1].trim(), "UTF-8")
+                result[key] = value
+            }
+        }
+        return result
+    }
+
+    /**
      * 检查网络类型
      */
-    private fun checkNetworkType(context: Context, condition: info.loveyu.mfca.config.NetworkCondition): Boolean {
-        val type = condition.type ?: return true
-
+    private fun checkNetworkType(context: Context, type: String): Boolean {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val network = connectivityManager.activeNetwork ?: return type == info.loveyu.mfca.config.NetworkType.any
+        val network = connectivityManager.activeNetwork ?: return type == "any"
         val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
 
-        return when (type) {
-            info.loveyu.mfca.config.NetworkType.wifi -> capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-            info.loveyu.mfca.config.NetworkType.mobile -> capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
-            info.loveyu.mfca.config.NetworkType.any -> true
+        return when (type.lowercase()) {
+            "wifi" -> capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+            "mobile" -> capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+            "any" -> true
+            else -> true
         }
     }
 
     /**
      * 检查 IP 段
      */
-    private fun checkIpRange(context: Context, ipRanges: List<String>): Boolean {
+    private fun checkIpRange(context: Context, ipRanges: String): Boolean {
         val currentIp = getCurrentIpAddress(context) ?: return false
+        val ranges = ipRanges.split(",").map { it.trim() }
 
-        return ipRanges.any { range ->
+        return ranges.any { range ->
             isIpInRange(currentIp, range)
         }
     }
 
     /**
-     * 检查 WiFi 条件
+     * 检查 WiFi SSID
      */
-    private fun checkWifiCondition(context: Context, condition: info.loveyu.mfca.config.WifiCondition): Boolean {
+    private fun checkWifiSsid(context: Context, ssidPattern: String): Boolean {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = connectivityManager.activeNetwork ?: return false
         val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
@@ -88,33 +142,40 @@ object NetworkChecker {
 
         val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         val wifiInfo = wifiManager.connectionInfo ?: return false
+        val currentSsid = wifiInfo.ssid?.removeSurrounding("\"") ?: ""
 
-        // Check SSID
-        if (condition.ssid != null && condition.ssid.isNotEmpty()) {
-            val currentSsid = wifiInfo.ssid?.removeSurrounding("\"") ?: ""
-            val matchesSsid = condition.ssid.any { pattern ->
-                if (pattern.startsWith("~")) {
-                    // Regex pattern
-                    Regex(pattern.removePrefix("~")).matches(currentSsid)
-                } else {
-                    currentSsid == pattern
-                }
-            }
-            if (!matchesSsid) {
-                return false
+        // ssidPattern can be comma-separated list
+        val patterns = ssidPattern.split(",").map { it.trim() }
+        return patterns.any { pattern ->
+            if (pattern.startsWith("~")) {
+                // Regex pattern
+                Regex(pattern.removePrefix("~")).matches(currentSsid)
+            } else {
+                currentSsid == pattern
             }
         }
+    }
 
-        // Check BSSID
-        if (condition.bssid != null && condition.bssid.isNotEmpty()) {
-            val currentBssid = wifiInfo.bssid ?: return false
-            val matchesBssid = condition.bssid.any { it == currentBssid }
-            if (!matchesBssid) {
-                return false
-            }
+    /**
+     * 检查 WiFi BSSID
+     */
+    private fun checkWifiBssid(context: Context, bssidPattern: String): Boolean {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+
+        // Must be WiFi
+        if (!capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+            return false
         }
 
-        return true
+        val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val wifiInfo = wifiManager.connectionInfo ?: return false
+        val currentBssid = wifiInfo.bssid ?: return false
+
+        // bssidPattern can be comma-separated list
+        val bssids = bssidPattern.split(",").map { it.trim() }
+        return bssids.any { it == currentBssid }
     }
 
     /**

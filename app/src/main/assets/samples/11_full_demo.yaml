@@ -1,43 +1,34 @@
 # 完整演示配置
 # 演示：所有功能模块的联合配置，模拟智能家居数据采集与转发
+#
+# when/deny 条件格式 (URI query string):
+#   when: network=wifi,ssid=MyWiFi,bssid=AA:BB:CC:DD:EE:FF,ipRanges=192.168.1.0/24
+#   deny: network=mobile
 
 version: "0.1"
 
 # ============================================
 # 链接配置（支持 MQTT / WebSocket / TCP）
-# 所有连接参数通过 URL query 部分传递
+# 类型通过 DSN 协议自动判断
 # ============================================
 links:
-  # 主 MQTT Broker（仅 WiFi 环境）
+  # 主 MQTT Broker（仅 WiFi 环境 + 特定 SSID）
   - id: main_mqtt
-    type: mqtt
-    broker: mqtt://mqtt.home.local:1883?connectTimeout=10&keepAliveInterval=60&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60
-    clientId: home_forwarder
-    enabledWhen:
-      network:
-        type: wifi
-        ipRanges: ["192.168.1.0/24"]
-      wifi:
-        ssid: ["HomeWiFi", "~HomeWiFi-.*"]
+    dsn: mqtt://mqtt.home.local:1883?connectTimeout=10&keepAliveInterval=60&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60&clientId=home_forwarder
+    when: network=wifi,ssid=HomeWiFi,~HomeWiFi-.*,ipRanges=192.168.1.0/24
 
   # 备用移动网络 MQTT
   - id: mobile_mqtt
-    type: mqtt
-    broker: mqtt://backup.example.com:1883?connectTimeout=10&keepAliveInterval=60&automaticReconnect=true&reconnectInterval=10&reconnectMaxInterval=120
-    clientId: mobile_backup
-    enabledWhen:
-      network:
-        type: mobile
+    dsn: mqtt://backup.example.com:1883?connectTimeout=10&keepAliveInterval=60&automaticReconnect=true&reconnectInterval=10&reconnectMaxInterval=120
+    when: network=mobile
 
   # WebSocket 服务器
   - id: ws_server
-    type: websocket
     url: ws://api.example.com/ws?readTimeout=30&writeTimeout=30&pingInterval=30&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=30
 
   # 局域网 TCP 设备
   - id: tcp_device
-    type: tcp
-    broker: tcp://192.168.1.50:9000?connectTimeout=5&soTimeout=30&keepAlive=true&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60
+    dsn: tcp://192.168.1.50:9000?connectTimeout=5&soTimeout=30&keepAlive=true&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60
 
 # ============================================
 # 输入配置

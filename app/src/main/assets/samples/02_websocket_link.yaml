@@ -1,25 +1,23 @@
 # WebSocket 连接示例
-# 演示：WebSocket 链接配置，所有参数通过 URL query 部分传递
+# 演示：WebSocket 链接配置，类型通过 URL 协议自动判断 (ws:// → websocket, wss:// → websocket)
+# 所有参数通过 URL query 部分传递
 
 version: "0.1"
 
 links:
-  # 标准 WebSocket - 参数通过 URL query 传递
+  # 标准 WebSocket - 类型从 URL 自动识别
   - id: ws_server
-    type: websocket
     url: ws://localhost:8080/ws?readTimeout=30&writeTimeout=30&pingInterval=30&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=30
 
   # WSS (TLS) WebSocket
   - id: wss_server
-    type: websocket
     url: wss://secure.example.com/ws?readTimeout=60&automaticReconnect=true
     tls:
       ca: /data/certs/ca.pem
 
   # 带认证的 WebSocket
   # - id: ws_auth
-  #   type: websocket
-  #   url: ws://localhost:8080/ws?username=admin&password=secret
+  #   url: ws://localhost:8080/ws?username=foo&password=foo
 
 inputs:
   link:

@@ -1,16 +1,14 @@
 # Link 输入输出示例
 # 演示：MQTT/WebSocket/TCP 作为数据源或目标
+# 类型通过 DSN 协议自动判断
 
 version: "0.1"
 
 links:
   - id: mqtt_broker
-    type: mqtt
-    broker: tcp://localhost:1883
-    clientId: forwarder_client
+    dsn: mqtt://localhost:1883?clientId=forwarder_client
 
   - id: ws_server
-    type: websocket
     url: ws://localhost:8080/ws
 
 inputs:

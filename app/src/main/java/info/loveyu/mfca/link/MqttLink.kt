@@ -1,7 +1,10 @@
 package info.loveyu.mfca.link
 
+import android.content.Context
+import android.os.Build
 import info.loveyu.mfca.config.LinkConfig
 import info.loveyu.mfca.config.LinkType
+import info.loveyu.mfca.util.CertResolver
 import info.loveyu.mfca.util.LogManager
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
 import org.eclipse.paho.client.mqttv3.MqttAsyncClient
@@ -20,7 +23,7 @@ import java.security.KeyStore as CertKeyStore
 /**
  * MQTT 连接实现
  */
-class MqttLink(override val config: LinkConfig) : Link {
+class MqttLink(override val config: LinkConfig, private val context: Context) : Link {
 
     override val id: String = config.id
 
@@ -36,8 +39,10 @@ class MqttLink(override val config: LinkConfig) : Link {
     private var lastConnectAttempt = 0L
 
     init {
-        if (config.type != LinkType.mqtt) {
-            throw IllegalArgumentException("MqttLink requires mqtt type config")
+        // Validate DSN protocol is mqtt or mqtts
+        val type = LinkType.fromDsn(config.dsn)
+        if (type != LinkType.mqtt) {
+            throw IllegalArgumentException("MqttLink requires mqtt:// or mqtts:// DSN")
         }
     }
 
@@ -65,12 +70,17 @@ class MqttLink(override val config: LinkConfig) : Link {
         lastConnectAttempt = now
         connecting = true
 
-        val broker = config.broker ?: return false
-        val clientId = config.clientId ?: "mfca_${System.currentTimeMillis()}"
+        val broker = config.dsn ?: return false
+
+        // Parse DSN first to extract params
+        val (rawBroker, params) = parseBrokerUrl(broker)
+
+        // Resolve clientId: query param > config.clientId > device ID
+        val resolvedClientId = params["clientId"]
+            ?: config.clientId
+            ?: getDeviceId()
 
         try {
-            // Parse broker URL to extract connection parameters from query string
-            val (rawBroker, params) = parseBrokerUrl(broker)
             // Paho MQTT requires tcp:// (non-TLS) or ssl:// (TLS), not mqtt:// / mqtts://
             val parsedBroker = when {
                 rawBroker.startsWith("mqtts://") -> rawBroker.replaceFirst("mqtts://", "ssl://")
@@ -78,10 +88,10 @@ class MqttLink(override val config: LinkConfig) : Link {
                 else -> rawBroker
             }
 
-            LogManager.appendLog("MQTT", "Connecting to $parsedBroker as $clientId")
+            LogManager.appendLog("MQTT", "Connecting to $parsedBroker as $resolvedClientId")
 
             val persistence = MemoryPersistence()
-            client = MqttAsyncClient(parsedBroker, clientId, persistence)
+            client = MqttAsyncClient(parsedBroker, resolvedClientId, persistence)
 
             val options = MqttConnectOptions().apply {
                 isCleanSession = params["cleanSession"]?.toBoolean() ?: true
@@ -306,6 +316,9 @@ class MqttLink(override val config: LinkConfig) : Link {
 
     private fun createSslSocketFactory(tls: info.loveyu.mfca.config.TlsConfig?): javax.net.SocketFactory {
         try {
+            // 解析 TLS 证书路径（支持 file://, sdcard://, https://, http://）
+            val resolvedTls = CertResolver.resolveTlsConfig(tls, context)
+
             val certFactory = CertificateFactory.getInstance("X.509")
 
             val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
@@ -314,11 +327,14 @@ class MqttLink(override val config: LinkConfig) : Link {
             keyStore.load(null, null)
 
             // Load CA certificate if provided
-            tls?.ca?.let { caPath ->
+            resolvedTls?.ca?.let { caPath ->
                 val caFile = File(caPath)
                 if (caFile.exists()) {
                     val caCert = certFactory.generateCertificate(caFile.inputStream()) as X509Certificate
                     keyStore.setCertificateEntry("ca", caCert)
+                    LogManager.appendLog("MQTT", "Loaded CA cert from: $caPath")
+                } else {
+                    LogManager.appendLog("MQTT", "CA cert file not found: $caPath")
                 }
             }
 
@@ -332,5 +348,13 @@ class MqttLink(override val config: LinkConfig) : Link {
             LogManager.appendLog("MQTT", "SSL setup error: ${e.message}")
             throw e
         }
+    }
+
+    /**
+     * 获取设备唯一标识
+     * 使用 Build 属性组合生成
+     */
+    private fun getDeviceId(): String {
+        return "mfca_${Build.BOARD}_${Build.BRAND}_${Build.DEVICE}_${Build.MODEL}_${Build.PRODUCT}".hashCode().toString(16)
     }
 }

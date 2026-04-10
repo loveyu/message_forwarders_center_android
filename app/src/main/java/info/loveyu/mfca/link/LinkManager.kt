@@ -55,7 +55,7 @@ object LinkManager {
         config.links.forEach { linkConfig ->
             configs[linkConfig.id] = linkConfig
             links[linkConfig.id] = createLink(linkConfig)
-            LogManager.appendLog("LINK", "Registered link: ${linkConfig.id} (${linkConfig.type})")
+            LogManager.appendLog("LINK", "Registered link: ${linkConfig.id} (${LinkType.fromDsn(linkConfig.dsn, linkConfig.url)})")
         }
 
         // Start network monitoring
@@ -150,8 +150,8 @@ object LinkManager {
         links.values.forEach { link ->
             val config = configs[link.id] ?: return@forEach
 
-            // Check network conditions
-            if (!NetworkChecker.shouldEnable(ctx, config.enabledWhen)) {
+            // Check network conditions (when/deny)
+            if (!info.loveyu.mfca.util.NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
                 if (link.isConnected()) {
                     LogManager.appendLog("LINK", "Disconnecting ${link.id}: network conditions not met")
                     link.disconnect()
@@ -195,10 +195,9 @@ object LinkManager {
         val ctx = applicationContext ?: return
         links.values.forEach { link ->
             val config = configs[link.id] ?: return@forEach
-            val condition = config.enabledWhen
 
-            // Check if link should be enabled based on network conditions
-            if (!NetworkChecker.shouldEnable(ctx, condition)) {
+            // Check if link should be enabled based on when/deny conditions
+            if (!info.loveyu.mfca.util.NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
                 LogManager.appendLog("LINK", "Skipping ${link.id}: network conditions not met")
                 return@forEach
             }
@@ -226,8 +225,8 @@ object LinkManager {
         links.values.forEach { link ->
             val config = configs[link.id] ?: return@forEach
 
-            // Check network conditions
-            if (!NetworkChecker.shouldEnable(ctx, config.enabledWhen)) {
+            // Check network conditions (when/deny)
+            if (!info.loveyu.mfca.util.NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
                 LogManager.appendLog("LINK", "Skipping ${link.id}: network conditions not met")
                 return@forEach
             }
@@ -276,8 +275,11 @@ object LinkManager {
     }
 
     private fun createLink(config: LinkConfig): Link {
-        return when (config.type) {
-            LinkType.mqtt -> MqttLink(config)
+        val ctx = applicationContext ?: throw IllegalStateException("Application context not set")
+        // Derive type from DSN protocol or URL
+        val type = LinkType.fromDsn(config.dsn, config.url)
+        return when (type) {
+            LinkType.mqtt -> MqttLink(config, ctx)
             LinkType.websocket -> WebSocketLink(config)
             LinkType.tcp -> TcpLink(config)
         }

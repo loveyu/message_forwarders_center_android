@@ -17,50 +17,42 @@ data class AppConfig(
 
 /**
  * 链接配置 (连接池)
+ * type 通过 dsn 协议自动判断: mqtt:// → mqtt, ws:// → websocket, tcp:// → tcp
  */
 data class LinkConfig(
     val id: String,
-    val type: LinkType,
-    val broker: String? = null,
+    val dsn: String? = null,  // 连接字符串，格式: protocol://user:pass@host:port?param=value
     val clientId: String? = null,
     val url: String? = null,
     val host: String? = null,
     val port: Int? = null,
     val reconnect: ReconnectConfig? = null,
     val tls: TlsConfig? = null,
-    val enabledWhen: LinkEnabledCondition? = null
+    val whenCondition: String? = null,  // 启用条件，URI query格式: network=wifi,ssid=MyWiFi
+    val deny: String? = null  // 禁用条件，URI query格式: network=mobile
 )
 
 /**
- * 链接启用条件
+ * 从 DSN 或 URL 协议推断链接类型
  */
-data class LinkEnabledCondition(
-    val network: NetworkCondition? = null,
-    val wifi: WifiCondition? = null
-)
-
-/**
- * 网络条件
- */
-data class NetworkCondition(
-    val type: NetworkType? = null,  // mobile, wifi, any
-    val ipRanges: List<String>? = null  // IP段，如 "192.168.1.0/24"
-)
-
-enum class NetworkType {
-    mobile, wifi, any
-}
-
-/**
- * WiFi 条件
- */
-data class WifiCondition(
-    val ssid: List<String>? = null,  // WiFi名称列表，支持正则
-    val bssid: List<String>? = null  // WiFi MAC地址列表
-)
-
 enum class LinkType {
-    mqtt, websocket, tcp
+    mqtt, websocket, tcp;
+
+    companion object {
+        fun fromDsn(dsn: String?, url: String? = null): LinkType {
+            // Check URL first for websocket (ws:// or wss://)
+            if (url != null && (url.startsWith("ws://") || url.startsWith("wss://"))) {
+                return websocket
+            }
+            if (dsn == null) return mqtt
+            return when {
+                dsn.startsWith("mqtt://") || dsn.startsWith("mqtts://") -> mqtt
+                dsn.startsWith("ws://") || dsn.startsWith("wss://") -> websocket
+                dsn.startsWith("tcp://") || dsn.startsWith("ssl://") -> tcp
+                else -> mqtt
+            }
+        }
+    }
 }
 
 data class ReconnectConfig(
@@ -88,7 +80,9 @@ data class HttpInputConfig(
     val listen: String,
     val port: Int,
     val path: String,
-    val auth: HttpAuthConfig? = null
+    val auth: HttpAuthConfig? = null,
+    val whenCondition: String? = null,
+    val deny: String? = null
 )
 
 data class HttpAuthConfig(
@@ -123,7 +117,9 @@ data class LinkInputConfig(
     val topic: String? = null,
     val topics: List<String>? = null,
     val excludeTopics: List<String>? = null,
-    val qos: Int? = null
+    val qos: Int? = null,
+    val whenCondition: String? = null,
+    val deny: String? = null
 )
 
 enum class LinkRole {
@@ -205,7 +201,9 @@ data class LinkOutputConfig(
     val linkId: String,
     val role: LinkRole,
     val topic: String? = null,
-    val queue: QueueRefConfig? = null
+    val queue: QueueRefConfig? = null,
+    val whenCondition: String? = null,
+    val deny: String? = null
 )
 
 data class InternalOutputConfig(
@@ -227,7 +225,9 @@ data class RuleConfig(
     val name: String,
     val from: String,
     val pipeline: List<PipelineStep> = emptyList(),
-    val onError: List<PipelineStep>? = null
+    val onError: List<PipelineStep>? = null,
+    val whenCondition: String? = null,
+    val deny: String? = null
 )
 
 data class PipelineStep(

@@ -59,8 +59,7 @@ queues:
 
 links:
   - id: mqtt_broker
-    type: mqtt
-    broker: tcp://localhost:1883
+    dsn: mqtt://localhost:1883
 
 inputs:
   link:

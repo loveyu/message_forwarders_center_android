@@ -46,16 +46,18 @@ class TcpLink(override val config: LinkConfig) : Link {
     private val port: Int
 
     init {
-        if (config.type != LinkType.tcp) {
-            throw IllegalArgumentException("TcpLink requires tcp type config")
+        // Validate DSN protocol is tcp or ssl
+        val type = LinkType.fromDsn(config.dsn)
+        if (type != LinkType.tcp) {
+            throw IllegalArgumentException("TcpLink requires tcp:// or ssl:// DSN")
         }
 
-        // Parse broker URL if provided, otherwise use host/port
-        val broker = config.broker
-        if (broker != null) {
-            val (cleanBroker, parsedParams) = parseUrlParams(broker)
+        // Parse dsn URL if provided, otherwise use host/port
+        val dsn = config.dsn
+        if (dsn != null) {
+            val (cleanDsn, parsedParams) = parseUrlParams(dsn)
             params = parsedParams
-            val uri = URI(cleanBroker)
+            val uri = URI(cleanDsn)
             host = uri.host ?: "127.0.0.1"
             port = uri.port ?: 6000
         } else {

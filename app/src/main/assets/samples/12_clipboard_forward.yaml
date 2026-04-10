@@ -5,16 +5,15 @@ version: "0.1"
 
 links:
   - id: mqtt_zzc
-    type: mqtt
+    # DSN 格式: mqtt://user:pass@host:port?param=value
     # 请修改为实际的 broker 地址、用户名、密码
-    broker: mqtt://mobile-k50:Qibh0c6fDH9DXHF8@10.4.125.53:1883?connectTimeout=3&keepAliveInterval=60&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60
-    client_id: mobile-k50-msg-farward-center
+    dsn: mqtt://foo:foo@10.4.125.53:1883?connectTimeout=3&keepAliveInterval=60&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60&clientId=foo
 
 inputs:
   link:
     # 订阅剪贴板主题（共享订阅）
     - name: mqtt_zzc_clipboard
-      link_id: mqtt_zzc
+      linkId: mqtt_zzc
       role: consumer
       topic: $share/phone-k50/phone-clipboard/#
       # 可选：排除特定设备主题

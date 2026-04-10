@@ -45,25 +45,17 @@ object ConfigLoader {
             (link as? Map<String, Any>)?.let { map ->
                 LinkConfig(
                     id = map["id"] as? String ?: return@mapNotNull null,
-                    type = parseLinkType(map["type"] as? String),
-                    broker = map["broker"] as? String,
+                    dsn = map["dsn"] as? String,
                     clientId = (map["client_id"] as? String),
                     url = map["url"] as? String,
                     host = map["host"] as? String,
                     port = (map["port"] as? Number)?.toInt(),
                     reconnect = null,
-                    tls = parseTls(map["tls"])
+                    tls = parseTls(map["tls"]),
+                    whenCondition = map["when"] as? String,
+                    deny = map["deny"] as? String
                 )
             }
-        }
-    }
-
-    private fun parseLinkType(type: String?): LinkType {
-        return when (type?.lowercase()) {
-            "mqtt" -> LinkType.mqtt
-            "websocket" -> LinkType.websocket
-            "tcp" -> LinkType.tcp
-            else -> LinkType.mqtt
         }
     }
 
@@ -99,7 +91,9 @@ object ConfigLoader {
                     listen = map["listen"] as? String ?: "0.0.0.0",
                     port = (map["port"] as? Number)?.toInt() ?: 8080,
                     path = map["path"] as? String ?: "/",
-                    auth = parseHttpAuth(map["auth"])
+                    auth = parseHttpAuth(map["auth"]),
+                    whenCondition = map["when"] as? String,
+                    deny = map["deny"] as? String
                 )
             }
         }
@@ -157,7 +151,9 @@ object ConfigLoader {
                     linkId = map["link_id"] as? String ?: return@mapNotNull null,
                     role = parseLinkRole(map["role"] as? String),
                     topic = map["topic"] as? String,
-                    qos = (map["qos"] as? Number)?.toInt()
+                    qos = (map["qos"] as? Number)?.toInt(),
+                    whenCondition = map["when"] as? String,
+                    deny = map["deny"] as? String
                 )
             }
         }
@@ -308,7 +304,9 @@ object ConfigLoader {
                     linkId = map["link_id"] as? String ?: return@mapNotNull null,
                     role = parseLinkRole(map["role"] as? String),
                     topic = map["topic"] as? String,
-                    queue = parseQueueRef(map["queue"])
+                    queue = parseQueueRef(map["queue"]),
+                    whenCondition = map["when"] as? String,
+                    deny = map["deny"] as? String
                 )
             }
         }
@@ -350,7 +348,9 @@ object ConfigLoader {
                     name = map["name"] as? String ?: return@mapNotNull null,
                     from = map["from"] as? String ?: return@mapNotNull null,
                     pipeline = parsePipeline(map["pipeline"]),
-                    onError = parsePipeline(map["on_error"])
+                    onError = parsePipeline(map["on_error"]),
+                    whenCondition = map["when"] as? String,
+                    deny = map["deny"] as? String
                 )
             }
         }

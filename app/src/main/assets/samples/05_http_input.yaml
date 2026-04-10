@@ -19,8 +19,8 @@ inputs:
       auth:
         type: basic
         basic:
-          username: admin
-          password: secret123
+          username: foo
+          password: foo
 
     # 示例3：带 Bearer Token 认证
     - name: http_bearer_auth
@@ -30,7 +30,7 @@ inputs:
       auth:
         type: bearer
         bearer:
-          token: your-secret-token-here
+          token: foo
 
     # 示例4：带 Query 参数认证
     - name: http_query_auth
