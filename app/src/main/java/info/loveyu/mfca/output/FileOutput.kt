@@ -25,7 +25,7 @@ import java.util.Locale
  * - QueueItem 变量: {id} {meta.xxx} (从 metadata 中读取 key xxx)
  *
  * options:
- * - auto_extension (bool) 仅在未设置 fileName 或为空时生效，自动添加 .dat 扩展名
+ * - autoExtension (bool) 仅在未设置 fileName 或为空时生效，自动添加 .dat 扩展名
  * - append (bool) 追加写入，与 overwrite 冲突
  * - overwrite (bool) 覆盖写入，与 append 冲突
  * - lock (bool) 是否加锁写入，默认 true
@@ -44,8 +44,10 @@ class FileOutput(
             val options = config.options ?: emptyMap()
 
             val dir = File(basePath)
-            if (!dir.exists()) {
-                dir.mkdirs()
+            if (!dir.exists() && !dir.mkdirs()) {
+                LogManager.appendLog("INTERNAL", "FileOutput [$name]: failed to create directory: ${dir.absolutePath}")
+                callback?.invoke(false)
+                return
             }
 
             val fileName = resolveFileName(config.fileName, item, options)
@@ -84,7 +86,7 @@ class FileOutput(
                 else -> file.writeBytes(dataToWrite)
             }
 
-            LogManager.appendLog("INTERNAL", "Written to file: ${file.absolutePath} (${writeMode.name.lowercase()})")
+            LogManager.appendLog("INTERNAL", "Written to file: ${file.absolutePath} (${writeMode.name.lowercase()}, ${dataToWrite.size} bytes)")
             callback?.invoke(true)
         } catch (e: Exception) {
             LogManager.appendLog("INTERNAL", "File write failed: ${e.message}")
@@ -104,9 +106,9 @@ class FileOutput(
             return expandVariables(configFileName, item)
         }
 
-        // 默认文件名：仅在此场景下 auto_extension 生效
+        // 默认文件名：仅在此场景下 autoExtension 生效
         val timestamp = System.currentTimeMillis()
-        val extension = if (options["auto_extension"] == true) ".dat" else ""
+        val extension = if (options["autoExtension"] == true) ".dat" else ""
         return "msg_$timestamp$extension"
     }
 

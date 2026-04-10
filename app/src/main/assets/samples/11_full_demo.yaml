@@ -121,7 +121,7 @@ outputs:
       type: file
       basePath: data://logs/raw
       options:
-        auto_extension: true
+        autoExtension: true
 
     # 应用内广播
     - name: app_broadcast

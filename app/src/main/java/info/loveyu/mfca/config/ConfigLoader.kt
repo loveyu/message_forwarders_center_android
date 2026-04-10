@@ -276,7 +276,7 @@ object ConfigLoader {
                 InternalOutputConfig(
                     name = map["name"] as? String ?: return@mapNotNull null,
                     type = parseInternalOutputType(map["type"] as? String),
-                    basePath = map["base_path"] as? String,
+                    basePath = map["basePath"] as? String,
                     fileName = map["fileName"] as? String,
                     options = map["options"] as? Map<String, Any>,
                     channel = map["channel"] as? String

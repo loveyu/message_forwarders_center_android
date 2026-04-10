@@ -863,4 +863,89 @@ class ExpressionEngine {
             }
         }
     }
+
+    /**
+     * 评估格式化模板，解析 {expression} 占位符
+     *
+     * 支持的占位符:
+     * - {data}         -> 原始数据字符串
+     * - {headers}      -> headers JSON 字符串
+     * - {$headers.X}   -> 特定 header 值
+     * - {path.to.key}  -> GJSON 路径提取
+     * - {func(arg)}    -> 内置函数调用
+     *
+     * {{ 转义为 {
+     */
+    fun evaluateFormatTemplate(
+        template: String,
+        data: ByteArray,
+        headers: Map<String, String>
+    ): ByteArray {
+        val dataStr = String(data)
+        val json = try { JSONObject(dataStr) } catch (_: Exception) { null }
+
+        val result = StringBuilder()
+        var i = 0
+        while (i < template.length) {
+            if (template[i] == '{') {
+                if (i + 1 < template.length && template[i + 1] == '{') {
+                    result.append('{')
+                    i += 2
+                    continue
+                }
+                val closeIdx = template.indexOf('}', i + 1)
+                if (closeIdx < 0) {
+                    result.append(template[i])
+                    i++
+                    continue
+                }
+                val expr = template.substring(i + 1, closeIdx).trim()
+                result.append(resolveFormatExpression(expr, dataStr, json, headers))
+                i = closeIdx + 1
+            } else {
+                result.append(template[i])
+                i++
+            }
+        }
+        return result.toString().toByteArray()
+    }
+
+    private fun resolveFormatExpression(
+        expr: String,
+        dataStr: String,
+        json: JSONObject?,
+        headers: Map<String, String>
+    ): String {
+        if (expr == "data") return dataStr
+        if (expr == "headers") return JSONObject(headers).toString()
+
+        // headers.X -> $headers.X
+        val normalizedExpr = if (expr.startsWith("headers.") && !expr.startsWith("\$headers.")) {
+            "\$$expr"
+        } else {
+            expr
+        }
+
+        // $headers.X
+        if (normalizedExpr.startsWith("\$headers.")) {
+            return headers[normalizedExpr.substring(9)] ?: ""
+        }
+
+        // 函数调用 (需要 JSON)
+        val funcMatch = Regex("""^(\w+)\((.*)\)$""").find(normalizedExpr)
+        if (funcMatch != null && json != null) {
+            val funcResult = evaluateExtractExpression(json, normalizedExpr, headers)
+            return funcResult?.let { String(it) } ?: ""
+        }
+
+        // GJSON 路径提取 (需要 JSON)
+        if (json != null) {
+            val extracted = extractPath(json, normalizedExpr, headers)
+            if (extracted != null && extracted != JSONObject.NULL) {
+                return extracted.toString()
+            }
+        }
+
+        return ""
+    }
 }

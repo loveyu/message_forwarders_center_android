@@ -8,6 +8,7 @@ import info.loveyu.mfca.config.HttpInputDsnParser
 import info.loveyu.mfca.config.HttpInputParsedConfig
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.NetworkChecker
+import org.json.JSONObject
 import java.net.BindException
 
 /**
@@ -118,23 +119,43 @@ class HttpInput(
             }
         }
 
-        // Parse POST data
+        // Parse request
         try {
-            val files = HashMap<String, String>()
-            session.parseBody(files)
-
-            val body = files["postData"] ?: ""
+            // Read raw POST body before parseBody consumes the stream
+            val contentLength = session.headers["content-length"]?.toLongOrNull() ?: 0L
+            val body: ByteArray = if (contentLength > 0) {
+                val buffer = ByteArray(contentLength.toInt())
+                session.inputStream.read(buffer)
+                buffer
+            } else {
+                ByteArray(0)
+            }
 
             val headersMap = mutableMapOf<String, String>()
-            session.headers.forEach { (key, values) ->
-                headersMap[key] = values.firstOrNull()?.toString() ?: ""
+            session.headers.forEach { (key, value) ->
+                headersMap[key] = value
             }
             // Include matched path in headers
             headersMap["X-Matched-Path"] = uri
 
+            // Parse query string
+            session.queryParameterString?.let { queryStr ->
+                headersMap["queryRaw"] = queryStr
+                val queryJson = JSONObject()
+                queryStr.split("&").forEach { pair ->
+                    val kv = pair.split("=", limit = 2)
+                    if (kv.size == 2) {
+                        queryJson.put(java.net.URLDecoder.decode(kv[0], "UTF-8"), java.net.URLDecoder.decode(kv[1], "UTF-8"))
+                    } else if (kv.isNotEmpty() && kv[0].isNotEmpty()) {
+                        queryJson.put(java.net.URLDecoder.decode(kv[0], "UTF-8"), "")
+                    }
+                }
+                headersMap["X-Query-Params"] = queryJson.toString()
+            }
+
             val message = InputMessage(
                 source = inputName,
-                data = body.toByteArray(),
+                data = body,
                 headers = headersMap
             )
 

@@ -53,7 +53,7 @@ outputs:
       # fileName 支持变量: 时间 {yyyy} {MM} {dd} {HH} {mm} {ss} {SSS} {timestamp}, QueueItem {id} {meta.xxx}
       fileName: "{yyyy}-{MM}-{dd}.log"
       options:
-        auto_extension: true   # 自动添加 .dat 扩展名，仅未设置 fileName 或为空时生效
+        autoExtension: true   # 自动添加 .dat 扩展名，仅未设置 fileName 或为空时生效
         append: true           # 追加写入，与 overwrite 冲突
         overwrite: false       # 覆盖写入，与 append 冲突
         lock: true             # 是否加锁写入，默认加锁

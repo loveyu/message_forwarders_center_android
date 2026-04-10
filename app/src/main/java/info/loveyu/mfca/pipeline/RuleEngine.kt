@@ -251,15 +251,11 @@ class RuleEngine(
     }
 
     /**
-     * 格式化模板: 支持 {headers} -> JSON(headers), {data} -> 原始数据字符串
+     * 格式化模板: 通过表达式引擎解析 {expression} 占位符
+     * 支持 {data}, {headers}, {$headers.X}, {path.to.key}, {func(arg)} 等
      */
     private fun applyFormat(template: String, data: ByteArray, headers: Map<String, String>): ByteArray {
-        val headersJson = JSONObject(headers).toString()
-        val dataStr = String(data)
-        val result = template
-            .replace("{headers}", headersJson)
-            .replace("{data}", dataStr)
-        return result.toByteArray()
+        return expressionEngine.evaluateFormatTemplate(template, data, headers)
     }
 
     private fun evaluateFilter(filter: String, data: ByteArray, headers: Map<String, String>?): Boolean {

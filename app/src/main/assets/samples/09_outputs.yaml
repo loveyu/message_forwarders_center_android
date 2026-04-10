@@ -47,7 +47,7 @@ outputs:
       type: file
       basePath: data://output
       options:
-        auto_extension: true   # 自动添加 .dat 扩展名
+        autoExtension: true   # 自动添加 .dat 扩展名
 
     # 内部输出 - 广播
     - name: local_broadcast
