@@ -39,7 +39,10 @@ class RuleEngine(
     init {
         config.rules.forEach { rule ->
             rules[rule.name] = rule
-            inputRulesMap.getOrPut(rule.from) { mutableListOf() }.add(rule)
+            val fromValues = if (rule.froms.isNotEmpty()) rule.froms else listOf(rule.from)
+            fromValues.forEach { from ->
+                inputRulesMap.getOrPut(from) { mutableListOf() }.add(rule)
+            }
         }
 
         // 预编译所有规则中的表达式

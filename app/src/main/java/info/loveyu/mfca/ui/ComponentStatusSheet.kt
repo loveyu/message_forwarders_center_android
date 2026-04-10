@@ -184,16 +184,21 @@ fun getAllComponentStatuses(context: Context): List<ComponentStatus> {
         val enableResult = NetworkChecker.getEnableReason(context, linkConfig.whenCondition, linkConfig.deny)
         val input = InputManager.getInput(linkConfig.name)
         val isRunning = input?.isRunning() ?: false
-        val link = LinkManager.getLink(linkConfig.linkId)
-        val linkConnected = link?.isConnected() ?: false
+        val displayLinkIds = if (linkConfig.linkIds.isNotEmpty()) linkConfig.linkIds else listOf(linkConfig.linkId)
+        val allLinksConnected = displayLinkIds.all { id ->
+            LinkManager.getLink(id)?.isConnected() ?: false
+        }
 
         val details = buildString {
-            append("Link: ${linkConfig.linkId}")
+            append("Link: ${displayLinkIds.joinToString()}")
             append("\nRole: ${linkConfig.role}")
             linkConfig.topic?.let { append("\nTopic: $it") }
             linkConfig.topics?.let { append("\nTopics: ${it.joinToString()}") }
-            if (!linkConnected) {
-                append("\n⚠ Link not connected")
+            if (!allLinksConnected) {
+                val disconnectedLinks = displayLinkIds.filter { id ->
+                    LinkManager.getLink(id)?.isConnected() != true
+                }
+                append("\n⚠ Link not connected: ${disconnectedLinks.joinToString()}")
             }
         }
 
@@ -204,8 +209,8 @@ fun getAllComponentStatuses(context: Context): List<ComponentStatus> {
                 type = ComponentType.LINK_INPUT,
                 isEnabled = enableResult.enabled,
                 isRunning = isRunning,
-                notEnabledReason = if (!linkConnected && enableResult.enabled)
-                    "Link ${linkConfig.linkId} not connected"
+                notEnabledReason = if (!allLinksConnected && enableResult.enabled)
+                    "Link ${displayLinkIds.joinToString()} not connected"
                 else
                     enableResult.reason,
                 details = details

@@ -19,11 +19,16 @@ import java.util.concurrent.TimeUnit
  * - 定时检查输入源健康状态
  * - 自动重启断开的输入源
  * - 支持链接状态联动
+ * - 支持单个输入绑定多个 link_id
  */
 object InputManager {
 
-    private val inputs = mutableMapOf<String, InputSource>()
-    private val configs = mutableMapOf<String, InputSourceConfig>()
+    private data class InputEntry(
+        val input: InputSource,
+        val config: InputSourceConfig
+    )
+
+    private val entries = mutableListOf<InputEntry>()
     private var globalMessageListener: ((InputMessage) -> Unit)? = null
     private var applicationContext: Context? = null
 
@@ -53,31 +58,40 @@ object InputManager {
         // HTTP inputs
         config.inputs.http.forEach { httpConfig ->
             val input = HttpInput(httpConfig)
-            inputs[httpConfig.name] = input
-            configs[httpConfig.name] = InputSourceConfig(
-                name = httpConfig.name,
-                isLinkBased = false,
-                linkId = null,
-                whenCondition = httpConfig.whenCondition,
-                deny = httpConfig.deny
-            )
+            entries.add(InputEntry(
+                input = input,
+                config = InputSourceConfig(
+                    name = httpConfig.name,
+                    isLinkBased = false,
+                    linkId = null,
+                    whenCondition = httpConfig.whenCondition,
+                    deny = httpConfig.deny
+                )
+            ))
             input.setOnMessageListener { msg -> messageHandler(msg) }
             LogManager.appendLog("INPUT", "Registered HTTP input: ${httpConfig.name} dsn=${httpConfig.dsn}")
         }
 
         // Link-based inputs (MQTT, WebSocket, TCP)
+        // 支持 link_id 为数组，展开为多个 InputSource 实例
         config.inputs.link.forEach { linkConfig ->
-            val input = createLinkInput(linkConfig)
-            inputs[linkConfig.name] = input
-            configs[linkConfig.name] = InputSourceConfig(
-                name = linkConfig.name,
-                isLinkBased = true,
-                linkId = linkConfig.linkId,
-                whenCondition = linkConfig.whenCondition,
-                deny = linkConfig.deny
-            )
-            input.setOnMessageListener { msg -> messageHandler(msg) }
-            LogManager.appendLog("INPUT", "Registered ${linkConfig.role} input: ${linkConfig.name} (link: ${linkConfig.linkId})")
+            val ids = if (linkConfig.linkIds.isNotEmpty()) linkConfig.linkIds else listOf(linkConfig.linkId)
+            ids.forEach { linkId ->
+                val perLinkConfig = linkConfig.copy(linkId = linkId)
+                val input = createLinkInput(perLinkConfig)
+                entries.add(InputEntry(
+                    input = input,
+                    config = InputSourceConfig(
+                        name = linkConfig.name,
+                        isLinkBased = true,
+                        linkId = linkId,
+                        whenCondition = linkConfig.whenCondition,
+                        deny = linkConfig.deny
+                    )
+                ))
+                input.setOnMessageListener { msg -> messageHandler(msg) }
+                LogManager.appendLog("INPUT", "Registered ${linkConfig.role} input: ${linkConfig.name} (link: $linkId)")
+            }
         }
 
         // Start health check
@@ -118,13 +132,14 @@ object InputManager {
         val ctx = applicationContext ?: return
         if (!LinkManager.isNetworkAvailable()) return
 
-        inputs.values.forEach { input ->
-            val config = configs[input.inputName] ?: return@forEach
+        entries.forEach { entry ->
+            val input = entry.input
+            val config = entry.config
 
             // Check network conditions (when/deny)
             if (!NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
                 if (input.isRunning()) {
-                    LogManager.appendLog("INPUT", "Stopping ${input.inputName}: network conditions not met")
+                    LogManager.appendLog("INPUT", "Stopping ${config.name}: network conditions not met")
                     input.stop()
                 }
                 return@forEach
@@ -135,7 +150,7 @@ object InputManager {
                 val link = LinkManager.getLink(config.linkId)
                 if (link == null || !link.isConnected()) {
                     if (input.isRunning()) {
-                        LogManager.appendLog("INPUT", "Stopping ${input.inputName}: link ${config.linkId} not connected")
+                        LogManager.appendLog("INPUT", "Stopping ${config.name}: link ${config.linkId} not connected")
                         input.stop()
                     }
                     return@forEach
@@ -148,34 +163,34 @@ object InputManager {
                 if (input.getError() != null) {
                     return@forEach
                 }
-                LogManager.appendLog("INPUT", "Restarting ${input.inputName}...")
+                LogManager.appendLog("INPUT", "Restarting ${config.name} (link: ${config.linkId})...")
                 try {
                     input.start()
                 } catch (e: Exception) {
-                    LogManager.appendLog("INPUT", "Restart failed for ${input.inputName}: ${e.message}")
+                    LogManager.appendLog("INPUT", "Restart failed for ${config.name}: ${e.message}")
                 }
             }
         }
     }
 
     fun startAll() {
-        inputs.values.forEach { input ->
+        entries.forEach { entry ->
             try {
-                if (!input.isRunning()) {
-                    input.start()
+                if (!entry.input.isRunning()) {
+                    entry.input.start()
                 }
             } catch (e: Exception) {
-                LogManager.appendLog("INPUT", "Failed to start ${input.inputName}: ${e.message}")
+                LogManager.appendLog("INPUT", "Failed to start ${entry.config.name}: ${e.message}")
             }
         }
     }
 
     fun stopAll() {
-        inputs.values.forEach { input ->
+        entries.forEach { entry ->
             try {
-                input.stop()
+                entry.input.stop()
             } catch (e: Exception) {
-                LogManager.appendLog("INPUT", "Error stopping ${input.inputName}: ${e.message}")
+                LogManager.appendLog("INPUT", "Error stopping ${entry.config.name}: ${e.message}")
             }
         }
     }
@@ -183,16 +198,18 @@ object InputManager {
     fun clear() {
         stopHealthCheck()
         stopAll()
-        inputs.clear()
-        configs.clear()
+        entries.clear()
         globalMessageListener = null
     }
 
-    fun getInput(name: String): InputSource? = inputs[name]
+    fun getInput(name: String): InputSource? =
+        entries.find { it.config.name == name }?.input
 
-    fun getAllInputs(): Map<String, InputSource> = inputs.toMap()
+    fun getAllInputs(): Map<String, InputSource> =
+        entries.associateBy({ it.input.inputName }, { it.input })
 
-    fun getInputState(name: String): Boolean = inputs[name]?.isRunning() ?: false
+    fun getInputState(name: String): Boolean =
+        entries.any { it.config.name == name && it.input.isRunning() }
 
     private fun createLinkInput(config: info.loveyu.mfca.config.LinkInputConfig): InputSource {
         return when {

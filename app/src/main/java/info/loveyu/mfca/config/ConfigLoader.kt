@@ -102,9 +102,12 @@ object ConfigLoader {
 
         return (link as List<*>).mapNotNull { input ->
             (input as? Map<String, Any>)?.let { map ->
+                val linkIds = parseStringOrList(map["link_id"])
+                if (linkIds.isEmpty()) return@mapNotNull null
                 LinkInputConfig(
                     name = map["name"] as? String ?: return@mapNotNull null,
-                    linkId = map["link_id"] as? String ?: return@mapNotNull null,
+                    linkId = linkIds.first(),
+                    linkIds = linkIds,
                     role = parseLinkRole(map["role"] as? String),
                     topic = map["topic"] as? String,
                     qos = (map["qos"] as? Number)?.toInt(),
@@ -120,6 +123,17 @@ object ConfigLoader {
             "consumer" -> LinkRole.consumer
             "producer" -> LinkRole.producer
             else -> LinkRole.consumer
+        }
+    }
+
+    /**
+     * 解析字符串或字符串数组字段，统一返回 List<String>
+     */
+    private fun parseStringOrList(value: Any?): List<String> {
+        return when (value) {
+            is String -> listOf(value)
+            is List<*> -> value.mapNotNull { it as? String }
+            else -> emptyList()
         }
     }
 
@@ -301,9 +315,12 @@ object ConfigLoader {
 
         return (rules as List<*>).mapNotNull { rule ->
             (rule as? Map<String, Any>)?.let { map ->
+                val froms = parseStringOrList(map["from"])
+                if (froms.isEmpty()) return@mapNotNull null
                 RuleConfig(
                     name = map["name"] as? String ?: return@mapNotNull null,
-                    from = map["from"] as? String ?: return@mapNotNull null,
+                    from = froms.first(),
+                    froms = froms,
                     pipeline = parsePipeline(map["pipeline"]),
                     onError = parsePipeline(map["on_error"]),
                     whenCondition = map["when"] as? String,

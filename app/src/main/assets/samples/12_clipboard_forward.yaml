@@ -1,25 +1,37 @@
 # 剪贴板转发示例
-# 场景：订阅 MQTT 剪贴板消息过滤 type=text，解码 content 后写入本地剪贴板
+# 场景：订阅多个 MQTT broker 的剪贴板消息，统一处理后写入本地剪贴板
+#
+# 新特性：
+#   link_id 支持字符串或数组，可同时订阅多个 link
+#   from 支持字符串或数组，可匹配多个输入源
 
 version: "0.1"
 
 links:
   - id: mqtt_zzc
     # DSN 格式: mqtt://user:pass@host:port?param=value
-    # 请修改为实际的 broker 地址、用户名、密码
     dsn: mqtt://foo:foo@10.4.125.53:1883?connectTimeout=3&keepAliveInterval=60&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60&clientId=foo
+
+  - id: mqtt_home
+    dsn: mqtt://foo:foo@10.11.11.8:1883?connectTimeout=3&keepAliveInterval=60&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60&clientId=foo
 
 inputs:
   link:
-    # 订阅剪贴板主题（共享订阅）
-    - name: mqtt_zzc_clipboard
-      linkId: mqtt_zzc
+    # 方式1：link_id 使用数组，同时订阅多个 broker 的同一主题
+    - name: mqtt_clipboard
+      link_id:
+        - mqtt_zzc
+        - mqtt_home
       role: consumer
       topic: $share/phone-k50/phone-clipboard/#
-      # 可选：排除特定设备主题
-      # excludeTopics:
-      #   - phone-clipboard/22081212C
       qos: 1
+
+    # 方式2：link_id 使用字符串（向后兼容）
+    # - name: mqtt_zzc_clipboard
+    #   link_id: mqtt_zzc
+    #   role: consumer
+    #   topic: $share/phone-k50/phone-clipboard/#
+    #   qos: 1
 
 outputs:
   internal:
@@ -27,16 +39,26 @@ outputs:
       type: clipboard
 
 rules:
-  # 剪贴板文本写入
-  # 输入消息格式: {"time":..., "uuid":..., "deviceName":"...", "type":"text", "content":"base64编码文本"}
-  # - filter: 只处理 type=text 的消息
-  # - extract: 提取 content 字段并 base64 解码
-  # - 写入剪贴板（相同内容 30 秒内不重复写入）
+  # 方式1：from 使用字符串（推荐：当输入源名唯一时）
+  # 由于 mqtt_clipboard 已通过 link_id 数组聚合了多个 broker，
+  # 消息的 source 统一为 mqtt_clipboard，所以 from 只需写一个名称
   - name: clipboard_text_write
-    from: mqtt_zzc_clipboard
+    from: mqtt_clipboard
     pipeline:
       - transform:
-          extract: "base64Decode(content)"  # 提取并解码
-          filter: "type == text"            # 只处理文本类型
+          extract: "base64Decode(content)"
+          filter: "type == text"
         to:
           - clipboard_write
+
+  # 方式2：from 使用数组（当需要匹配多个不同名称的输入源时）
+  # - name: clipboard_text_write
+  #   from:
+  #     - mqtt_zzc_clipboard
+  #     - mqtt_home_clipboard
+  #   pipeline:
+  #     - transform:
+  #         extract: "base64Decode(content)"
+  #         filter: "type == text"
+  #       to:
+  #         - clipboard_write

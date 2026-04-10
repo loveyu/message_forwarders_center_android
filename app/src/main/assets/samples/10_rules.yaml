@@ -1,5 +1,9 @@
 # 规则引擎示例
 # 演示：JSON 数据提取、过滤、媒体类型检测、Headers 访问、Base64 解码
+#
+# from 支持字符串或数组：
+#   from: sensor_data                     # 单个输入源（字符串）
+#   from: [sensor_data, filtered_clipboard]  # 多个输入源（数组，任一输入源匹配时触发）
 
 version: "0.1"
 
@@ -152,6 +156,15 @@ rules:
         to: [api_server]
     onError:
       - to: [clipboard_out]             # 处理失败时复制到剪贴板
+
+  # 示例14：from 使用数组，匹配多个输入源
+  # 当 sensor_data 或 filtered_clipboard 任一输入源收到消息时都会触发此规则
+  # - name: multi_source_rule
+  #   from: [sensor_data, filtered_clipboard]
+  #   pipeline:
+  #     - transform:
+  #         detect: "json"
+  #       to: [api_server]
 
 # 死信队列配置
 deadLetter:

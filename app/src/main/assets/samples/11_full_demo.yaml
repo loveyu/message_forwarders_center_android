@@ -33,6 +33,9 @@ links:
 # ============================================
 # 输入配置
 # ============================================
+# link_id 支持字符串或数组：
+#   link_id: mqtt_broker                  # 单个 link（字符串）
+#   link_id: [mqtt_broker, ws_server]     # 多个 link（数组）
 inputs:
   http:
     # HTTP Webhook 接收口 (Bearer 认证 + 指定路径)
@@ -131,6 +134,9 @@ outputs:
 # ============================================
 # 规则配置
 # ============================================
+# from 支持字符串或数组：
+#   from: http_webhook                    # 单个输入源（字符串）
+#   from: [http_webhook, mqtt_sensors]    # 多个输入源（数组）
 rules:
   # 处理 HTTP Webhook 传感器数据
   - name: process_http_sensor

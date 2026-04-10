@@ -120,6 +120,7 @@ data class CookieAuth(
 data class LinkInputConfig(
     val name: String,
     val linkId: String,
+    val linkIds: List<String> = emptyList(),
     val role: LinkRole,
     val topic: String? = null,
     val topics: List<String>? = null,
@@ -232,6 +233,7 @@ enum class InternalOutputType {
 data class RuleConfig(
     val name: String,
     val from: String,
+    val froms: List<String> = emptyList(),
     val pipeline: List<PipelineStep> = emptyList(),
     val onError: List<PipelineStep>? = null,
     val whenCondition: String? = null,
