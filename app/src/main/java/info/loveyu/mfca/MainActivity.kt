@@ -108,6 +108,28 @@ class MainActivity : ComponentActivity() {
         if (ForwardService.isServiceAlive()) {
             LinkManager.refreshNetworkState()
         }
+        // 精确定位授权后，请求后台定位权限（Android 10+ 需要分步请求）
+        requestBackgroundLocationIfNeeded()
+    }
+
+    private val backgroundLocationLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        if (ForwardService.isServiceAlive()) {
+            LinkManager.refreshNetworkState()
+        }
+    }
+
+    private fun requestBackgroundLocationIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

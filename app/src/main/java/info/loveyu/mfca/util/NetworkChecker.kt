@@ -262,7 +262,13 @@ object NetworkChecker {
             wifiManager.connectionInfo?.ssid?.removeSurrounding("\"") ?: ""
         } catch (e: SecurityException) {
             LogManager.appendLog("NETWORK", "Cannot access WiFi SSID: ${e.message}")
-            return false
+            return true // 无法获取SSID时跳过检查，保持连接
+        }
+
+        // 后台时系统可能返回 <unknown ssid>，此时无法判断，跳过SSID检查以保持连接
+        if (currentSsid == "<unknown ssid>") {
+            LogManager.appendLog("NETWORK", "SSID unavailable (app in background?), skipping SSID check")
+            return true
         }
 
         // ssidPattern can be comma-separated list
@@ -295,8 +301,14 @@ object NetworkChecker {
             wifiManager.connectionInfo?.bssid
         } catch (e: SecurityException) {
             LogManager.appendLog("NETWORK", "Cannot access WiFi BSSID: ${e.message}")
-            return false
-        } ?: return false
+            return true // 无法获取BSSID时跳过检查，保持连接
+        } ?: return true
+
+        // 后台时系统可能返回 02:00:00:00:00:00，此时无法判断，跳过BSSID检查以保持连接
+        if (currentBssid == "02:00:00:00:00:00") {
+            LogManager.appendLog("NETWORK", "BSSID unavailable (app in background?), skipping BSSID check")
+            return true
+        }
 
         // bssidPattern can be comma-separated list
         val bssids = bssidPattern.split(",").map { it.trim() }
