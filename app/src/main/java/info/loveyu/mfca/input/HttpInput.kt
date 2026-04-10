@@ -80,7 +80,7 @@ class HttpInput(
     override fun serve(session: IHTTPSession): Response {
         // IP access control
         val remoteIp = session.remoteIpAddress
-        if (!checkIpAccess(remoteIp)) {
+        if (!checkIpAccess(remoteIp, parsedConfig)) {
             LogManager.appendLog("HTTP", "IP denied: $remoteIp for $inputName")
             return newFixedLengthResponse(
                 Response.Status.FORBIDDEN,
@@ -90,7 +90,7 @@ class HttpInput(
         }
 
         // Authentication - all configured methods must pass
-        if (!authenticate(session)) {
+        if (!authenticate(session, parsedConfig)) {
             return newFixedLengthResponse(
                 Response.Status.UNAUTHORIZED,
                 MIME_PLAINTEXT,
@@ -119,144 +119,7 @@ class HttpInput(
             }
         }
 
-        // Parse request
-        try {
-            // Read raw POST body before parseBody consumes the stream
-            val contentLength = session.headers["content-length"]?.toLongOrNull() ?: 0L
-            val body: ByteArray = if (contentLength > 0) {
-                val buffer = ByteArray(contentLength.toInt())
-                session.inputStream.read(buffer)
-                buffer
-            } else {
-                ByteArray(0)
-            }
-
-            val headersMap = mutableMapOf<String, String>()
-            session.headers.forEach { (key, value) ->
-                headersMap[key] = value
-            }
-            // Include matched path in headers
-            headersMap["X-Matched-Path"] = uri
-
-            // Parse query string
-            session.queryParameterString?.let { queryStr ->
-                headersMap["queryRaw"] = queryStr
-                val queryJson = JSONObject()
-                queryStr.split("&").forEach { pair ->
-                    val kv = pair.split("=", limit = 2)
-                    if (kv.size == 2) {
-                        queryJson.put(java.net.URLDecoder.decode(kv[0], "UTF-8"), java.net.URLDecoder.decode(kv[1], "UTF-8"))
-                    } else if (kv.isNotEmpty() && kv[0].isNotEmpty()) {
-                        queryJson.put(java.net.URLDecoder.decode(kv[0], "UTF-8"), "")
-                    }
-                }
-                headersMap["X-Query-Params"] = queryJson.toString()
-            }
-
-            val message = InputMessage(
-                source = inputName,
-                data = body,
-                headers = headersMap
-            )
-
-            messageListener?.invoke(message)
-            LogManager.appendLog("HTTP", "Message received from $inputName path=$uri")
-
-            return newFixedLengthResponse(
-                Response.Status.OK,
-                MIME_PLAINTEXT,
-                "OK"
-            )
-        } catch (e: Exception) {
-            LogManager.appendLog("HTTP", "Error processing request: ${e.message}")
-            return newFixedLengthResponse(
-                Response.Status.INTERNAL_ERROR,
-                MIME_PLAINTEXT,
-                "Internal Error"
-            )
-        }
-    }
-
-    /**
-     * IP 访问控制检查
-     */
-    private fun checkIpAccess(remoteIp: String): Boolean {
-        // Deny list takes priority
-        if (parsedConfig.denyIps.isNotEmpty()) {
-            if (parsedConfig.denyIps.any { NetworkChecker.isIpInRange(remoteIp, it) }) {
-                return false
-            }
-        }
-
-        // Allow list - if specified, must match
-        if (parsedConfig.allowIps.isNotEmpty()) {
-            return parsedConfig.allowIps.any { NetworkChecker.isIpInRange(remoteIp, it) }
-        }
-
-        return true
-    }
-
-    /**
-     * 多认证检查 - 所有已配置的认证方式必须全部通过
-     */
-    private fun authenticate(session: IHTTPSession): Boolean {
-        var anyAuthConfigured = false
-
-        parsedConfig.basicAuth?.let {
-            anyAuthConfigured = true
-            if (!authenticateBasic(session, it)) return false
-        }
-
-        parsedConfig.bearerAuth?.let {
-            anyAuthConfigured = true
-            if (!authenticateBearer(session, it)) return false
-        }
-
-        parsedConfig.queryAuth?.let {
-            anyAuthConfigured = true
-            if (!authenticateQuery(session, it)) return false
-        }
-
-        parsedConfig.cookieAuth?.let {
-            anyAuthConfigured = true
-            if (!authenticateCookie(session, it)) return false
-        }
-
-        // If no auth configured, allow all
-        return true
-    }
-
-    private fun authenticateBasic(session: IHTTPSession, basicAuth: info.loveyu.mfca.config.BasicAuth): Boolean {
-        val authHeader = session.headers["authorization"] ?: return false
-
-        if (!authHeader.startsWith("Basic ")) return false
-
-        val encoded = authHeader.removePrefix("Basic ")
-        val decoded = String(Base64.decode(encoded, Base64.DEFAULT))
-        val parts = decoded.split(":", limit = 2)
-        if (parts.size != 2) return false
-
-        return parts[0] == basicAuth.username && parts[1] == basicAuth.password
-    }
-
-    private fun authenticateBearer(session: IHTTPSession, bearerAuth: info.loveyu.mfca.config.BearerAuth): Boolean {
-        val authHeader = session.headers["authorization"] ?: return false
-        return authHeader == "Bearer ${bearerAuth.token}"
-    }
-
-    private fun authenticateQuery(session: IHTTPSession, queryAuth: info.loveyu.mfca.config.QueryAuth): Boolean {
-        val queryString = session.queryParameterString ?: return false
-        return queryString.contains("${queryAuth.key}=${queryAuth.value}")
-    }
-
-    private fun authenticateCookie(session: IHTTPSession, cookieAuth: CookieAuth): Boolean {
-        val cookieHeader = session.headers["cookie"] ?: return false
-        // Parse cookies: "key1=value1; key2=value2"
-        val cookies = cookieHeader.split(";").associate { cookie ->
-            val kv = cookie.trim().split("=", limit = 2)
-            if (kv.size == 2) kv[0].trim() to kv[1].trim() else kv[0].trim() to ""
-        }
-        return cookies[cookieAuth.key] == cookieAuth.value
+        return handleRequest(session, uri, inputName, parsedConfig, messageListener)
     }
 
     companion object {
@@ -277,5 +140,239 @@ class HttpInput(
                 8080
             }
         }
+
+        /**
+         * IP 访问控制检查
+         */
+        fun checkIpAccess(remoteIp: String, parsedConfig: HttpInputParsedConfig): Boolean {
+            // Deny list takes priority
+            if (parsedConfig.denyIps.isNotEmpty()) {
+                if (parsedConfig.denyIps.any { NetworkChecker.isIpInRange(remoteIp, it) }) {
+                    return false
+                }
+            }
+
+            // Allow list - if specified, must match
+            if (parsedConfig.allowIps.isNotEmpty()) {
+                return parsedConfig.allowIps.any { NetworkChecker.isIpInRange(remoteIp, it) }
+            }
+
+            return true
+        }
+
+        /**
+         * 多认证检查 - 所有已配置的认证方式必须全部通过
+         */
+        fun authenticate(session: NanoHTTPD.IHTTPSession, parsedConfig: HttpInputParsedConfig): Boolean {
+            parsedConfig.basicAuth?.let {
+                if (!authenticateBasic(session, it)) return false
+            }
+
+            parsedConfig.bearerAuth?.let {
+                if (!authenticateBearer(session, it)) return false
+            }
+
+            parsedConfig.queryAuth?.let {
+                if (!authenticateQuery(session, it)) return false
+            }
+
+            parsedConfig.cookieAuth?.let {
+                if (!authenticateCookie(session, it)) return false
+            }
+
+            return true
+        }
+
+        private fun authenticateBasic(session: NanoHTTPD.IHTTPSession, basicAuth: info.loveyu.mfca.config.BasicAuth): Boolean {
+            val authHeader = session.headers["authorization"] ?: return false
+
+            if (!authHeader.startsWith("Basic ")) return false
+
+            val encoded = authHeader.removePrefix("Basic ")
+            val decoded = String(Base64.decode(encoded, Base64.DEFAULT))
+            val parts = decoded.split(":", limit = 2)
+            if (parts.size != 2) return false
+
+            return parts[0] == basicAuth.username && parts[1] == basicAuth.password
+        }
+
+        private fun authenticateBearer(session: NanoHTTPD.IHTTPSession, bearerAuth: info.loveyu.mfca.config.BearerAuth): Boolean {
+            val authHeader = session.headers["authorization"] ?: return false
+            return authHeader == "Bearer ${bearerAuth.token}"
+        }
+
+        private fun authenticateQuery(session: NanoHTTPD.IHTTPSession, queryAuth: info.loveyu.mfca.config.QueryAuth): Boolean {
+            val queryString = session.queryParameterString ?: return false
+            return queryString.contains("${queryAuth.key}=${queryAuth.value}")
+        }
+
+        private fun authenticateCookie(session: NanoHTTPD.IHTTPSession, cookieAuth: CookieAuth): Boolean {
+            val cookieHeader = session.headers["cookie"] ?: return false
+            // Parse cookies: "key1=value1; key2=value2"
+            val cookies = cookieHeader.split(";").associate { cookie ->
+                val kv = cookie.trim().split("=", limit = 2)
+                if (kv.size == 2) kv[0].trim() to kv[1].trim() else kv[0].trim() to ""
+            }
+            return cookies[cookieAuth.key] == cookieAuth.value
+        }
+
+        /**
+         * Handle a request: parse body, build message, invoke listener, return response.
+         */
+        fun handleRequest(
+            session: NanoHTTPD.IHTTPSession,
+            uri: String,
+            sourceName: String,
+            parsedConfig: HttpInputParsedConfig,
+            messageListener: ((InputMessage) -> Unit)?
+        ): NanoHTTPD.Response {
+            try {
+                // Read raw POST body before parseBody consumes the stream
+                val contentLength = session.headers["content-length"]?.toLongOrNull() ?: 0L
+                val body: ByteArray = if (contentLength > 0) {
+                    val buffer = ByteArray(contentLength.toInt())
+                    session.inputStream.read(buffer)
+                    buffer
+                } else {
+                    ByteArray(0)
+                }
+
+                val headersMap = mutableMapOf<String, String>()
+                session.headers.forEach { (key, value) ->
+                    headersMap[key] = value
+                }
+                // Include matched path in headers
+                headersMap["X-Matched-Path"] = uri
+
+                // Parse query string
+                session.queryParameterString?.let { queryStr ->
+                    headersMap["queryRaw"] = queryStr
+                    val queryJson = JSONObject()
+                    queryStr.split("&").forEach { pair ->
+                        val kv = pair.split("=", limit = 2)
+                        if (kv.size == 2) {
+                            queryJson.put(java.net.URLDecoder.decode(kv[0], "UTF-8"), java.net.URLDecoder.decode(kv[1], "UTF-8"))
+                        } else if (kv.isNotEmpty() && kv[0].isNotEmpty()) {
+                            queryJson.put(java.net.URLDecoder.decode(kv[0], "UTF-8"), "")
+                        }
+                    }
+                    headersMap["X-Query-Params"] = queryJson.toString()
+                }
+
+                val message = InputMessage(
+                    source = sourceName,
+                    data = body,
+                    headers = headersMap
+                )
+
+                messageListener?.invoke(message)
+                LogManager.appendLog("HTTP", "Message received from $sourceName path=$uri")
+
+                return NanoHTTPD.newFixedLengthResponse(
+                    NanoHTTPD.Response.Status.OK,
+                    NanoHTTPD.MIME_PLAINTEXT,
+                    "OK"
+                )
+            } catch (e: Exception) {
+                LogManager.appendLog("HTTP", "Error processing request: ${e.message}")
+                return NanoHTTPD.newFixedLengthResponse(
+                    NanoHTTPD.Response.Status.INTERNAL_ERROR,
+                    NanoHTTPD.MIME_PLAINTEXT,
+                    "Internal Error"
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 虚拟 HTTP 输入 - 用于共享模式下的独立路由单元
+ *
+ * 不继承 NanoHTTPD，仅持有 config 和 messageListener。
+ * start()/stop() 为空操作（服务器由 SharedHttpInput 管理）。
+ */
+class HttpVirtualInput(
+    private val httpConfig: HttpInputConfig
+) : InputSource {
+
+    private val parsedConfig: HttpInputParsedConfig
+    override val inputName: String = httpConfig.name
+    override val inputType: InputType = InputType.http
+
+    @Volatile private var error: String? = null
+    private var messageListener: ((InputMessage) -> Unit)? = null
+
+    init {
+        parsedConfig = try {
+            HttpInputDsnParser.parse(httpConfig.dsn)
+        } catch (e: Exception) {
+            error = "DSN 解析失败: ${e.message}"
+            LogManager.appendLog("HTTP", "DSN parse error for virtual input $inputName: ${e.message}")
+            HttpInputParsedConfig(listen = "0.0.0.0", port = 0)
+        }
+    }
+
+    // Lifecycle managed by SharedHttpInput
+    override fun start() {}
+    override fun stop() {}
+    override fun isRunning(): Boolean = true
+
+    override fun getError(): String? = error
+
+    override fun setOnMessageListener(listener: (InputMessage) -> Unit) {
+        messageListener = listener
+    }
+
+    fun getParsedConfig(): HttpInputParsedConfig = parsedConfig
+
+    /**
+     * Check if this virtual input matches the given URI path.
+     */
+    fun matchesPath(uri: String): Boolean {
+        return httpConfig.paths.isEmpty() || httpConfig.paths.contains(uri)
+    }
+
+    /**
+     * Attempt to handle a request. Returns a NanoHTTPD Response if this input
+     * matches and processes the request, or null if no match.
+     */
+    fun matchAndHandle(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response? {
+        val uri = session.uri ?: "/"
+
+        // Path matching
+        if (!matchesPath(uri)) return null
+
+        // IP access control
+        val remoteIp = session.remoteIpAddress
+        if (!HttpInput.checkIpAccess(remoteIp, parsedConfig)) {
+            LogManager.appendLog("HTTP", "IP denied: $remoteIp for $inputName")
+            return NanoHTTPD.newFixedLengthResponse(
+                NanoHTTPD.Response.Status.FORBIDDEN,
+                NanoHTTPD.MIME_PLAINTEXT,
+                "Forbidden"
+            )
+        }
+
+        // Authentication
+        if (!HttpInput.authenticate(session, parsedConfig)) {
+            return NanoHTTPD.newFixedLengthResponse(
+                NanoHTTPD.Response.Status.UNAUTHORIZED,
+                NanoHTTPD.MIME_PLAINTEXT,
+                "Unauthorized"
+            )
+        }
+
+        // Method check
+        if (parsedConfig.methods.isNotEmpty()) {
+            if (!parsedConfig.methods.contains(session.method.name.uppercase())) {
+                return NanoHTTPD.newFixedLengthResponse(
+                    NanoHTTPD.Response.Status.NOT_FOUND,
+                    NanoHTTPD.MIME_PLAINTEXT,
+                    "Not Found"
+                )
+            }
+        }
+
+        return HttpInput.handleRequest(session, uri, inputName, parsedConfig, messageListener)
     }
 }

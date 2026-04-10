@@ -43,6 +43,7 @@ object InputManager {
         val name: String,
         val isLinkBased: Boolean = false,
         val linkId: String? = null,
+        val isSharedServer: Boolean = false,
         val whenCondition: String? = null,
         val deny: String? = null
     )
@@ -55,8 +56,20 @@ object InputManager {
         clear()
         globalMessageListener = messageHandler
 
-        // HTTP inputs
+        // HTTP inputs - group by linkId for shared mode
+        val standaloneInputs = mutableListOf<HttpInputConfig>()
+        val sharedGroups = mutableMapOf<String, MutableList<HttpInputConfig>>()
+
         config.inputs.http.forEach { httpConfig ->
+            if (httpConfig.linkId != null) {
+                sharedGroups.getOrPut(httpConfig.linkId) { mutableListOf() }.add(httpConfig)
+            } else {
+                standaloneInputs.add(httpConfig)
+            }
+        }
+
+        // Standalone HTTP inputs (no link_id → independent server)
+        standaloneInputs.forEach { httpConfig ->
             val input = HttpInput(httpConfig)
             entries.add(InputEntry(
                 input = input,
@@ -70,6 +83,52 @@ object InputManager {
             ))
             input.setOnMessageListener { msg -> messageHandler(msg) }
             LogManager.appendLog("INPUT", "Registered HTTP input: ${httpConfig.name} dsn=${httpConfig.dsn}")
+        }
+
+        // Shared HTTP inputs (with link_id → SharedHttpInput + HttpVirtualInputs)
+        sharedGroups.forEach { (linkId, httpConfigs) ->
+            val linkConfig = config.links.find { it.id == linkId }
+            if (linkConfig == null) {
+                LogManager.appendLog("INPUT", "Shared HTTP group skipped: link_id '$linkId' not found in links")
+                httpConfigs.forEach { httpConfig ->
+                    LogManager.appendLog("INPUT", "  → skipping HTTP input: ${httpConfig.name}")
+                }
+                return@forEach
+            }
+
+            val sharedInput = SharedHttpInput(linkConfig)
+
+            httpConfigs.forEach { httpConfig ->
+                val virtualInput = HttpVirtualInput(httpConfig)
+                sharedInput.addVirtualInput(virtualInput)
+
+                entries.add(InputEntry(
+                    input = virtualInput,
+                    config = InputSourceConfig(
+                        name = httpConfig.name,
+                        isLinkBased = false,
+                        linkId = linkId,
+                        whenCondition = httpConfig.whenCondition,
+                        deny = httpConfig.deny
+                    )
+                ))
+                virtualInput.setOnMessageListener { msg -> messageHandler(msg) }
+                LogManager.appendLog("INPUT", "Registered shared HTTP input: ${httpConfig.name} (link: $linkId)")
+            }
+
+            // Register SharedHttpInput as a special entry for lifecycle management
+            entries.add(InputEntry(
+                input = sharedInput,
+                config = InputSourceConfig(
+                    name = sharedInput.inputName,
+                    isLinkBased = false,
+                    linkId = linkId,
+                    isSharedServer = true,
+                    whenCondition = linkConfig.whenCondition,
+                    deny = linkConfig.deny
+                )
+            ))
+            LogManager.appendLog("INPUT", "Registered shared HTTP server for link: $linkId with ${httpConfigs.size} virtual inputs")
         }
 
         // Link-based inputs (MQTT, WebSocket, TCP)
@@ -135,6 +194,28 @@ object InputManager {
         entries.forEach { entry ->
             val input = entry.input
             val config = entry.config
+
+            // SharedHttpInput server entries manage a shared NanoHTTPD lifecycle
+            // Virtual inputs (HttpVirtualInput) always report running, skip health check
+            if (config.isSharedServer || input is HttpVirtualInput) {
+                if (config.isSharedServer) {
+                    // Check network conditions from link's when/deny
+                    if (!NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
+                        if (input.isRunning()) {
+                            LogManager.appendLog("INPUT", "Stopping shared HTTP server ${config.name}: network conditions not met")
+                            input.stop()
+                        }
+                    } else if (!input.isRunning() && input.getError() == null) {
+                        LogManager.appendLog("INPUT", "Restarting shared HTTP server: ${config.name}")
+                        try {
+                            input.start()
+                        } catch (e: Exception) {
+                            LogManager.appendLog("INPUT", "Restart failed for shared HTTP server: ${e.message}")
+                        }
+                    }
+                }
+                return@forEach
+            }
 
             // Check network conditions (when/deny)
             if (!NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
@@ -203,13 +284,31 @@ object InputManager {
     }
 
     fun getInput(name: String): InputSource? =
-        entries.find { it.config.name == name }?.input
+        entries.find { it.config.name == name && !it.config.isSharedServer }?.input
 
     fun getAllInputs(): Map<String, InputSource> =
-        entries.associateBy({ it.input.inputName }, { it.input })
+        entries.filter { !it.config.isSharedServer }.associateBy({ it.input.inputName }, { it.input })
 
     fun getInputState(name: String): Boolean =
-        entries.any { it.config.name == name && it.input.isRunning() }
+        entries.any { it.config.name == name && !it.config.isSharedServer && it.input.isRunning() }
+
+    /**
+     * 获取指定 linkId 对应的 SharedHttpInput 的运行状态
+     */
+    fun getSharedHttpInputState(linkId: String): Boolean {
+        return entries.any {
+            it.config.isSharedServer && it.config.linkId == linkId && it.input.isRunning()
+        }
+    }
+
+    /**
+     * 获取指定 linkId 对应的 SharedHttpInput 的错误信息
+     */
+    fun getSharedHttpInputError(linkId: String): String? {
+        return entries.find {
+            it.config.isSharedServer && it.config.linkId == linkId
+        }?.input?.getError()
+    }
 
     private fun createLinkInput(config: info.loveyu.mfca.config.LinkInputConfig): InputSource {
         return when {

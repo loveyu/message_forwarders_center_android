@@ -69,6 +69,13 @@ object LinkManager {
         clear()
         val ctx = applicationContext ?: return
         config.links.forEach { linkConfig ->
+            // HTTP links are managed by SharedHttpInput in InputManager, skip them here
+            val type = LinkType.fromDsn(linkConfig.dsn, linkConfig.url)
+            if (type == LinkType.http) {
+                configs[linkConfig.id] = linkConfig
+                LogManager.appendLog("LINK", "Skipped HTTP link: ${linkConfig.id} (managed by SharedHttpInput)")
+                return@forEach
+            }
             configs[linkConfig.id] = linkConfig
             val link = createLink(linkConfig)
             // Set reconnect callback that checks when/deny conditions before reconnecting
@@ -354,10 +361,21 @@ object LinkManager {
             LinkType.mqtt -> MqttLink(config, ctx)
             LinkType.websocket -> WebSocketLink(config)
             LinkType.tcp -> TcpLink(config)
+            LinkType.http -> throw IllegalArgumentException("HTTP links are not managed by LinkManager, use SharedHttpInput instead")
         }
     }
 
     fun getAllLinks(): Map<String, Link> = links.toMap()
+
+    /**
+     * 获取所有 HTTP 类型的 link 配置（由 SharedHttpInput 管理，不创建 Link 对象）
+     */
+    fun getHttpLinkConfigs(): Map<String, LinkConfig> {
+        return configs.filter { (id, _) ->
+            val type = LinkType.fromDsn(configs[id]?.dsn, configs[id]?.url)
+            type == LinkType.http
+        }
+    }
 
     fun getLinkState(id: String): LinkState {
         val link = links[id] ?: return LinkState.disconnected

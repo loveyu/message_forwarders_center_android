@@ -18,7 +18,19 @@ import java.net.URLDecoder
  */
 object HttpInputDsnParser {
 
+    /**
+     * Parse an HTTP input DSN.
+     *
+     * Full DSN: http://[user:pass@]host:port[?params]
+     * Query-only DSN (for shared mode with link_id): ?params
+     */
     fun parse(dsn: String): HttpInputParsedConfig {
+        // Query-only DSN for shared mode
+        if (dsn.startsWith("?")) {
+            val params = parseQueryParams(dsn.substring(1))
+            return buildFromParams(params, listen = "0.0.0.0", port = 8080, basicAuth = null)
+        }
+
         val uri = URI(dsn)
 
         if (uri.scheme != "http") {
@@ -41,7 +53,15 @@ object HttpInputDsnParser {
 
         // Parse query parameters
         val params = parseQueryParams(uri.query)
+        return buildFromParams(params, listen, port, basicAuth)
+    }
 
+    private fun buildFromParams(
+        params: Map<String, String>,
+        listen: String,
+        port: Int,
+        basicAuth: BasicAuth?
+    ): HttpInputParsedConfig {
         val bearerAuth = params["bearerToken"]?.let { BearerAuth(token = it) }
 
         val queryAuth = if (params.containsKey("queryTokenKey") && params.containsKey("queryTokenValue")) {

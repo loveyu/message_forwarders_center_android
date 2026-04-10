@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.config.LinkConfig
 import info.loveyu.mfca.input.HttpInput
+import info.loveyu.mfca.input.HttpVirtualInput
 import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.util.NetworkChecker
@@ -78,7 +79,7 @@ data class ComponentStatus(
 fun getAllComponentStatuses(context: Context): List<ComponentStatus> {
     val statuses = mutableListOf<ComponentStatus>()
 
-    // Get Link statuses
+    // Get Link statuses (non-HTTP: MQTT, WS, TCP)
     LinkManager.getAllLinks().forEach { (id, link) ->
         val config = LinkManager.getLinkConfig(id)
         if (config != null) {
@@ -140,17 +141,87 @@ fun getAllComponentStatuses(context: Context): List<ComponentStatus> {
         }
     }
 
-    // Get HTTP Input statuses
+    // Get HTTP Link statuses (managed by SharedHttpInput, no Link object)
     val appConfig = forwardServiceCurrentConfig
+    LinkManager.getHttpLinkConfigs().forEach { (id, config) ->
+        val enableResult = NetworkChecker.getEnableReason(context, config.whenCondition, config.deny)
+        val isRunning = InputManager.getSharedHttpInputState(id)
+        val serverError = InputManager.getSharedHttpInputError(id)
+
+        // Parse listen/port from link DSN
+        val listenInfo = buildString {
+            append("Type: ${getLinkTypeString(config)}")
+            val dsn = config.dsn
+            if (dsn != null) {
+                try {
+                    val uri = java.net.URI(dsn)
+                    val host = uri.host ?: "0.0.0.0"
+                    val port = if (uri.port > 0) uri.port else 8080
+                    append("\nListen: $host:$port")
+                } catch (e: Exception) {
+                    append("\nListen: 0.0.0.0:8080")
+                }
+            }
+
+            // Network condition match details
+            if (config.whenCondition != null || config.deny != null) {
+                append("\n\n${NetworkChecker.getMatchedConditions(context, config.whenCondition, config.deny)}")
+            }
+        }
+
+        statuses.add(
+            ComponentStatus(
+                id = id,
+                name = id,
+                type = ComponentType.LINK,
+                isEnabled = enableResult.enabled,
+                isRunning = isRunning,
+                notEnabledReason = enableResult.reason,
+                details = listenInfo,
+                error = serverError
+            )
+        )
+    }
+
+    // Get HTTP Input statuses
     appConfig?.inputs?.http?.forEach { httpConfig ->
         val enableResult = NetworkChecker.getEnableReason(context, httpConfig.whenCondition, httpConfig.deny)
         val input = InputManager.getInput(httpConfig.name)
-        val isRunning = input?.isRunning() ?: false
         val inputError = input?.getError()
-        val parsedConfig = (input as? HttpInput)?.getParsedConfig()
+
+        // Get parsed config from HttpInput or HttpVirtualInput
+        val parsedConfig = when (input) {
+            is HttpInput -> input.getParsedConfig()
+            is HttpVirtualInput -> input.getParsedConfig()
+            else -> null
+        }
+
+        // For shared inputs, get actual running state from SharedHttpInput server
+        val isRunning = if (httpConfig.linkId != null) {
+            InputManager.getSharedHttpInputState(httpConfig.linkId) && (input?.isRunning() ?: false)
+        } else {
+            input?.isRunning() ?: false
+        }
 
         val details = buildString {
-            append("Listen: ${parsedConfig?.listen}:${parsedConfig?.port}")
+            // Show link_id for shared inputs
+            if (httpConfig.linkId != null) {
+                append("Shared Server: ${httpConfig.linkId}")
+                // Get listen address from link config
+                val linkConfig = appConfig?.links?.find { it.id == httpConfig.linkId }
+                if (linkConfig?.dsn != null) {
+                    try {
+                        val uri = java.net.URI(linkConfig.dsn)
+                        val host = uri.host ?: "0.0.0.0"
+                        val port = if (uri.port > 0) uri.port else 8080
+                        append("\nListen: $host:$port")
+                    } catch (e: Exception) {
+                        append("\nListen: 0.0.0.0:8080")
+                    }
+                }
+            } else {
+                append("Listen: ${parsedConfig?.listen}:${parsedConfig?.port}")
+            }
             if (httpConfig.paths.isNotEmpty()) append("\nPaths: ${httpConfig.paths.joinToString()}")
             else append("\nPaths: *")
             if (!parsedConfig?.methods.isNullOrEmpty()) append("\nMethods: ${parsedConfig?.methods?.joinToString()}")
@@ -162,7 +233,6 @@ fun getAllComponentStatuses(context: Context): List<ComponentStatus> {
             if (authMethods.isNotEmpty()) append("\nAuth: ${authMethods.joinToString(", ")}")
             if (!parsedConfig?.allowIps.isNullOrEmpty()) append("\nAllow IPs: ${parsedConfig?.allowIps?.joinToString()}")
             if (!parsedConfig?.denyIps.isNullOrEmpty()) append("\nDeny IPs: ${parsedConfig?.denyIps?.joinToString()}")
-            if (!inputError.isNullOrEmpty()) append("\nError: $inputError")
         }
 
         statuses.add(
@@ -223,11 +293,16 @@ fun getAllComponentStatuses(context: Context): List<ComponentStatus> {
 
 private fun getLinkTypeString(config: LinkConfig): String {
     return when {
+        config.dsn?.startsWith("mqtts") == true -> "MQTT (SSL)"
         config.dsn?.startsWith("mqtt") == true -> "MQTT"
+        config.dsn?.startsWith("wss") == true -> "WebSocket (SSL)"
         config.dsn?.startsWith("ws") == true -> "WebSocket"
+        config.dsn?.startsWith("ssl") == true -> "TCP (SSL)"
         config.dsn?.startsWith("tcp") == true -> "TCP"
-        config.url?.startsWith("ws") == true -> "WebSocket"
+        config.dsn?.startsWith("https") == true -> "HTTPS"
+        config.dsn?.startsWith("http") == true -> "HTTP"
         config.url?.startsWith("wss") == true -> "WebSocket (SSL)"
+        config.url?.startsWith("ws") == true -> "WebSocket"
         else -> "Unknown"
     }
 }

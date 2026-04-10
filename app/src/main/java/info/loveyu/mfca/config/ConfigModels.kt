@@ -36,7 +36,7 @@ data class LinkConfig(
  * 从 DSN 或 URL 协议推断链接类型
  */
 enum class LinkType {
-    mqtt, websocket, tcp;
+    mqtt, websocket, tcp, http;
 
     companion object {
         fun fromDsn(dsn: String?, url: String? = null): LinkType {
@@ -49,6 +49,7 @@ enum class LinkType {
                 dsn.startsWith("mqtt://") || dsn.startsWith("mqtts://") -> mqtt
                 dsn.startsWith("ws://") || dsn.startsWith("wss://") -> websocket
                 dsn.startsWith("tcp://") || dsn.startsWith("ssl://") -> tcp
+                dsn.startsWith("http://") || dsn.startsWith("https://") -> http
                 else -> mqtt
             }
         }
@@ -79,6 +80,7 @@ data class HttpInputConfig(
     val name: String,
     val dsn: String,
     val paths: List<String> = listOf("/"),
+    val linkId: String? = null,
     val whenCondition: String? = null,
     val deny: String? = null
 )

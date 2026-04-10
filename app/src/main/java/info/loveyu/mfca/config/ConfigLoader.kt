@@ -90,6 +90,7 @@ object ConfigLoader {
                     name = map["name"] as? String ?: return@mapNotNull null,
                     dsn = map["dsn"] as? String ?: return@mapNotNull null,
                     paths = (map["paths"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+                    linkId = map["link_id"] as? String,
                     whenCondition = map["when"] as? String,
                     deny = map["deny"] as? String
                 )
