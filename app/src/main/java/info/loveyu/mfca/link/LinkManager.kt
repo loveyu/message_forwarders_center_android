@@ -45,6 +45,8 @@ object LinkManager {
     private var currentNetworkType = NetworkType.UNKNOWN
     @Volatile
     private var lastReconnectTime = 0L
+    @Volatile
+    private var lastNetworkTypeUpdateTime = 0L
 
     // Network state version for UI refresh
     private val _networkStateVersion = MutableStateFlow(0)
@@ -115,6 +117,10 @@ object LinkManager {
     }
 
     private fun updateNetworkType() {
+        val now = System.currentTimeMillis()
+        if (now - lastNetworkTypeUpdateTime < 1_000L) return
+        lastNetworkTypeUpdateTime = now
+
         val ctx = applicationContext ?: return
         val connectivityManager = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = connectivityManager.activeNetwork ?: return
@@ -326,6 +332,14 @@ object LinkManager {
     }
 
     fun isNetworkAvailable(): Boolean = isNetworkAvailable
+
+    /**
+     * 刷新网络状态（权限变更后调用）
+     */
+    fun refreshNetworkState() {
+        lastNetworkTypeUpdateTime = 0L
+        updateNetworkType()
+    }
 
     fun getCurrentNetworkType(): NetworkType = currentNetworkType
 

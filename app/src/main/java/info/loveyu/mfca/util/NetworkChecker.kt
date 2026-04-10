@@ -445,8 +445,7 @@ object NetworkChecker {
                 val wifiInfo = wifiManager.connectionInfo
                 val ssid = wifiInfo?.ssid?.removeSurrounding("\"") ?: "unknown"
                 val bssid = wifiInfo?.bssid ?: "unknown"
-                val mac = getMacAddress(wifiManager)
-                sb.append("\n  [WiFi] SSID=$ssid BSSID=$bssid IP=$ipAddress MAC=$mac")
+                sb.append("\n  [WiFi] SSID=$ssid BSSID=$bssid IP=$ipAddress")
             } catch (e: SecurityException) {
                 sb.append("\n  [WiFi] info unavailable: ${e.message}")
             }

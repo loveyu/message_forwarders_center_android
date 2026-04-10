@@ -100,6 +100,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val wifiPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ ->
+        // Trigger network state refresh after permission result
+        if (ForwardService.isServiceAlive()) {
+            LinkManager.refreshNetworkState()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -109,6 +118,18 @@ class MainActivity : ComponentActivity() {
                 != PackageManager.PERMISSION_GRANTED
             ) {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.NEARBY_WIFI_DEVICES)
+                != PackageManager.PERMISSION_GRANTED
+                || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                wifiPermissionLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.NEARBY_WIFI_DEVICES,
+                        Manifest.permission.ACCESS_FINE_LOCATION
+                    )
+                )
             }
         }
 
