@@ -59,13 +59,18 @@ jobs:
 
     - name: Create keystore for release builds
       if: steps.build_info.outputs.build_type == 'release'
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       run: |
-        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/release.keystore
+        printf '%s' "$KEYSTORE_BASE64" | base64 --decode > app/release.keystore
         {
           echo "STORE_FILE=release.keystore"
-          echo "STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}"
-          echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}"
-          echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}"
+          printf 'STORE_PASSWORD=%s\n' "$STORE_PASSWORD"
+          printf 'KEY_ALIAS=%s\n' "$KEY_ALIAS"
+          printf 'KEY_PASSWORD=%s\n' "$KEY_PASSWORD"
         } > keystore.properties
 
     - name: Build Debug APK
