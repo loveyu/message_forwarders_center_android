@@ -215,12 +215,30 @@ class ForwardService : Service() {
 
         if (intent?.action == ACTION_START) {
             start()
+        } else if (intent?.action == null && wasRunningBeforeRestart) {
+            // Service restarted by system (START_STICKY) after being killed
+            // Auto-restore previously running service
+            LogManager.appendLog("SERVICE", "Auto-restoring service after system restart")
+            wasRunningBeforeRestart = false
+            start()
         }
 
         return START_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Keep service running when user swipes app from recents
+        if (isRunning) {
+            LogManager.appendLog("SERVICE", "Task removed, restarting service to keep running")
+            val restartIntent = Intent(this, ForwardService::class.java).apply {
+                action = ACTION_START
+            }
+            startService(restartIntent)
+        }
+        super.onTaskRemoved(rootIntent)
+    }
 
     override fun onDestroy() {
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -433,6 +451,9 @@ class ForwardService : Service() {
         }
     }
 
+    @Volatile
+    private var wasRunningBeforeRestart = false
+
     private fun loadStatus() {
         try {
             val status = AppStatusManager.loadStatus(this)
@@ -442,6 +463,7 @@ class ForwardService : Service() {
             preferences.receivingEnabled = status.isReceivingEnabled
             preferences.forwardingEnabled = status.isForwardingEnabled
             preferences.autoStart = status.autoStart
+            wasRunningBeforeRestart = status.isRunning
             LogManager.appendLog("APP_STATUS", "Status loaded: running=${status.isRunning}, receive=${status.isReceivingEnabled}, forward=${status.isForwardingEnabled}")
         } catch (e: Exception) {
             LogManager.appendLog("APP_STATUS", "Failed to load status: ${e.message}")
