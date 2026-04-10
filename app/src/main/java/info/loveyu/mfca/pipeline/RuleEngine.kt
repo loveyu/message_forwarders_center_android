@@ -223,25 +223,43 @@ class RuleEngine(
         data: ByteArray,
         inputMessage: InputMessage
     ): ByteArray? {
+        var currentData = data
+
         val json = try {
             JSONObject(String(data))
         } catch (e: Exception) {
-            // Not JSON, return raw data if no extract specified
-            if (transform.extract == null) {
-                return data
-            }
-            return null
+            if (transform.extract != null) return null
+            null
         }
 
         // Extract using GJSON path or function expression
-        transform.extract?.let { path ->
-            val extracted = expressionEngine.evaluateExtractExpression(json, path, inputMessage.headers)
+        if (json != null && transform.extract != null) {
+            val extracted = expressionEngine.evaluateExtractExpression(json, transform.extract, inputMessage.headers)
             if (extracted != null) {
-                return extracted
+                currentData = extracted
+            } else {
+                return null
             }
         }
 
-        return data
+        // Apply format template
+        transform.format?.let { template ->
+            return applyFormat(template, currentData, inputMessage.headers)
+        }
+
+        return currentData
+    }
+
+    /**
+     * 格式化模板: 支持 {headers} -> JSON(headers), {data} -> 原始数据字符串
+     */
+    private fun applyFormat(template: String, data: ByteArray, headers: Map<String, String>): ByteArray {
+        val headersJson = JSONObject(headers).toString()
+        val dataStr = String(data)
+        val result = template
+            .replace("{headers}", headersJson)
+            .replace("{data}", dataStr)
+        return result.toByteArray()
     }
 
     private fun evaluateFilter(filter: String, data: ByteArray, headers: Map<String, String>?): Boolean {

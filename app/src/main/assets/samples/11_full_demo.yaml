@@ -35,15 +35,11 @@ links:
 # ============================================
 inputs:
   http:
-    # HTTP Webhook 接收口
+    # HTTP Webhook 接收口 (Bearer 认证 + 指定路径)
     - name: http_webhook
-      listen: "0.0.0.0"
-      port: 8080
-      path: /webhook/sensor
-      auth:
-        type: bearer
-        bearer:
-          token: secure-webhook-token
+      dsn: "http://0.0.0.0:8080?bearerToken=secure-webhook-token"
+      paths:
+        - /webhook/sensor
 
   link:
     # 从主 MQTT 订阅传感器数据

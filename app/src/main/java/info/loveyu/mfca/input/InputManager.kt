@@ -62,7 +62,7 @@ object InputManager {
                 deny = httpConfig.deny
             )
             input.setOnMessageListener { msg -> messageHandler(msg) }
-            LogManager.appendLog("INPUT", "Registered HTTP input: ${httpConfig.name} on ${httpConfig.listen}:${httpConfig.port}${httpConfig.path}")
+            LogManager.appendLog("INPUT", "Registered HTTP input: ${httpConfig.name} dsn=${httpConfig.dsn}")
         }
 
         // Link-based inputs (MQTT, WebSocket, TCP)
@@ -142,8 +142,12 @@ object InputManager {
                 }
             }
 
-            // Try to restart if not running
+            // Try to restart if not running (skip inputs with permanent errors)
             if (!input.isRunning()) {
+                // Skip inputs with permanent errors (e.g. port conflict, DSN parse failure)
+                if (input.getError() != null) {
+                    return@forEach
+                }
                 LogManager.appendLog("INPUT", "Restarting ${input.inputName}...")
                 try {
                     input.start()

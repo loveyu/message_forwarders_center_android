@@ -77,24 +77,26 @@ data class InputsConfig(
 
 data class HttpInputConfig(
     val name: String,
-    val listen: String,
-    val port: Int,
-    val path: String,
-    val auth: HttpAuthConfig? = null,
+    val dsn: String,
+    val paths: List<String> = listOf("/"),
     val whenCondition: String? = null,
     val deny: String? = null
 )
 
-data class HttpAuthConfig(
-    val type: HttpAuthType,
-    val basic: BasicAuth? = null,
-    val bearer: BearerAuth? = null,
-    val query: QueryAuth? = null
+/**
+ * DSN 解析后的 HTTP 输入配置
+ */
+data class HttpInputParsedConfig(
+    val listen: String,
+    val port: Int,
+    val methods: List<String> = emptyList(),
+    val basicAuth: BasicAuth? = null,
+    val bearerAuth: BearerAuth? = null,
+    val queryAuth: QueryAuth? = null,
+    val cookieAuth: CookieAuth? = null,
+    val allowIps: List<String> = emptyList(),
+    val denyIps: List<String> = emptyList()
 )
-
-enum class HttpAuthType {
-    basic, bearer, query
-}
 
 data class BasicAuth(
     val username: String,
@@ -106,6 +108,11 @@ data class BearerAuth(
 )
 
 data class QueryAuth(
+    val key: String,
+    val value: String
+)
+
+data class CookieAuth(
     val key: String,
     val value: String
 )
@@ -210,6 +217,7 @@ data class InternalOutputConfig(
     val name: String,
     val type: InternalOutputType,
     val basePath: String? = null,
+    val fileName: String? = null,
     val options: Map<String, Any>? = null,
     val channel: String? = null
 )
@@ -238,7 +246,8 @@ data class PipelineStep(
 data class TransformConfig(
     val extract: String? = null,
     val filter: String? = null,
-    val detect: String? = null
+    val detect: String? = null,
+    val format: String? = null
 )
 
 /**

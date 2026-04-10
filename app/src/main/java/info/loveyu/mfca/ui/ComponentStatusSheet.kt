@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.config.LinkConfig
+import info.loveyu.mfca.input.HttpInput
 import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.util.NetworkChecker
@@ -64,7 +65,8 @@ data class ComponentStatus(
     val isEnabled: Boolean, // 符合网络运行条件
     val isRunning: Boolean, // 实际运行/连接状态
     val notEnabledReason: String? = null, // 不符合条件的原因
-    val details: String = "" // 详细信息
+    val details: String = "", // 详细信息
+    val error: String? = null // 启动错误(如端口冲突)
 ) {
     val isLink: Boolean get() = type == ComponentType.LINK
     val isInput: Boolean get() = type == ComponentType.HTTP_INPUT || type == ComponentType.LINK_INPUT
@@ -144,11 +146,23 @@ fun getAllComponentStatuses(context: Context): List<ComponentStatus> {
         val enableResult = NetworkChecker.getEnableReason(context, httpConfig.whenCondition, httpConfig.deny)
         val input = InputManager.getInput(httpConfig.name)
         val isRunning = input?.isRunning() ?: false
+        val inputError = input?.getError()
+        val parsedConfig = (input as? HttpInput)?.getParsedConfig()
 
         val details = buildString {
-            append("Listen: ${httpConfig.listen}:${httpConfig.port}")
-            append("\nPath: ${httpConfig.path}")
-            httpConfig.auth?.let { append("\nAuth: ${it.type}") }
+            append("Listen: ${parsedConfig?.listen}:${parsedConfig?.port}")
+            if (httpConfig.paths.isNotEmpty()) append("\nPaths: ${httpConfig.paths.joinToString()}")
+            else append("\nPaths: *")
+            if (!parsedConfig?.methods.isNullOrEmpty()) append("\nMethods: ${parsedConfig?.methods?.joinToString()}")
+            val authMethods = mutableListOf<String>()
+            parsedConfig?.basicAuth?.let { authMethods.add("basic") }
+            parsedConfig?.bearerAuth?.let { authMethods.add("bearer") }
+            parsedConfig?.queryAuth?.let { authMethods.add("query") }
+            parsedConfig?.cookieAuth?.let { authMethods.add("cookie") }
+            if (authMethods.isNotEmpty()) append("\nAuth: ${authMethods.joinToString(", ")}")
+            if (!parsedConfig?.allowIps.isNullOrEmpty()) append("\nAllow IPs: ${parsedConfig?.allowIps?.joinToString()}")
+            if (!parsedConfig?.denyIps.isNullOrEmpty()) append("\nDeny IPs: ${parsedConfig?.denyIps?.joinToString()}")
+            if (!inputError.isNullOrEmpty()) append("\nError: $inputError")
         }
 
         statuses.add(
@@ -159,7 +173,8 @@ fun getAllComponentStatuses(context: Context): List<ComponentStatus> {
                 isEnabled = enableResult.enabled,
                 isRunning = isRunning,
                 notEnabledReason = enableResult.reason,
-                details = details
+                details = details,
+                error = inputError
             )
         )
     }
@@ -356,9 +371,12 @@ fun ComponentCard(
                         .size(8.dp)
                         .clip(CircleShape)
                         .background(
-                            if (component.isRunning) Color(0xFF4CAF50)
-                            else if (isEnabled) Color(0xFFFF9800)
-                            else Color(0xFF9E9E9E)
+                            when {
+                                component.error != null -> Color(0xFFF44336) // Red for error
+                                component.isRunning -> Color(0xFF4CAF50) // Green for running
+                                isEnabled -> Color(0xFFFF9800) // Orange for enabled but stopped
+                                else -> Color(0xFF9E9E9E) // Gray for disabled
+                            }
                         )
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -395,16 +413,29 @@ fun ComponentCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (component.isRunning) Icons.Default.CheckCircle else Icons.Default.Close,
+                    imageVector = if (component.error != null) Icons.Default.Warning
+                        else if (component.isRunning) Icons.Default.CheckCircle
+                        else Icons.Default.Close,
                     contentDescription = null,
                     modifier = Modifier.size(12.dp),
-                    tint = if (component.isRunning) Color(0xFF4CAF50) else Color(0xFF9E9E9E)
+                    tint = when {
+                        component.error != null -> Color(0xFFF44336)
+                        component.isRunning -> Color(0xFF4CAF50)
+                        else -> Color(0xFF9E9E9E)
+                    }
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = if (component.isRunning) "Running" else "Stopped",
+                    text = when {
+                        component.error != null -> "Error"
+                        component.isRunning -> "Running"
+                        else -> "Stopped"
+                    },
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = when {
+                        component.error != null -> Color(0xFFF44336)
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
                 )
             }
         }
@@ -478,8 +509,16 @@ fun ComponentDetailSheet(
                 )
                 StatusItem(
                     label = "运行状态",
-                    value = if (component.isRunning) "运行中" else "已停止",
-                    valueColor = if (component.isRunning) Color(0xFF4CAF50) else Color(0xFF9E9E9E)
+                    value = when {
+                        component.error != null -> "错误"
+                        component.isRunning -> "运行中"
+                        else -> "已停止"
+                    },
+                    valueColor = when {
+                        component.error != null -> Color(0xFFF44336)
+                        component.isRunning -> Color(0xFF4CAF50)
+                        else -> Color(0xFF9E9E9E)
+                    }
                 )
             }
 
@@ -513,6 +552,42 @@ fun ComponentDetailSheet(
                                 text = component.notEnabledReason,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Error state (e.g. port conflict, DSN parse failure)
+            if (component.error != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFFFEBEE)
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = Color(0xFFF44336)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "启动错误",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = component.error,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFF44336)
                             )
                         }
                     }

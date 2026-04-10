@@ -347,7 +347,10 @@ object NetworkChecker {
     /**
      * 检查 IP 是否在段内
      */
-    private fun isIpInRange(ip: String, cidr: String): Boolean {
+    /**
+     * 检查 IP 是否在 CIDR/精确地址段内
+     */
+    fun isIpInRange(ip: String, cidr: String): Boolean {
         return try {
             if (!cidr.contains("/")) {
                 // No prefix, exact match

@@ -1,56 +1,68 @@
 # HTTP 输入示例
 # 演示：NanoHTTPD 内置 HTTP 服务器，接收来自传感器或第三方的 HTTP 请求
+#
+# DSN 格式: http://[user:pass@]host:port[?params]
+# 查询参数:
+#   bearerToken=xxx                    - Bearer Token 认证
+#   queryTokenKey=k&queryTokenValue=v  - Query 参数认证
+#   cookieTokenKey=k&cookieTokenValue=v - Cookie 认证
+#   allowIps=192.168.1.0/24,10.0.0.1   - 允许的 IP CIDR/精确地址
+#   denyIps=192.168.1.100              - 禁止的 IP CIDR/精确地址
+#   methods=GET,POST                   - 允许的 HTTP 方法(空则不限)
+# paths: dsn 同级字段，YAML 数组格式，空则允许全部路径
 
 version: "0.1"
 
 inputs:
   http:
-    # 示例1：基础 HTTP 服务
+    # 示例1：基础 HTTP 服务（无认证，允许全部路径）
     - name: http_basic
-      listen: "0.0.0.0"
-      port: 8080
-      path: /webhook
+      dsn: "http://0.0.0.0:8080"
 
-    # 示例2：带 Basic 认证
+    # 示例2：带 Basic 认证 + 指定路径
     - name: http_basic_auth
-      listen: "0.0.0.0"
-      port: 8081
-      path: /api/data
-      auth:
-        type: basic
-        basic:
-          username: foo
-          password: foo
+      dsn: "http://foo:foo@0.0.0.0:8081"
+      paths:
+        - /api/data
 
-    # 示例3：带 Bearer Token 认证
+    # 示例3：带 Bearer Token 认证 + 多路径
     - name: http_bearer_auth
-      listen: "0.0.0.0"
-      port: 8082
-      path: /api/secure
-      auth:
-        type: bearer
-        bearer:
-          token: foo
+      dsn: "http://0.0.0.0:8082?bearerToken=foo"
+      paths:
+        - /api/secure
+        - /webhook
 
-    # 示例4：带 Query 参数认证
+    # 示例4：带 Query 参数认证 + 指定方法
     - name: http_query_auth
-      listen: "0.0.0.0"
-      port: 8083
-      path: /api/v2/data
-      auth:
-        type: query
-        query:
-          key: apikey
-          value: your-api-key
+      dsn: "http://0.0.0.0:8083?queryTokenKey=apikey&queryTokenValue=your-api-key&methods=GET,POST"
+      paths:
+        - /api/v2/data
+
+    # 示例5：多认证 + IP 控制 + 多路径
+    - name: http_multi
+      dsn: "http://admin:secret@0.0.0.0:8084?bearerToken=extra-token&allowIps=192.168.1.0/24,10.0.0.1&denyIps=192.168.1.100"
+      paths:
+        - /webhook
+        - /api/data
 
 outputs:
   internal:
     - name: log_to_file
       type: file
-      basePath: /data/logs/http_input
+      basePath: sdcard:///mfca/logs/http_input
+      # fileName 支持变量: 时间 {yyyy} {MM} {dd} {HH} {mm} {ss} {SSS} {timestamp}, QueueItem {id} {meta.xxx}
+      fileName: "{yyyy}-{MM}-{dd}.log"
+      options:
+        auto_extension: true   # 自动添加 .dat 扩展名，仅未设置 fileName 或为空时生效
+        append: true           # 追加写入，与 overwrite 冲突
+        overwrite: false       # 覆盖写入，与 append 冲突
+        lock: true             # 是否加锁写入，默认加锁
+        eof: "\n"              # 写入数据后追加的字符串，默认 null 不追加
 
 rules:
   - name: http_webhook
     from: http_basic
     pipeline:
-      - to: [log_to_file]
+      - transform:
+          format: "{headers}\n\n{data}"
+        to: [log_to_file]

@@ -88,57 +88,13 @@ object ConfigLoader {
             (input as? Map<String, Any>)?.let { map ->
                 HttpInputConfig(
                     name = map["name"] as? String ?: return@mapNotNull null,
-                    listen = map["listen"] as? String ?: "0.0.0.0",
-                    port = (map["port"] as? Number)?.toInt() ?: 8080,
-                    path = map["path"] as? String ?: "/",
-                    auth = parseHttpAuth(map["auth"]),
+                    dsn = map["dsn"] as? String ?: return@mapNotNull null,
+                    paths = (map["paths"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
                     whenCondition = map["when"] as? String,
                     deny = map["deny"] as? String
                 )
             }
         }
-    }
-
-    private fun parseHttpAuth(auth: Any?): HttpAuthConfig? {
-        if (auth == null) return null
-        val map = auth as Map<String, Any>
-        val type = (map["type"] as? String)?.lowercase()
-
-        return HttpAuthConfig(
-            type = when (type) {
-                "basic" -> HttpAuthType.basic
-                "bearer" -> HttpAuthType.bearer
-                "query" -> HttpAuthType.query
-                else -> HttpAuthType.basic
-            },
-            basic = parseBasicAuth(map["basic"]),
-            bearer = parseBearerAuth(map["bearer"]),
-            query = parseQueryAuth(map["query"])
-        )
-    }
-
-    private fun parseBasicAuth(basic: Any?): BasicAuth? {
-        if (basic == null) return null
-        val map = basic as Map<String, Any>
-        return BasicAuth(
-            username = map["username"] as? String ?: "",
-            password = map["password"] as? String ?: ""
-        )
-    }
-
-    private fun parseBearerAuth(bearer: Any?): BearerAuth? {
-        if (bearer == null) return null
-        val map = bearer as Map<String, Any>
-        return BearerAuth(token = map["token"] as? String ?: "")
-    }
-
-    private fun parseQueryAuth(query: Any?): QueryAuth? {
-        if (query == null) return null
-        val map = query as Map<String, Any>
-        return QueryAuth(
-            key = map["key"] as? String ?: "",
-            value = map["value"] as? String ?: ""
-        )
     }
 
     private fun parseLinkInputs(link: Any?): List<LinkInputConfig> {
@@ -321,6 +277,7 @@ object ConfigLoader {
                     name = map["name"] as? String ?: return@mapNotNull null,
                     type = parseInternalOutputType(map["type"] as? String),
                     basePath = map["base_path"] as? String,
+                    fileName = map["fileName"] as? String,
                     options = map["options"] as? Map<String, Any>,
                     channel = map["channel"] as? String
                 )
@@ -375,7 +332,8 @@ object ConfigLoader {
         return TransformConfig(
             extract = map["extract"] as? String,
             filter = map["filter"] as? String,
-            detect = map["detect"] as? String
+            detect = map["detect"] as? String,
+            format = map["format"] as? String
         )
     }
 
