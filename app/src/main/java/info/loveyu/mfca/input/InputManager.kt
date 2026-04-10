@@ -2,8 +2,11 @@ package info.loveyu.mfca.input
 
 import android.content.Context
 import info.loveyu.mfca.config.AppConfig
+import info.loveyu.mfca.config.HttpInputConfig
+import info.loveyu.mfca.config.LinkInputConfig
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.util.LogManager
+import info.loveyu.mfca.util.NetworkChecker
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
@@ -34,7 +37,9 @@ object InputManager {
     private data class InputSourceConfig(
         val name: String,
         val isLinkBased: Boolean = false,
-        val linkId: String? = null
+        val linkId: String? = null,
+        val whenCondition: String? = null,
+        val deny: String? = null
     )
 
     fun setContext(context: Context) {
@@ -52,7 +57,9 @@ object InputManager {
             configs[httpConfig.name] = InputSourceConfig(
                 name = httpConfig.name,
                 isLinkBased = false,
-                linkId = null
+                linkId = null,
+                whenCondition = httpConfig.whenCondition,
+                deny = httpConfig.deny
             )
             input.setOnMessageListener { msg -> messageHandler(msg) }
             LogManager.appendLog("INPUT", "Registered HTTP input: ${httpConfig.name} on ${httpConfig.listen}:${httpConfig.port}${httpConfig.path}")
@@ -65,7 +72,9 @@ object InputManager {
             configs[linkConfig.name] = InputSourceConfig(
                 name = linkConfig.name,
                 isLinkBased = true,
-                linkId = linkConfig.linkId
+                linkId = linkConfig.linkId,
+                whenCondition = linkConfig.whenCondition,
+                deny = linkConfig.deny
             )
             input.setOnMessageListener { msg -> messageHandler(msg) }
             LogManager.appendLog("INPUT", "Registered ${linkConfig.role} input: ${linkConfig.name} (link: ${linkConfig.linkId})")
@@ -99,8 +108,27 @@ object InputManager {
     private fun checkInputHealth() {
         if (!LinkManager.isNetworkAvailable()) return
 
+        checkAllInputConditions()
+    }
+
+    /**
+     * 检查所有输入源的网络条件，不符合的停止，符合但停止的重新启动
+     */
+    fun checkAllInputConditions() {
+        val ctx = applicationContext ?: return
+        if (!LinkManager.isNetworkAvailable()) return
+
         inputs.values.forEach { input ->
             val config = configs[input.inputName] ?: return@forEach
+
+            // Check network conditions (when/deny)
+            if (!NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
+                if (input.isRunning()) {
+                    LogManager.appendLog("INPUT", "Stopping ${input.inputName}: network conditions not met")
+                    input.stop()
+                }
+                return@forEach
+            }
 
             // For link-based inputs, check if the associated link is connected
             if (config.isLinkBased && config.linkId != null) {

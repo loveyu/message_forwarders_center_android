@@ -23,7 +23,8 @@ import java.util.concurrent.Executors
  * 使用预编译表达式和 Worker 线程执行模型
  */
 class RuleEngine(
-    private val config: AppConfig
+    private val config: AppConfig,
+    private val onForwarded: (() -> Unit)? = null
 ) {
     private val rules = mutableMapOf<String, RuleConfig>()
     private val inputRulesMap = ConcurrentHashMap<String, MutableList<RuleConfig>>()
@@ -149,6 +150,7 @@ class RuleEngine(
                     )
                     output.send(item) { success ->
                         LogManager.appendLog("RULE", "Output $outputName: ${if (success) "OK" else "FAILED"}")
+                        if (success) onForwarded?.invoke()
                     }
                 } else {
                     LogManager.appendLog("RULE", "Output not found: $outputName")
@@ -207,6 +209,7 @@ class RuleEngine(
                     )
                     output.send(item) { success ->
                         LogManager.appendLog("RULE", "Output $outputName: ${if (success) "OK" else "FAILED"}")
+                        if (success) onForwarded?.invoke()
                     }
                 } else {
                     LogManager.appendLog("RULE", "Output not found: $outputName")

@@ -19,8 +19,8 @@ import java.net.URLDecoder
  *
  * 示例:
  *   when: network=wifi
- *   when: network=wifi,ssid=MyHomeWiFi
- *   when: network=wifi,ipRanges=192.168.1.0/24
+ *   when: network=wifi&ssid=MyHomeWiFi
+ *   when: network=wifi&ipRanges=192.168.1.0/24
  *   deny: network=mobile
  */
 object NetworkChecker {
@@ -41,6 +41,31 @@ object NetworkChecker {
 
         return true
     }
+
+    /**
+     * 获取链接是否应该启用及原因
+     */
+    fun getEnableReason(context: Context, whenCondition: String?, denyCondition: String?): EnableResult {
+        // First check deny conditions
+        if (denyCondition != null) {
+            val denyResult = checkConditionWithReason(context, denyCondition)
+            if (denyResult.matched) {
+                return EnableResult(enabled = false, reason = "Denied by condition: $denyCondition")
+            }
+        }
+
+        // Then check when conditions
+        if (whenCondition != null) {
+            val whenResult = checkConditionWithReason(context, whenCondition)
+            if (!whenResult.matched) {
+                return EnableResult(enabled = false, reason = "Condition not met: $whenCondition")
+            }
+        }
+
+        return EnableResult(enabled = true, reason = null)
+    }
+
+    data class EnableResult(val enabled: Boolean, val reason: String?)
 
     /**
      * 检查条件是否匹配
@@ -81,18 +106,110 @@ object NetworkChecker {
     }
 
     /**
+     * 检查条件是否匹配，返回详细原因
+     */
+    private fun checkConditionWithReason(context: Context, condition: String): ConditionResult {
+        val params = parseCondition(condition)
+
+        // Check network type
+        params["network"]?.let { network ->
+            if (!checkNetworkType(context, network)) {
+                val currentType = getCurrentNetworkTypeString(context)
+                return ConditionResult(false, "Network type mismatch: required=$network, current=$currentType")
+            }
+        }
+
+        // Check IP ranges
+        params["ipRanges"]?.let { ranges ->
+            if (!checkIpRange(context, ranges)) {
+                val currentIp = getCurrentIpAddress(context) ?: "unknown"
+                return ConditionResult(false, "IP not in range: ranges=$ranges, current=$currentIp")
+            }
+        }
+
+        // Check WiFi SSID
+        params["ssid"]?.let { ssid ->
+            if (!checkWifiSsid(context, ssid)) {
+                val currentSsid = getCurrentWifiSsid(context)
+                return ConditionResult(false, "SSID mismatch: required=$ssid, current=$currentSsid")
+            }
+        }
+
+        // Check WiFi BSSID
+        params["bssid"]?.let { bssid ->
+            if (!checkWifiBssid(context, bssid)) {
+                val currentBssid = getCurrentWifiBssid(context)
+                return ConditionResult(false, "BSSID mismatch: required=$bssid, current=$currentBssid")
+            }
+        }
+
+        return ConditionResult(true, null)
+    }
+
+    private data class ConditionResult(val matched: Boolean, val reason: String?)
+
+    private fun getCurrentNetworkTypeString(context: Context): String {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork ?: return "none"
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return "none"
+
+        return when {
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "mobile"
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ethernet"
+            else -> "unknown"
+        }
+    }
+
+    private fun getCurrentWifiSsid(context: Context): String {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork ?: return "none"
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return "none"
+
+        if (!capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+            return "not wifi"
+        }
+
+        val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        return try {
+            wifiManager.connectionInfo?.ssid?.removeSurrounding("\"") ?: "unknown"
+        } catch (e: SecurityException) {
+            "permission denied"
+        }
+    }
+
+    private fun getCurrentWifiBssid(context: Context): String {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork ?: return "none"
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return "none"
+
+        if (!capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+            return "not wifi"
+        }
+
+        val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        return try {
+            wifiManager.connectionInfo?.bssid ?: "unknown"
+        } catch (e: SecurityException) {
+            "permission denied"
+        }
+    }
+
+    /**
      * 解析条件字符串为 key=value map
-     * 格式: network=wifi,ssid=MyWiFi,~Regex.*
-     * 值如果是列表用逗号分隔，但等号后面的整个值作为一个值
+     * 格式 (URI query string): network=wifi&ssid=MyWiFi&ipRanges=192.168.1.0%2F24
+     * 使用 & 分隔参数，值内的逗号不需要编码
+     * 注意: + 号不会被当作空格处理，会作为字面字符保留
      */
     private fun parseCondition(condition: String): Map<String, String> {
         val result = mutableMapOf<String, String>()
-        val pairs = condition.split(",")
+        val pairs = condition.split("&")
         for (pair in pairs) {
             val kv = pair.split("=", limit = 2)
             if (kv.size == 2) {
-                val key = URLDecoder.decode(kv[0].trim(), "UTF-8")
-                val value = URLDecoder.decode(kv[1].trim(), "UTF-8")
+                // 先将 + 替换为 %2B，防止 URLDecoder 把 + 当作空格处理
+                val key = URLDecoder.decode(kv[0].trim().replace("+", "%2B"), "UTF-8")
+                val value = URLDecoder.decode(kv[1].trim().replace("+", "%2B"), "UTF-8")
                 result[key] = value
             }
         }
@@ -141,8 +258,12 @@ object NetworkChecker {
         }
 
         val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        val wifiInfo = wifiManager.connectionInfo ?: return false
-        val currentSsid = wifiInfo.ssid?.removeSurrounding("\"") ?: ""
+        val currentSsid = try {
+            wifiManager.connectionInfo?.ssid?.removeSurrounding("\"") ?: ""
+        } catch (e: SecurityException) {
+            LogManager.appendLog("NETWORK", "Cannot access WiFi SSID: ${e.message}")
+            return false
+        }
 
         // ssidPattern can be comma-separated list
         val patterns = ssidPattern.split(",").map { it.trim() }
@@ -170,8 +291,12 @@ object NetworkChecker {
         }
 
         val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        val wifiInfo = wifiManager.connectionInfo ?: return false
-        val currentBssid = wifiInfo.bssid ?: return false
+        val currentBssid = try {
+            wifiManager.connectionInfo?.bssid
+        } catch (e: SecurityException) {
+            LogManager.appendLog("NETWORK", "Cannot access WiFi BSSID: ${e.message}")
+            return false
+        } ?: return false
 
         // bssidPattern can be comma-separated list
         val bssids = bssidPattern.split(",").map { it.trim() }
@@ -266,9 +391,12 @@ object NetworkChecker {
         if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
             types.add("WiFi")
             val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-            val wifiInfo = wifiManager.connectionInfo
-            wifiInfo?.ssid?.let { ssid ->
-                types.add("(SSID: ${ssid.removeSurrounding("\"")})")
+            try {
+                wifiManager.connectionInfo?.ssid?.let { ssid ->
+                    types.add("(SSID: ${ssid.removeSurrounding("\"")})")
+                }
+            } catch (e: SecurityException) {
+                types.add("(WiFi info unavailable)")
             }
         }
         if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
@@ -279,5 +407,90 @@ object NetworkChecker {
         }
 
         return types.joinToString(" + ")
+    }
+
+    /**
+     * 获取详细网络信息，包含 IP、MAC、SSID、BSSID、类型等
+     * 仅使用当前活跃网络，避免重复信息
+     */
+    fun getDetailedNetworkInfo(context: Context): String {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+
+        val sb = StringBuilder()
+        sb.append("Network Info:")
+
+        val activeNetwork = connectivityManager.activeNetwork
+        if (activeNetwork == null) {
+            sb.append("\n  No active network")
+            return sb.toString()
+        }
+
+        val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
+        if (capabilities == null) {
+            sb.append("\n  No capabilities")
+            return sb.toString()
+        }
+
+        // Get IP address for active network
+        val ipAddress = try {
+            val linkProperties = connectivityManager.getLinkProperties(activeNetwork)
+            linkProperties?.linkAddresses?.firstOrNull { it.address is Inet4Address && !it.address.isLoopbackAddress }?.address?.hostAddress
+        } catch (e: Exception) {
+            null
+        }
+
+        if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+            try {
+                val wifiInfo = wifiManager.connectionInfo
+                val ssid = wifiInfo?.ssid?.removeSurrounding("\"") ?: "unknown"
+                val bssid = wifiInfo?.bssid ?: "unknown"
+                val mac = getMacAddress(wifiManager)
+                sb.append("\n  [WiFi] SSID=$ssid BSSID=$bssid IP=$ipAddress MAC=$mac")
+            } catch (e: SecurityException) {
+                sb.append("\n  [WiFi] info unavailable: ${e.message}")
+            }
+        }
+
+        if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+            sb.append("\n  [Cellular] IP=$ipAddress")
+        }
+
+        if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
+            sb.append("\n  [Ethernet] IP=$ipAddress")
+        }
+
+        return sb.toString()
+    }
+
+    /**
+     * 获取当前 WiFi MAC 地址
+     */
+    private fun getMacAddress(wifiManager: WifiManager): String {
+        try {
+            val wifiInfo = wifiManager.connectionInfo
+            val mac = wifiInfo?.macAddress
+            if (mac != null && mac != "02:00:00:00:00:00") {
+                return mac
+            }
+        } catch (e: SecurityException) {
+            // Fallback
+        }
+
+        // Try to get MAC from network interfaces
+        try {
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val networkInterface = interfaces.nextElement()
+                val macBytes = networkInterface.hardwareAddress ?: continue
+                if (macBytes.isNotEmpty() && macBytes.size == 6) {
+                    return macBytes.joinToString(":") { String.format("%02X", it) }
+                }
+            }
+        } catch (e: Exception) {
+            // Ignore
+        }
+
+        return "unknown"
     }
 }

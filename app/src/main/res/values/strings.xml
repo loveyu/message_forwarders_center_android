@@ -71,5 +71,6 @@
     <string name="sample_configs">示例配置</string>
     <string name="config_not_found">未找到配置，已跳转到配置管理页面</string>
     <string name="system_settings">系统设置</string>
+    <string name="component_status">组件状态</string>
     <string name="github">GitHub</string>
 </resources>

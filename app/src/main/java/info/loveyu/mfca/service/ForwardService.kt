@@ -130,7 +130,7 @@ class ForwardService : Service() {
     }
 
     private var httpServer: HttpServer? = null
-    private var legacyMode = true
+    private var legacyMode = false
     private lateinit var preferences: Preferences
 
     // New architecture components
@@ -225,12 +225,13 @@ class ForwardService : Service() {
                 applyConfig(config)
                 return
             } catch (e: Exception) {
-                LogManager.appendLog("CONFIG", "Failed to load saved config, falling back to legacy mode: ${e.message}")
+                LogManager.appendLog("CONFIG", "Failed to load saved config: ${e.message}")
             }
         }
 
-        // Fall back to legacy mode
-        startLegacyMode()
+        // No valid config, just mark as not running
+        isRunning = false
+        LogManager.appendLog("SERVICE", "No valid config found, service not started")
     }
 
     private fun startLegacyMode() {
@@ -301,7 +302,11 @@ class ForwardService : Service() {
 
             // 5. Initialize Rule Engine
             LogManager.appendLog("CONFIG", "Initializing rule engine...")
-            ruleEngine = RuleEngine(config)
+            ruleEngine = RuleEngine(config) {
+                forwardedCount++
+                onStatsChanged?.invoke()
+                updateNotification()
+            }
 
             // 6. Initialize Inputs with message handler
             LogManager.appendLog("CONFIG", "Initializing inputs...")
@@ -323,15 +328,8 @@ class ForwardService : Service() {
         } catch (e: Exception) {
             LogManager.appendLog("CONFIG", "Failed to apply config: ${e.message}")
             e.printStackTrace()
-            // Fall back to legacy mode
-            legacyMode = true
-            try {
-                startLegacyModeInternal()
-            } catch (ex: Exception) {
-                LogManager.appendLog("SERVICE", "Failed to start service: ${ex.message}")
-                isRunning = false
-                onStartFailed?.invoke("启动失败: ${ex.message}")
-            }
+            isRunning = false
+            onStartFailed?.invoke("启动失败: ${e.message}")
         }
     }
 
@@ -368,19 +366,15 @@ class ForwardService : Service() {
     }
 
     private fun stopAll() {
-        if (legacyMode) {
-            stopLegacyMode()
-        } else {
-            InputManager.stopAll()
-            QueueManager.stopAll()
-            LinkManager.disconnectAll()
-            OutputManager.clear()
-            isRunning = false
-            receivedCount = 0
-            forwardedCount = 0
-            ruleEngine = null
-            deadLetterHandler = null
-        }
+        InputManager.stopAll()
+        QueueManager.stopAll()
+        LinkManager.disconnectAll()
+        OutputManager.clear()
+        isRunning = false
+        receivedCount = 0
+        forwardedCount = 0
+        ruleEngine = null
+        deadLetterHandler = null
         LogManager.appendLog("SERVICE", "All components stopped")
     }
 

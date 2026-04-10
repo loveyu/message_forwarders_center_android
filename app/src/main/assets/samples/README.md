@@ -70,17 +70,17 @@ links:
   # WiFi + 特定 SSID
   - id: home_wifi
     dsn: mqtt://host:1883
-    when: network=wifi,ssid=MyHomeWiFi
+    when: network=wifi&ssid=MyHomeWiFi
 
   # WiFi + 多个 SSID（逗号分隔）
   - id: multi_ssid
     dsn: mqtt://host:1883
-    when: network=wifi,ssid=MyHomeWiFi,MyHomeWiFi-5G
+    when: network=wifi&ssid=MyHomeWiFi,MyHomeWiFi-5G
 
   # WiFi + IP 段
   - id: local_network
     dsn: mqtt://host:1883
-    when: network=wifi,ipRanges=192.168.1.0/24,10.0.0.10
+    when: network=wifi&ipRanges=192.168.1.0/24,10.0.0.10
 
   # 禁止移动网络
   - id: no_mobile
@@ -90,12 +90,12 @@ links:
   # 正则匹配 SSID（前缀 ~）
   - id: regex_ssid
     dsn: mqtt://host:1883
-    when: network=wifi,ssid=~MyHomeWiFi-.*
+    when: network=wifi&ssid=~MyHomeWiFi-.*
 
   # 同时使用 when 和 deny
   - id: complex
     dsn: mqtt://host:1883
-    when: network=wifi,ipRanges=192.168.1.0/24
+    when: network=wifi&ipRanges=192.168.1.0/24
     deny: ssid=PublicWiFi
 ```
 

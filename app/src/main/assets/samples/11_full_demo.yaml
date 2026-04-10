@@ -15,7 +15,7 @@ links:
   # 主 MQTT Broker（仅 WiFi 环境 + 特定 SSID）
   - id: main_mqtt
     dsn: mqtt://mqtt.home.local:1883?connectTimeout=10&keepAliveInterval=60&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60&clientId=home_forwarder
-    when: network=wifi,ssid=HomeWiFi,~HomeWiFi-.*,ipRanges=192.168.1.0/24
+    when: network=wifi&ssid=HomeWiFi,~HomeWiFi-.*&ipRanges=192.168.1.0/24
 
   # 备用移动网络 MQTT
   - id: mobile_mqtt

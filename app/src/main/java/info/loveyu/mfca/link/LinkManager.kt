@@ -8,8 +8,12 @@ import android.net.NetworkRequest
 import info.loveyu.mfca.config.AppConfig
 import info.loveyu.mfca.config.LinkConfig
 import info.loveyu.mfca.config.LinkType
+import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.NetworkChecker
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
@@ -41,6 +45,10 @@ object LinkManager {
     private var currentNetworkType = NetworkType.UNKNOWN
     @Volatile
     private var lastReconnectTime = 0L
+
+    // Network state version for UI refresh
+    private val _networkStateVersion = MutableStateFlow(0)
+    val networkStateVersion: StateFlow<Int> = _networkStateVersion.asStateFlow()
 
     enum class NetworkType {
         WIFI, MOBILE, ETHERNET, UNKNOWN
@@ -120,6 +128,16 @@ object LinkManager {
         }
 
         LogManager.appendLog("LINK", "Network type: $currentNetworkType")
+        LogManager.appendLog("NETWORK", NetworkChecker.getDetailedNetworkInfo(ctx))
+
+        // Notify UI to refresh component states
+        _networkStateVersion.value++
+
+        // Check all links conditions and reconnect/disconnect as needed
+        checkAllLinkConditions()
+
+        // Also check all input conditions
+        InputManager.checkAllInputConditions()
     }
 
     /**
@@ -144,6 +162,16 @@ object LinkManager {
      * 检查链路健康状态，自动重连断开的链路
      */
     private fun checkLinkHealth() {
+        val ctx = applicationContext ?: return
+        if (!isNetworkAvailable) return
+
+        checkAllLinkConditions()
+    }
+
+    /**
+     * 检查所有链路的网络条件，不符合的断开，符合但断开的重新连接
+     */
+    private fun checkAllLinkConditions() {
         val ctx = applicationContext ?: return
         if (!isNetworkAvailable) return
 

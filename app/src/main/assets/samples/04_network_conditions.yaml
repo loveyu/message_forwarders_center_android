@@ -9,8 +9,8 @@
 #
 # 示例:
 #   when: network=wifi                    # 仅 WiFi 下启用
-#   when: network=wifi,ssid=MyHomeWiFi   # WiFi + 特定 SSID
-#   when: network=wifi,ipRanges=192.168.1.0/24  # WiFi + IP 段
+#   when: network=wifi&ssid=MyHomeWiFi   # WiFi + 特定 SSID
+#   when: network=wifi&ipRanges=192.168.1.0/24  # WiFi + IP 段
 #   deny: network=mobile                  # 移动网络下禁用
 
 version: "0.1"
@@ -29,22 +29,22 @@ links:
   # 示例3：WiFi 名称白名单（支持精确匹配和正则）
   - id: home_wifi_mqtt
     dsn: mqtt://home-server.local:1883
-    when: network=wifi,ssid=MyHomeWiFi,MyHomeWiFi-5G
+    when: network=wifi&ssid=MyHomeWiFi,MyHomeWiFi-5G
 
   # 示例4：WiFi BSSID 白名单
   - id: specific_ap_mqtt
     dsn: mqtt://192.168.1.1:1883
-    when: network=wifi,bssid=AA:BB:CC:DD:EE:FF,11:22:33:44:55:66
+    when: network=wifi&bssid=AA:BB:CC:DD:EE:FF,11:22:33:44:55:66
 
   # 示例5：IP 段限制（仅在指定 IP 范围内启用）
   - id: local_network_mqtt
     dsn: mqtt://192.168.1.100:1883
-    when: network=wifi,ipRanges=192.168.1.0/24,192.168.2.0/24,10.0.0.10
+    when: network=wifi&ipRanges=192.168.1.0/24,192.168.2.0/24,10.0.0.10
 
   # 示例6：同时限制网络类型和 WiFi 条件
   - id: strict_home_mqtt
     dsn: mqtt://home-server.local:1883
-    when: network=wifi,ssid=MyHomeWiFi,bssid=AA:BB:CC:DD:EE:FF,ipRanges=192.168.1.0/24
+    when: network=wifi&ssid=MyHomeWiFi&bssid=AA:BB:CC:DD:EE:FF&ipRanges=192.168.1.0/24
 
   # 示例7：任意网络类型（默认行为，不设置 when）
   - id: always_on_mqtt
@@ -58,5 +58,5 @@ links:
   # 示例9：同时使用 when 和 deny
   - id: complex_condition_mqtt
     dsn: mqtt://complex-server.example.com:1883
-    when: network=wifi,ipRanges=192.168.1.0/24
+    when: network=wifi&ipRanges=192.168.1.0/24
     deny: ssid=PublicWiFi,~TestWiFi-.*
