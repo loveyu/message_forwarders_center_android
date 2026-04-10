@@ -5,6 +5,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -330,6 +332,60 @@ fun SettingsScreen(
                                 LogManager.appendLog("SETTINGS", "Auto-start ${if (enabled) "enabled" else "disabled"}")
                             }
                         )
+                    }
+                }
+            }
+
+            // 电池优化豁免
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+                    val isIgnoring = powerManager.isIgnoringBatteryOptimizations(context.packageName)
+                    var ignoringBattery by remember { mutableStateOf(isIgnoring) }
+
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "后台保活",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Text(
+                            text = if (ignoringBattery) "已加入电池优化白名单，后台运行不受限制"
+                            else "未加入电池优化白名单，熄屏后可能被系统限制后台运行",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (ignoringBattery) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.error
+                        )
+                        Button(
+                            onClick = {
+                                try {
+                                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                        data = Uri.parse("package:${context.packageName}")
+                                    }
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    // Fallback to battery optimization settings
+                                    try {
+                                        context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                                    } catch (_: Exception) {
+                                        Toast.makeText(context, "无法打开电池优化设置", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            enabled = !ignoringBattery,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(if (ignoringBattery) "已豁免" else "请求电池优化豁免")
+                        }
+                    }
+
+                    // Refresh state when returning to the screen
+                    LaunchedEffect(Unit) {
+                        ignoringBattery = powerManager.isIgnoringBatteryOptimizations(context.packageName)
                     }
                 }
             }

@@ -11,6 +11,8 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- 添加前台服务权限 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- 添加唤醒锁权限（保持CPU在熄屏后运行） -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- 添加数据同步类型前台服务权限（Android 14及以上需要） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- 添加开机自启动权限 -->

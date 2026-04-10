@@ -9,8 +9,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
 import info.loveyu.mfca.config.AppConfig
@@ -135,6 +137,11 @@ class ForwardService : Service() {
     private var httpServer: HttpServer? = null
     private var legacyMode = false
     private lateinit var preferences: Preferences
+
+    // WakeLock: keeps CPU running when screen is off
+    private var wakeLock: PowerManager.WakeLock? = null
+    // WifiLock: keeps WiFi connection alive when screen is off
+    private var wifiLock: WifiManager.WifiLock? = null
 
     // New architecture components
     private var ruleEngine: RuleEngine? = null
@@ -271,6 +278,7 @@ class ForwardService : Service() {
         httpServer?.startServer()
         isRunning = true
         saveStatus()
+        acquireLocks()
         LogManager.appendLog("SERVICE", "Legacy mode started on port $port")
     }
 
@@ -352,6 +360,7 @@ class ForwardService : Service() {
             isRunning = true
             refreshStats()
             saveStatus()
+            acquireLocks()
             LogManager.appendLog("CONFIG", "Configuration applied successfully. Service started.")
             updateNotification()
         } catch (e: Exception) {
@@ -399,6 +408,7 @@ class ForwardService : Service() {
         QueueManager.stopAll()
         LinkManager.disconnectAll()
         OutputManager.clear()
+        releaseLocks()
         isRunning = false
         receivedCount = 0
         forwardedCount = 0
@@ -518,5 +528,50 @@ class ForwardService : Service() {
         lastNotificationStats = statsText
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID, createNotification())
+    }
+
+    private fun acquireLocks() {
+        // Acquire partial wake lock to keep CPU alive when screen is off
+        if (wakeLock == null) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "mfca::forward_service"
+            ).apply {
+                acquire()
+            }
+            LogManager.appendLog("SERVICE", "WakeLock acquired")
+        }
+        // Acquire WiFi lock to keep WiFi connection alive when screen is off
+        if (wifiLock == null) {
+            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val wifiMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+            } else {
+                @Suppress("DEPRECATION")
+                WifiManager.WIFI_MODE_FULL_HIGH_PERF
+            }
+            wifiLock = wifiManager.createWifiLock(wifiMode, "mfca::forward_service").apply {
+                acquire()
+            }
+            LogManager.appendLog("SERVICE", "WifiLock acquired")
+        }
+    }
+
+    private fun releaseLocks() {
+        wakeLock?.let {
+            if (it.isHeld) {
+                it.release()
+                LogManager.appendLog("SERVICE", "WakeLock released")
+            }
+        }
+        wakeLock = null
+        wifiLock?.let {
+            if (it.isHeld) {
+                it.release()
+                LogManager.appendLog("SERVICE", "WifiLock released")
+            }
+        }
+        wifiLock = null
     }
 }
