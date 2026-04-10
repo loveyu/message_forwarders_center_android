@@ -58,9 +58,9 @@ class HttpInput(
     }
 
     override fun stop() {
+        running = false
         try {
-            stop()
-            running = false
+            super.stop()
             LogManager.appendLog("HTTP", "HTTP input stopped: $inputName")
         } catch (e: Exception) {
             LogManager.appendLog("HTTP", "Error stopping HTTP input: $inputName - ${e.message}")
