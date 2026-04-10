@@ -1,22 +1,43 @@
 # TCP 连接示例
-# 演示：TCP Socket 链接配置，支持 DSN 格式和独立 host/port 格式
+# 演示：TCP Socket 链接配置, 必须使用 DSN 格式
 # 类型通过 DSN 协议自动判断 (tcp:// → tcp, ssl:// → tcp)
+#
+# 帧协议 (DSN 参数 protocol, 默认 lb):
+#   lb   : | length(4字节, 大端序) | body(N字节) |        (默认)
+#   tlv  : | type(2) | length(4字节, 大端序) | body(N字节) |
+#   split: 分隔符协议, 以指定分隔符切割消息
+#
+# DSN query 参数需要 URL-encode, 常用编码:
+#   \n → %5Cn    \r → %5Cr    \t → %5Ct    \0 → %5C0    \\ → %5C%5C
+#
+# 无效长度、超长数据、读写超时将直接断开连接。
 
 version: "0.1"
 
 links:
-  # DSN 格式 - 所有参数通过 URL query 传递
+  # LB 协议 (默认) - | length(4) | body(N) |
   - id: tcp_device
-    dsn: tcp://192.168.1.100:9000?connectTimeout=5&soTimeout=30&keepAlive=true&noDelay=true&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60
+    dsn: tcp://192.168.1.100:9000?protocol=lb&maxLength=1048576&connectTimeout=5&readTimeout=30&writeTimeout=10&keepAlive=true&noDelay=true&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60
 
-  # 独立配置格式 (host/port)
-  - id: tcp_server
-    host: api.example.com
-    port: 9001
+  # TLV 协议 - | type(2) | length(4) | body(N) |
+  # - id: tcp_tlv
+  #   dsn: tcp://192.168.1.100:9001?protocol=tlv&maxLength=524288&readTimeout=30&writeTimeout=10
+
+  # Split 协议 - 以 \n (换行) 分割消息
+  # - id: tcp_split_newline
+  #   dsn: tcp://192.168.1.100:9002?protocol=split&split=%5Cn&maxLength=65536&readTimeout=30&writeTimeout=10
+
+  # Split 协议 - 以 \r\n (CRLF) 分割消息
+  # - id: tcp_split_crlf
+  #   dsn: tcp://192.168.1.100:9002?protocol=split&split=%5Cr%5Cn&maxLength=65536&readTimeout=30&writeTimeout=10
+
+  # Split 协议 - 以 \0 (null) 分割消息
+  # - id: tcp_split_null
+  #   dsn: tcp://192.168.1.100:9002?protocol=split&split=%5C0&maxLength=65536&readTimeout=30&writeTimeout=10
 
   # TLS/SSL TCP 示例
   # - id: tcp_tls
-  #   dsn: ssl://192.168.1.100:9002?connectTimeout=10&keepAlive=true
+  #   dsn: ssl://192.168.1.100:9003?protocol=lb&maxLength=1048576&readTimeout=30&writeTimeout=10
   #   tls:
   #     ca: /data/certs/ca.pem
 
