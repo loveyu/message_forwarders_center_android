@@ -45,7 +45,7 @@ outputs:
     # 内部输出 - 文件
     - name: save_file
       type: file
-      basePath: /data/output
+      basePath: data://output
       options:
         auto_extension: true   # 自动添加 .dat 扩展名
 

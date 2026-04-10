@@ -96,7 +96,7 @@ links:
 | 类型 | 路径协议 |
 |------|----------|
 | 内存队列 | 高性能，容量可配，溢出策略（dropOldest/dropNew/block） |
-| SQLite | `data://` → 应用私有目录<br>`sdcard://` → 外部存储<br>重试机制 + 指数退避 + 自动清理 |
+| SQLite | `data://` → 应用私有目录<br>`sdcard://` → 外部存储<br>`file://` → 文件系统绝对路径<br>重试机制 + 指数退避 + 自动清理 |
 
 ### 输出层 (OutputManager)
 - **HTTP**: POST/PUT/GET，配置重试

@@ -20,8 +20,9 @@ links:
   #     ca: https://example.com/certs/ca.pem      # 支持 https://, http:// 下载
   #     # ca: sdcard://Download/ca.pem              # 支持 sdcard://
   #     # ca: file:///data/certs/ca.pem             # 支持 file://
-  #     cert: /path/to/cert.pem  # 客户端证书 (可选)
-  #     key: /path/to/key.pem    # 客户端私钥 (可选)
+  #     # ca: data://certs/ca.pem                   # 支持 data:// 应用私有目录
+  #     cert: file:///path/to/cert.pem  # 客户端证书 (可选)
+  #     key: file:///path/to/key.pem    # 客户端私钥 (可选)
 
 inputs:
   link:

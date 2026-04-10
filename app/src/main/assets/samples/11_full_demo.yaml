@@ -77,7 +77,7 @@ queues:
   sqlite:
     # 持久化存储队列
     sensor_archive:
-      path: /data/queues/sensors.db
+      path: file:///data/queues/sensors.db
       batchSize: 50
       retryInterval: 5s
       maxRetry: 10
@@ -123,7 +123,7 @@ outputs:
     # 保存原始数据到文件
     - name: raw_data_log
       type: file
-      basePath: /data/logs/raw
+      basePath: data://logs/raw
       options:
         auto_extension: true
 

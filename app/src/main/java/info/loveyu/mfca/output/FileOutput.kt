@@ -1,6 +1,7 @@
 package info.loveyu.mfca.output
 
 import android.content.Context
+import android.os.Environment
 import info.loveyu.mfca.config.InternalOutputConfig
 import info.loveyu.mfca.output.OutputType
 import info.loveyu.mfca.queue.QueueItem
@@ -9,6 +10,11 @@ import java.io.File
 
 /**
  * 文件输出
+ *
+ * 路径协议:
+ * - data:// - 应用私有数据目录 (context.getExternalFilesDir)
+ * - sdcard:// - 外部存储卡目录
+ * - file:// - 文件系统绝对路径
  */
 class FileOutput(
     private val context: Context,
@@ -19,7 +25,7 @@ class FileOutput(
 
     override fun send(item: QueueItem, callback: ((Boolean) -> Unit)?) {
         try {
-            val basePath = config.basePath ?: "/data/output"
+            val basePath = resolvePath(config.basePath ?: "data://output")
             val options = config.options ?: emptyMap()
 
             val dir = File(basePath)
@@ -39,6 +45,28 @@ class FileOutput(
         } catch (e: Exception) {
             LogManager.appendLog("INTERNAL", "File write failed: ${e.message}")
             callback?.invoke(false)
+        }
+    }
+
+    private fun resolvePath(path: String): String {
+        return when {
+            path.startsWith("data://") -> {
+                val relativePath = path.removePrefix("data://")
+                val externalDir = context.getExternalFilesDir(null)
+                if (externalDir != null) {
+                    File(externalDir, relativePath).absolutePath
+                } else {
+                    File(context.filesDir, relativePath).absolutePath
+                }
+            }
+            path.startsWith("sdcard://") -> {
+                val relativePath = path.removePrefix("sdcard://")
+                File(Environment.getExternalStorageDirectory(), relativePath).absolutePath
+            }
+            path.startsWith("file://") -> {
+                path.removePrefix("file://")
+            }
+            else -> throw IllegalArgumentException("Unsupported path protocol: $path, must use data://, sdcard:// or file://")
         }
     }
 }

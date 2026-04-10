@@ -2,17 +2,17 @@
 # 演示：磁盘持久化队列，支持重试和自动清理
 #
 # 路径协议说明:
-# - /absolute/path.db     - 绝对路径（需应用有权限）
-# - data://relative.db    - 应用外部数据目录 (context.getExternalFilesDir)
-# - sdcard://relative.db  - 外部存储根目录 (Environment.getExternalStorageDirectory)
+# - file:///absolute/path.db  - 文件系统绝对路径（需应用有权限）
+# - data://relative.db        - 应用外部数据目录 (context.getExternalFilesDir)
+# - sdcard://relative.db      - 外部存储根目录 (Environment.getExternalStorageDirectory)
 
 version: "0.1"
 
 queues:
   sqlite:
-    # 基础持久化队列（使用绝对路径）
+    # 基础持久化队列（使用文件系统绝对路径）
     persistent_queue:
-      path: /data/queues/main.db
+      path: file:///data/queues/main.db
       batchSize: 20           # 批量处理大小
       retryInterval: 5s       # 重试间隔
       maxRetry: 10            # 最大重试次数

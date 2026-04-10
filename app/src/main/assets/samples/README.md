@@ -48,10 +48,11 @@ links:
 tls:
   ca: https://example.com/certs/ca.pem   # 网络 URL - 自动下载
   ca: http://example.com/certs/ca.pem    # HTTP URL - 自动下载
-  ca: sdcard://Download/ca.pem            # SD 卡路径
-  ca: file:///data/certs/ca.pem          # 文件路径
-  cert: /path/to/cert.pem                # 客户端证书 (可选)
-  key: /path/to/key.pem                  # 客户端私钥 (可选)
+  ca: sdcard://Download/ca.pem           # SD 卡路径
+  ca: file:///data/certs/ca.pem          # 文件系统绝对路径
+  ca: data://certs/ca.pem                # 应用私有目录
+  cert: file:///path/to/cert.pem         # 客户端证书 (可选)
+  key: file:///path/to/key.pem           # 客户端私钥 (可选)
 ```
 
 证书下载后存储在外部扩展目录，以 hash 值命名，仅下载一次，更新时重复覆盖。
@@ -182,13 +183,27 @@ inputs:
       qos: 1
 ```
 
-## 队列路径协议
+## 文件路径协议
 
-| 协议 | 说明 | 示例 |
-|------|------|------|
-| `/path` | 绝对路径 | `/data/queue.db` |
-| `data://` | 应用外部数据目录 | `data://queues/db` |
-| `sdcard://` | 外部存储 | `sdcard://backups/db` |
+所有需要指定文件路径的配置项统一使用以下协议前缀：
+
+| 协议 | 说明 | 对应目录 | 示例 |
+|------|------|----------|------|
+| `data://` | 应用私有数据目录 | context.getExternalFilesDir | `data://queues/db` |
+| `sdcard://` | 外部存储根目录 | Environment.getExternalStorageDirectory | `sdcard://backups/db` |
+| `file://` | 文件系统绝对路径 | 直接使用绝对路径 | `file:///data/queue.db` |
+| `cache://` | 应用缓存目录 | context.getExternalCacheDir | `cache://temp/config.yaml` |
+
+注意：不再支持无协议前缀的裸路径，必须使用上述协议之一。
+
+### 各场景支持的协议
+
+| 场景 | 支持的协议 |
+|------|-----------|
+| 配置文件路径 (ConfigDownloader) | `http://`, `https://`, `sdcard://` |
+| 队列数据库路径 (SqliteQueue) | `data://`, `sdcard://`, `file://` |
+| TLS 证书路径 (CertResolver) | `file://`, `sdcard://`, `data://`, `http://`, `https://` |
+| 文件输出路径 (FileOutput) | `data://`, `sdcard://`, `file://` |
 
 ## 使用方法
 

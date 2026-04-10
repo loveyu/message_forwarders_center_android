@@ -47,9 +47,9 @@ class SqliteQueue(
     /**
      * 解析路径协议
      * 支持:
-     * - data:// - 应用私有数据目录
+     * - data:// - 应用私有数据目录 (context.getExternalFilesDir)
      * - sdcard:// - 外部存储卡目录
-     * - 空协议或无协议 - 绝对路径
+     * - file:// - 文件系统绝对路径
      */
     private fun resolvePath(path: String): String {
         return when {
@@ -69,7 +69,11 @@ class SqliteQueue(
                 val sdcardDir = Environment.getExternalStorageDirectory()
                 File(sdcardDir, relativePath).absolutePath
             }
-            else -> path
+            path.startsWith("file://") -> {
+                // 文件系统绝对路径
+                path.removePrefix("file://")
+            }
+            else -> throw IllegalArgumentException("Unsupported path protocol: $path, must use data://, sdcard:// or file://")
         }
     }
 

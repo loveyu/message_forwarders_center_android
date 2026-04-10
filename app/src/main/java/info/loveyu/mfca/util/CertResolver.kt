@@ -13,8 +13,9 @@ import java.security.MessageDigest
  * TLS 证书解析器
  *
  * 支持协议:
- * - file:///path/to/cert.pem     - 直接文件路径
- * - sdcard://path/to/cert.pem   - 外部存储卡路径
+ * - file:///path/to/cert.pem     - 文件系统绝对路径
+ * - sdcard://path/to/cert.pem    - 外部存储卡路径
+ * - data://path/to/cert.pem      - 应用私有数据目录
  * - https://example.com/cert.pem - 网络下载（缓存到应用外部目录）
  * - http://example.com/cert.pem  - 网络下载（缓存到应用外部目录）
  *
@@ -28,7 +29,7 @@ object CertResolver {
 
     /**
      * 解析证书路径
-     * @param certPath 证书路径，支持 file://, sdcard://, https://, http://
+     * @param certPath 证书路径，支持 file://, sdcard://, data://, https://, http://
      * @param context Android Context
      * @return 本地文件路径
      */
@@ -37,7 +38,7 @@ object CertResolver {
 
         return when {
             certPath.startsWith("file://") -> {
-                // 直接文件路径
+                // 文件系统绝对路径
                 val filePath = certPath.removePrefix("file://")
                 val file = File(filePath)
                 if (file.exists() && file.canRead()) filePath else null
@@ -49,14 +50,24 @@ object CertResolver {
                 val file = File(sdcardDir, relativePath)
                 if (file.exists() && file.canRead()) file.absolutePath else null
             }
+            certPath.startsWith("data://") -> {
+                // 应用私有数据目录
+                val relativePath = certPath.removePrefix("data://")
+                val externalDir = context.getExternalFilesDir(null)
+                val file = if (externalDir != null) {
+                    File(externalDir, relativePath)
+                } else {
+                    File(context.filesDir, relativePath)
+                }
+                if (file.exists() && file.canRead()) file.absolutePath else null
+            }
             certPath.startsWith("https://") || certPath.startsWith("http://") -> {
                 // 网络下载（带缓存）
                 downloadAndCacheCert(certPath, context)
             }
             else -> {
-                // 假设是绝对路径
-                val file = File(certPath)
-                if (file.exists() && file.canRead()) certPath else null
+                LogManager.appendLog(TAG, "不支持的证书路径协议: $certPath，需使用 file://, sdcard://, data:// 或 http(s)://")
+                null
             }
         }
     }

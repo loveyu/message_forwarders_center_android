@@ -1,5 +1,6 @@
 package info.loveyu.mfca.util
 
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import java.io.BufferedReader
@@ -20,17 +21,17 @@ object ConfigDownloader {
         Thread {
             val result = try {
                 val content = when {
-                    url.startsWith("file://") -> {
-                        LogManager.appendLog(TAG, "检测到本地文件协议，从文件读取: $url")
-                        downloadFromFile(url)
-                    }
                     url.startsWith("http://") || url.startsWith("https://") -> {
                         LogManager.appendLog(TAG, "检测到HTTP(S)协议，开始网络下载: $url")
                         downloadFromHttp(url)
                     }
+                    url.startsWith("sdcard://") -> {
+                        LogManager.appendLog(TAG, "检测到SD卡协议，从SD卡读取: $url")
+                        downloadFromSdcard(url)
+                    }
                     else -> {
-                        LogManager.appendLog(TAG, "不支持的协议: $url")
-                        throw IllegalArgumentException("Unsupported protocol: $url")
+                        LogManager.appendLog(TAG, "不支持的协议: $url，仅支持 http(s):// 和 sdcard://")
+                        throw IllegalArgumentException("Unsupported protocol: $url, only http(s):// and sdcard:// are supported")
                     }
                 }
                 LogManager.appendLog(TAG, "配置下载完成，内容大小: ${content.length} 字符")
@@ -43,20 +44,20 @@ object ConfigDownloader {
         }.start()
     }
 
-    private fun downloadFromFile(fileUrl: String): String {
-        val filePath = fileUrl.removePrefix("file://")
-        LogManager.appendLog(TAG, "读取本地文件: $filePath")
-        val file = File(filePath)
+    private fun downloadFromSdcard(sdcardUrl: String): String {
+        val relativePath = sdcardUrl.removePrefix("sdcard://")
+        val file = File(Environment.getExternalStorageDirectory(), relativePath)
+        LogManager.appendLog(TAG, "读取SD卡文件: ${file.absolutePath}")
         if (!file.exists()) {
-            LogManager.appendLog(TAG, "文件不存在: $filePath")
-            throw IllegalArgumentException("File not found: $filePath")
+            LogManager.appendLog(TAG, "文件不存在: ${file.absolutePath}")
+            throw IllegalArgumentException("File not found: ${file.absolutePath}")
         }
         if (!file.canRead()) {
-            LogManager.appendLog(TAG, "文件不可读: $filePath")
-            throw IllegalArgumentException("Cannot read file: $filePath")
+            LogManager.appendLog(TAG, "文件不可读: ${file.absolutePath}")
+            throw IllegalArgumentException("Cannot read file: ${file.absolutePath}")
         }
         val content = BufferedReader(FileReader(file)).use { it.readText() }
-        LogManager.appendLog(TAG, "本地文件读取成功，大小: ${content.length} 字符")
+        LogManager.appendLog(TAG, "SD卡文件读取成功，大小: ${content.length} 字符")
         return content
     }
 
