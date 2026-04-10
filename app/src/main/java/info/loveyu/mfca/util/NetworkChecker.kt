@@ -376,6 +376,61 @@ object NetworkChecker {
     }
 
     /**
+     * 获取当前网络条件与 when/deny 的匹配详情
+     */
+    fun getMatchedConditions(context: Context, whenCondition: String?, denyCondition: String?): String {
+        val sb = StringBuilder()
+
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val activeNetwork = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
+
+        if (capabilities != null) {
+            val type = when {
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "WiFi"
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "Mobile"
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet"
+                else -> "Unknown"
+            }
+            sb.append("Network: $type")
+
+            if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+                try {
+                    val ssid = wifiManager.connectionInfo?.ssid?.removeSurrounding("\"") ?: "unknown"
+                    val bssid = wifiManager.connectionInfo?.bssid ?: "unknown"
+                    sb.append("\nSSID: $ssid")
+                    sb.append("\nBSSID: $bssid")
+                } catch (e: SecurityException) {
+                    sb.append("\nWiFi info: permission denied")
+                }
+            }
+
+            val ip = getCurrentIpAddress(context)
+            if (ip != null) {
+                sb.append("\nIP: $ip")
+            }
+        } else {
+            sb.append("Network: none")
+        }
+
+        // Show when condition evaluation
+        if (whenCondition != null) {
+            val result = checkConditionWithReason(context, whenCondition)
+            sb.append("\nWhen: $whenCondition -> ${if (result.matched) "MATCHED" else "NOT MATCHED"}")
+            if (!result.matched && result.reason != null) {
+                sb.append(" (${result.reason})")
+            }
+        }
+        if (denyCondition != null) {
+            val result = checkConditionWithReason(context, denyCondition)
+            sb.append("\nDeny: $denyCondition -> ${if (result.matched) "MATCHED (denied)" else "not matched"}")
+        }
+
+        return sb.toString()
+    }
+
+    /**
      * 获取当前网络类型描述
      */
     fun getNetworkInfo(context: Context): String {

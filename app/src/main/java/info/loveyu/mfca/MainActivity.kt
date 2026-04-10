@@ -242,6 +242,7 @@ fun MainScreen(
     val preferences = remember { Preferences(context) }
 
     var isRunning by remember { mutableStateOf(ForwardService.isRunning) }
+    var isStarting by remember { mutableStateOf(ForwardService.isStarting) }
     var receivedCount by remember { mutableIntStateOf(ForwardService.receivedCount) }
     var forwardedCount by remember { mutableIntStateOf(ForwardService.forwardedCount) }
     var isPaused by remember { mutableStateOf(LogManager.isPaused()) }
@@ -266,11 +267,13 @@ fun MainScreen(
         receivedCount = ForwardService.receivedCount
         forwardedCount = ForwardService.forwardedCount
         isRunning = ForwardService.isRunning
+        isStarting = ForwardService.isStarting
     }
 
     // Sync initial state from service on first composition
     LaunchedEffect(Unit) {
         isRunning = ForwardService.isRunning
+        isStarting = ForwardService.isStarting
         receivedCount = ForwardService.receivedCount
         forwardedCount = ForwardService.forwardedCount
     }
@@ -338,7 +341,13 @@ fun MainScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            if (isRunning) {
+                            if (isStarting) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            } else if (isRunning) {
                                 Box(
                                     modifier = Modifier
                                         .size(10.dp)
@@ -349,14 +358,24 @@ fun MainScreen(
                                 )
                             }
                             Text(
-                                text = if (isRunning) stringResource(R.string.status_running)
-                                else stringResource(R.string.status_stopped),
+                                text = when {
+                                    isStarting -> "启动中..."
+                                    isRunning -> stringResource(R.string.status_running)
+                                    else -> stringResource(R.string.status_stopped)
+                                },
                                 style = MaterialTheme.typography.titleMedium,
-                                color = if (isRunning) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = when {
+                                    isStarting -> MaterialTheme.colorScheme.primary
+                                    isRunning -> MaterialTheme.colorScheme.primary
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                }
                             )
                         }
-                        if (isRunning) {
+                        if (isStarting) {
+                            Button(onClick = {}, enabled = false) {
+                                Text(stringResource(R.string.start_service))
+                            }
+                        } else if (isRunning) {
                             Button(onClick = onStopServer) {
                                 Text(stringResource(R.string.stop_service))
                             }

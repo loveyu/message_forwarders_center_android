@@ -48,6 +48,10 @@ object LinkManager {
     @Volatile
     private var lastNetworkTypeUpdateTime = 0L
 
+    // Whether initialization is complete (links ready for connection)
+    @Volatile
+    private var initialized = false
+
     // Network state version for UI refresh
     private val _networkStateVersion = MutableStateFlow(0)
     val networkStateVersion: StateFlow<Int> = _networkStateVersion.asStateFlow()
@@ -61,15 +65,31 @@ object LinkManager {
     }
 
     fun initialize(config: AppConfig) {
+        initialized = false
         clear()
+        val ctx = applicationContext ?: return
         config.links.forEach { linkConfig ->
             configs[linkConfig.id] = linkConfig
-            links[linkConfig.id] = createLink(linkConfig)
+            val link = createLink(linkConfig)
+            // Set reconnect callback that checks when/deny conditions before reconnecting
+            link.reconnectCallback = {
+                val cfg = configs[link.id]
+                if (cfg != null && NetworkChecker.shouldEnable(ctx, cfg.whenCondition, cfg.deny)) {
+                    link.connect()
+                } else {
+                    LogManager.appendLog("LINK", "Skipping reconnect for ${link.id}: network conditions not met")
+                    false
+                }
+            }
+            links[linkConfig.id] = link
             LogManager.appendLog("LINK", "Registered link: ${linkConfig.id} (${LinkType.fromDsn(linkConfig.dsn, linkConfig.url)})")
         }
 
-        // Start network monitoring
+        // Start network monitoring (updateNetworkType won't trigger connections until initialized=true)
         startNetworkMonitoring()
+        // Start health check for reconnection
+        startHealthCheck()
+        initialized = true
     }
 
     /**
@@ -91,6 +111,7 @@ object LinkManager {
             override fun onLost(network: Network) {
                 LogManager.appendLog("LINK", "Network lost")
                 isNetworkAvailable = false
+                updateNetworkType()
             }
 
             override fun onCapabilitiesChanged(
@@ -123,14 +144,18 @@ object LinkManager {
 
         val ctx = applicationContext ?: return
         val connectivityManager = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val network = connectivityManager.activeNetwork ?: return
-        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return
+        val network = connectivityManager.activeNetwork
+        val capabilities = network?.let { connectivityManager.getNetworkCapabilities(it) }
 
-        currentNetworkType = when {
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> NetworkType.WIFI
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> NetworkType.MOBILE
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> NetworkType.ETHERNET
-            else -> NetworkType.UNKNOWN
+        if (capabilities != null) {
+            currentNetworkType = when {
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> NetworkType.WIFI
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> NetworkType.MOBILE
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> NetworkType.ETHERNET
+                else -> NetworkType.UNKNOWN
+            }
+        } else {
+            currentNetworkType = NetworkType.UNKNOWN
         }
 
         LogManager.appendLog("LINK", "Network type: $currentNetworkType")
@@ -139,11 +164,23 @@ object LinkManager {
         // Notify UI to refresh component states
         _networkStateVersion.value++
 
-        // Check all links conditions and reconnect/disconnect as needed
-        checkAllLinkConditions()
+        // During initialization, skip connection management (applyConfig's connectAll handles it)
+        if (!initialized) return
 
-        // Also check all input conditions
-        InputManager.checkAllInputConditions()
+        // Disconnect all links when network is lost
+        if (network == null) {
+            linkScheduler.execute {
+                disconnectAll()
+                InputManager.checkAllInputConditions()
+            }
+            return
+        }
+
+        // Check all links conditions on background thread to avoid blocking main thread
+        linkScheduler.execute {
+            checkAllLinkConditions()
+            InputManager.checkAllInputConditions()
+        }
     }
 
     /**
@@ -288,6 +325,7 @@ object LinkManager {
     }
 
     fun clear() {
+        initialized = false
         stopHealthCheck()
         unregisterNetworkCallback()
         disconnectAll()

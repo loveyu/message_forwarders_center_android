@@ -84,10 +84,44 @@ fun getAllComponentStatuses(context: Context): List<ComponentStatus> {
             val isConnected = link.isConnected()
 
             val details = buildString {
-                append("Type: ${getLinkTypeString(config)}")
-                config.host?.let { append("\nHost: $it") }
-                config.port?.let { append(":$it") }
-                config.url?.let { append("\nURL: $it") }
+                // Connection details from link
+                val connDetails = link.getConnectionDetails()
+                val protocol = connDetails["protocol"] ?: getLinkTypeString(config)
+                append("Type: $protocol")
+                connDetails["host"]?.let { append("\nHost: $it") }
+                connDetails["port"]?.let { append(":$it") }
+                connDetails["resolved_ip"]?.let { append("\nDNS: $it") }
+
+                // Fallback for host/port if getConnectionDetails didn't provide them
+                if (!connDetails.containsKey("host")) {
+                    config.host?.let { append("\nHost: $it") }
+                    config.port?.let { append(":$it") }
+                }
+                if (!connDetails.containsKey("host") && connDetails.isEmpty()) {
+                    config.url?.let { append("\nURL: $it") }
+                }
+
+                // Network condition match details
+                if (config.whenCondition != null || config.deny != null) {
+                    append("\n\n${NetworkChecker.getMatchedConditions(context, config.whenCondition, config.deny)}")
+                }
+
+                // TLS certificate info
+                val tlsInfo = link.getTlsInfo()
+                if (tlsInfo != null) {
+                    append("\n\nTLS Info:")
+                    tlsInfo.protocol?.let { append("\n  Protocol: $it") }
+                    tlsInfo.cipherSuite?.let { append("\n  Cipher: $it") }
+                    if (tlsInfo.peerCertificates.isNotEmpty()) {
+                        val cert = tlsInfo.peerCertificates.first()
+                        append("\n  Certificate:")
+                        append("\n    Subject: ${cert.subject}")
+                        append("\n    Issuer: ${cert.issuer}")
+                        append("\n    Valid: ${cert.validFrom} - ${cert.validTo}")
+                        cert.serialNumber?.let { append("\n    Serial: $it") }
+                        cert.fingerprintSha256?.let { append("\n    SHA-256: $it") }
+                    }
+                }
             }
 
             statuses.add(

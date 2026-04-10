@@ -31,6 +31,8 @@ class TcpLink(override val config: LinkConfig) : Link {
     private var connected = AtomicBoolean(false)
     private var messageListener: ((ByteArray) -> Unit)? = null
     private var errorListener: ((Exception) -> Unit)? = null
+    override var reconnectCallback: (() -> Boolean)? = null
+    @Volatile private var resolvedIp: String? = null
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var readerJob: Job? = null
@@ -94,6 +96,8 @@ class TcpLink(override val config: LinkConfig) : Link {
 
             connected.set(true)
             reconnectJob?.cancel()
+            // Cache resolved IP
+            resolvedIp = (socket?.remoteSocketAddress as? java.net.InetSocketAddress)?.address?.hostAddress
             LogManager.appendLog("TCP", "Connected: $id")
 
             startReading()
@@ -114,7 +118,7 @@ class TcpLink(override val config: LinkConfig) : Link {
         reconnectJob = scope.launch {
             kotlinx.coroutines.delay(reconnectDelay * 1000)
             LogManager.appendLog("TCP", "Attempting reconnect: $id")
-            connect()
+            reconnectCallback?.invoke() ?: connect()
         }
     }
 
@@ -198,6 +202,15 @@ class TcpLink(override val config: LinkConfig) : Link {
 
     override fun setOnErrorListener(listener: (Exception) -> Unit) {
         errorListener = listener
+    }
+
+    override fun getConnectionDetails(): Map<String, String> {
+        val details = mutableMapOf<String, String>()
+        details["protocol"] = if (config.dsn?.startsWith("ssl://") == true) "SSL/TCP" else "TCP"
+        details["host"] = host
+        details["port"] = port.toString()
+        resolvedIp?.let { if (it != host) details["resolved_ip"] = it }
+        return details
     }
 
     private fun parseUrlParams(url: String): Pair<String, Map<String, String>> {

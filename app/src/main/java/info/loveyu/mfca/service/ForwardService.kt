@@ -51,6 +51,10 @@ class ForwardService : Service() {
             private set
 
         @Volatile
+        var isStarting = false
+            private set
+
+        @Volatile
         var receivedCount = 0
             private set
 
@@ -114,9 +118,8 @@ class ForwardService : Service() {
         fun loadConfig(yamlContent: String, configUrl: String = ""): Boolean {
             return try {
                 val config = ConfigLoader.loadConfig(yamlContent)
-                serviceInstance?.applyConfig(config)
                 currentConfigUrl = configUrl
-                serviceInstance?.saveStatus()
+                serviceInstance?.applyConfig(config)
                 true
             } catch (e: Exception) {
                 LogManager.appendLog("CONFIG", "Failed to load config: ${e.message}")
@@ -140,6 +143,11 @@ class ForwardService : Service() {
     // Stats refresh scheduler (5s)
     private val statsScheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
     private var statsFuture: ScheduledFuture<*>? = null
+
+    // Config application executor (off main thread)
+    private val configExecutor: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
+    @Volatile
+    private var isApplyingConfig = false
 
     override fun onCreate() {
         super.onCreate()
@@ -211,6 +219,7 @@ class ForwardService : Service() {
         stopForeground(STOP_FOREGROUND_REMOVE)
         statsFuture?.cancel(false)
         statsScheduler.shutdown()
+        configExecutor.shutdown()
         serviceInstance = null
         stopAll()
         super.onDestroy()
@@ -274,6 +283,26 @@ class ForwardService : Service() {
     }
 
     private fun applyConfig(config: AppConfig) {
+        if (isApplyingConfig) {
+            LogManager.appendLog("CONFIG", "Config application already in progress, skipping duplicate")
+            return
+        }
+        isApplyingConfig = true
+        isStarting = true
+        onStatsChanged?.invoke()
+
+        configExecutor.execute {
+            try {
+                applyConfigInternal(config)
+            } finally {
+                isApplyingConfig = false
+                isStarting = false
+                onStatsChanged?.invoke()
+            }
+        }
+    }
+
+    private fun applyConfigInternal(config: AppConfig) {
         LogManager.appendLog("CONFIG", "Applying new configuration...")
 
         // Stop existing components

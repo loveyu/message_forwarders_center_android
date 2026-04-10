@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import info.loveyu.mfca.config.LinkConfig
 import info.loveyu.mfca.config.LinkType
+import info.loveyu.mfca.config.TlsConfig
 import info.loveyu.mfca.util.CertResolver
 import info.loveyu.mfca.util.LogManager
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
@@ -13,12 +14,16 @@ import org.eclipse.paho.client.mqttv3.MqttConnectOptions
 import org.eclipse.paho.client.mqttv3.MqttMessage
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import java.io.File
+import java.net.InetAddress
+import java.net.URI
 import java.net.URLDecoder
+import java.security.KeyStore as CertKeyStore
+import java.security.MessageDigest
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
-import java.security.KeyStore as CertKeyStore
+import javax.net.ssl.X509TrustManager
 
 /**
  * MQTT 连接实现
@@ -37,6 +42,9 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
 
     private var consecutiveFailures = 0
     private var lastConnectAttempt = 0L
+    override var reconnectCallback: (() -> Boolean)? = null
+    @Volatile private var peerCertificates: List<X509Certificate>? = null
+    @Volatile private var resolvedIp: String? = null
 
     init {
         // Validate DSN protocol is mqtt or mqtts
@@ -146,6 +154,13 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
             if (client?.isConnected == true) {
                 connected = true
                 consecutiveFailures = 0
+                // Cache resolved IP
+                try {
+                    val uri = URI(parsedBroker)
+                    uri.host?.let { h ->
+                        resolvedIp = InetAddress.getByName(h).hostAddress
+                    }
+                } catch (_: Exception) {}
                 LogManager.appendLog("MQTT", "Connected successfully")
 
                 // Re-subscribe to topics
@@ -260,6 +275,48 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         errorListener = listener
     }
 
+    override fun getConnectionDetails(): Map<String, String> {
+        val details = mutableMapOf<String, String>()
+        val broker = config.dsn ?: return details
+        details["protocol"] = if (broker.startsWith("mqtts://")) "MQTTS" else "MQTT"
+        try {
+            val (cleanBroker, _) = parseBrokerUrl(broker)
+            val transformed = when {
+                cleanBroker.startsWith("mqtts://") -> cleanBroker.replaceFirst("mqtts://", "ssl://")
+                cleanBroker.startsWith("mqtt://") -> cleanBroker.replaceFirst("mqtt://", "tcp://")
+                else -> cleanBroker
+            }
+            val uri = URI(transformed)
+            uri.host?.let { h ->
+                details["host"] = h
+                if (uri.port != -1) details["port"] = uri.port.toString()
+                resolvedIp?.let { if (it != h) details["resolved_ip"] = it }
+            }
+        } catch (_: Exception) {}
+        return details
+    }
+
+    override fun getTlsInfo(): TlsConnectionInfo? {
+        val certs = peerCertificates ?: return null
+        val certInfos = certs.map { cert ->
+            CertInfo(
+                subject = cert.subjectX500Principal.name,
+                issuer = cert.issuerX500Principal.name,
+                validFrom = cert.notBefore.toString(),
+                validTo = cert.notAfter.toString(),
+                serialNumber = cert.serialNumber.toString(16),
+                fingerprintSha256 = cert.encoded?.let {
+                    val md = MessageDigest.getInstance("SHA-256")
+                    md.digest(it).joinToString(":") { "%02x".format(it) }
+                }
+            )
+        }
+        return TlsConnectionInfo(
+            protocol = "TLS",
+            peerCertificates = certInfos
+        )
+    }
+
     /**
      * Parse broker URL and extract connection parameters from query string and userinfo.
      * Example: mqtt://admin:123456@10.4.125.53:1883?connectTimeout=3&keepAliveInterval=60
@@ -314,7 +371,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         return Pair(urlWithoutQuery, params)
     }
 
-    private fun createSslSocketFactory(tls: info.loveyu.mfca.config.TlsConfig?): javax.net.SocketFactory {
+    private fun createSslSocketFactory(tls: TlsConfig?): javax.net.SocketFactory {
         try {
             // 解析 TLS 证书路径（支持 file://, sdcard://, https://, http://）
             val resolvedTls = CertResolver.resolveTlsConfig(tls, context)
@@ -340,8 +397,24 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
 
             trustManagerFactory.init(keyStore)
 
+            // Wrap TrustManagers to capture peer certificates
+            val wrappedTms = trustManagerFactory.trustManagers.map { tm ->
+                if (tm is X509TrustManager) {
+                    object : X509TrustManager {
+                        override fun checkClientTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {
+                            tm.checkClientTrusted(chain, authType)
+                        }
+                        override fun checkServerTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {
+                            chain?.let { peerCertificates = it.toList() }
+                            tm.checkServerTrusted(chain, authType)
+                        }
+                        override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = tm.acceptedIssuers
+                    }
+                } else tm
+            }.toTypedArray()
+
             val sslContext = SSLContext.getInstance("TLSv1.2")
-            sslContext.init(null, trustManagerFactory.trustManagers, null)
+            sslContext.init(null, wrappedTms, null)
 
             return sslContext.socketFactory
         } catch (e: Exception) {

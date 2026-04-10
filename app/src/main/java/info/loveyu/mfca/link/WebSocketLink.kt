@@ -4,13 +4,17 @@ import info.loveyu.mfca.config.LinkConfig
 import info.loveyu.mfca.config.LinkType
 import info.loveyu.mfca.util.LogManager
 import kotlinx.coroutines.launch
+import okhttp3.Handshake
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
+import java.net.InetAddress
+import java.net.URI
 import java.net.URLDecoder
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 /**
@@ -28,6 +32,9 @@ class WebSocketLink(override val config: LinkConfig) : Link {
     private var connected = false
     private var messageListener: ((ByteArray) -> Unit)? = null
     private var errorListener: ((Exception) -> Unit)? = null
+    override var reconnectCallback: (() -> Boolean)? = null
+    private var lastHandshake: Handshake? = null
+    @Volatile private var resolvedIp: String? = null
 
     private var params: Map<String, String> = emptyMap()
     private var autoReconnect = true
@@ -81,6 +88,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 connected = true
                 reconnectJob?.cancel()
+                lastHandshake = response.handshake
                 LogManager.appendLog("WS", "Connected: $id")
             }
 
@@ -136,7 +144,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
         reconnectJob = scope.launch {
             kotlinx.coroutines.delay(reconnectDelay * 1000)
             LogManager.appendLog("WS", "Attempting reconnect: $id")
-            connect()
+            reconnectCallback?.invoke() ?: connect()
         }
     }
 
@@ -177,6 +185,49 @@ class WebSocketLink(override val config: LinkConfig) : Link {
 
     override fun setOnErrorListener(listener: (Exception) -> Unit) {
         errorListener = listener
+    }
+
+    override fun getConnectionDetails(): Map<String, String> {
+        val details = mutableMapOf<String, String>()
+        val urlStr = config.url ?: return details
+        details["protocol"] = if (urlStr.startsWith("wss://")) "WSS" else "WS"
+        try {
+            val uri = URI(urlStr)
+            uri.host?.let { h ->
+                details["host"] = h
+                if (uri.port != -1) details["port"] = uri.port.toString()
+                // Use cached resolved IP, or resolve now
+                val ip = resolvedIp ?: try {
+                    InetAddress.getByName(h).hostAddress?.also { resolvedIp = it }
+                } catch (_: Exception) { null }
+                if (ip != null && ip != h) details["resolved_ip"] = ip
+            }
+        } catch (_: Exception) {}
+        return details
+    }
+
+    override fun getTlsInfo(): TlsConnectionInfo? {
+        val handshake = lastHandshake ?: return null
+        val peerCerts = handshake.peerCertificates.mapNotNull { cert ->
+            if (cert is java.security.cert.X509Certificate) {
+                CertInfo(
+                    subject = cert.subjectX500Principal.name,
+                    issuer = cert.issuerX500Principal.name,
+                    validFrom = cert.notBefore.toString(),
+                    validTo = cert.notAfter.toString(),
+                    serialNumber = cert.serialNumber.toString(16),
+                    fingerprintSha256 = cert.encoded?.let {
+                        val md = MessageDigest.getInstance("SHA-256")
+                        md.digest(it).joinToString(":") { "%02x".format(it) }
+                    }
+                )
+            } else null
+        }
+        return TlsConnectionInfo(
+            protocol = handshake.tlsVersion?.javaName,
+            cipherSuite = handshake.cipherSuite?.javaName,
+            peerCertificates = peerCerts
+        )
     }
 
     private fun parseUrlParams(url: String): Pair<String, Map<String, String>> {
