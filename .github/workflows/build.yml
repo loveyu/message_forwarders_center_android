@@ -57,13 +57,16 @@ jobs:
           echo "is_release=false" >> $GITHUB_OUTPUT
         fi
 
-    - name: Create keystore for all builds
+    - name: Create keystore for release builds
+      if: steps.build_info.outputs.build_type == 'release'
       run: |
         echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/release.keystore
-        echo "STORE_FILE=release.keystore" >> keystore.properties
-        echo "STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> keystore.properties
-        echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> keystore.properties
-        echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> keystore.properties
+        {
+          echo "STORE_FILE=release.keystore"
+          echo "STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}"
+          echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}"
+          echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}"
+        } > keystore.properties
 
     - name: Build Debug APK
       if: steps.build_info.outputs.build_type == 'debug'
