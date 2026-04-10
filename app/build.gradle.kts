@@ -3,6 +3,15 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Properties
 
+val buildTime: String = SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(Date())
+val gitBranch: String = try {
+    val process = Runtime.getRuntime().exec(arrayOf("git", "rev-parse", "--abbrev-ref", "HEAD"))
+    process.waitFor()
+    process.inputStream.bufferedReader().readText().trim()
+} catch (e: Exception) {
+    "unknown"
+}
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -17,9 +26,12 @@ android {
         minSdk = 33
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = (project.findProperty("versionName") as String?) ?: "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")
+        buildConfigField("String", "GIT_BRANCH", "\"$gitBranch\"")
     }
 
     signingConfigs {
@@ -42,7 +54,7 @@ android {
             applicationIdSuffix = ".debug"
             val dateFormat = SimpleDateFormat("yyMMddHHmm")
             val timestamp = dateFormat.format(Date())
-            versionNameSuffix = "-debug-$timestamp"
+            versionNameSuffix = "-debug.$timestamp.$gitBranch"
 
             isDebuggable = true
             isMinifyEnabled = false
@@ -78,6 +90,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
