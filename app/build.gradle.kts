@@ -2,12 +2,32 @@ import java.io.FileInputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Properties
+import java.util.TimeZone
 
-val buildTime: String = SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(Date())
+val buildTime: String = SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z (z)").apply {
+    timeZone = TimeZone.getDefault()
+}.format(Date())
+
 val gitBranch: String = try {
-    val process = Runtime.getRuntime().exec(arrayOf("git", "rev-parse", "--abbrev-ref", "HEAD"))
-    process.waitFor()
-    process.inputStream.bufferedReader().readText().trim()
+    // Check if HEAD is on a tag
+    val tagProcess = Runtime.getRuntime().exec(arrayOf("git", "describe", "--tags", "--exact-match", "HEAD"))
+    tagProcess.waitFor()
+    if (tagProcess.exitValue() == 0) {
+        val tagName = tagProcess.inputStream.bufferedReader().readText().trim()
+        "tag-$tagName"
+    } else {
+        val process = Runtime.getRuntime().exec(arrayOf("git", "rev-parse", "--abbrev-ref", "HEAD"))
+        process.waitFor()
+        val ref = process.inputStream.bufferedReader().readText().trim()
+        if (ref == "HEAD") {
+            // Detached HEAD, use short commit hash
+            val hashProcess = Runtime.getRuntime().exec(arrayOf("git", "rev-parse", "--short", "HEAD"))
+            hashProcess.waitFor()
+            hashProcess.inputStream.bufferedReader().readText().trim()
+        } else {
+            ref
+        }
+    }
 } catch (e: Exception) {
     "unknown"
 }
