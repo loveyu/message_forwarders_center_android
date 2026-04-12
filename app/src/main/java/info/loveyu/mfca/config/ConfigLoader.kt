@@ -1,17 +1,17 @@
 package info.loveyu.mfca.config
 
-import org.yaml.snakeyaml.LoaderOptions
-import org.yaml.snakeyaml.Yaml
+import org.snakeyaml.engine.v2.api.Load
+import org.snakeyaml.engine.v2.api.LoadSettings
 import java.io.File
 import java.io.StringReader
 
 object ConfigLoader {
 
-    private val yaml = Yaml(LoaderOptions())
+    private val yaml = Load(LoadSettings.builder().build())
 
     fun loadConfig(yamlString: String): AppConfig {
         return try {
-            val data = yaml.load(StringReader(yamlString)) as? Map<String, Any>
+            val data = yaml.loadFromString(yamlString) as? Map<String, Any>
                 ?: throw IllegalArgumentException("Invalid YAML format")
 
             AppConfig(

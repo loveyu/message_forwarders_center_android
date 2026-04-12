@@ -1,7 +1,14 @@
-# Add project specific ProGuard rules here.
--keep class info.loveyu.mfca.server.** { *; }
--keep class info.loveyu.mfca.constants.** { *; }
+# ============================================================
+# ProGuard / R8 规则 - MessageForwardersCenter
+# ============================================================
 
-# SnakeYAML references java.beans classes which don't exist on Android
-# These are only used in BeanAccess.DEFAULT mode; using -dontwarn lets R8 proceed
--dontwarn java.beans.**
+# ---------- 调试辅助 ----------
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
+
+# ---------- 项目代码（不混淆，保留所有类名和字段名） ----------
+-keep class info.loveyu.mfca.** { *; }
+
+# ---------- SnakeYAML Engine ----------
+-keep class org.snakeyaml.** { *; }
+-dontwarn org.snakeyaml.**

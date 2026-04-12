@@ -2,17 +2,16 @@ package info.loveyu.mfca.util
 
 import android.content.Context
 import info.loveyu.mfca.config.AppStatusConfig
-import org.yaml.snakeyaml.DumperOptions
-import org.yaml.snakeyaml.LoaderOptions
-import org.yaml.snakeyaml.Yaml
+import org.snakeyaml.engine.v2.api.Dump
+import org.snakeyaml.engine.v2.api.DumpSettings
+import org.snakeyaml.engine.v2.api.Load
+import org.snakeyaml.engine.v2.api.LoadSettings
 import java.io.File
-import java.io.StringReader
-import java.io.StringWriter
 
 object AppStatusManager {
     private const val STATUS_FILE_NAME = "app_status.yaml"
 
-    private val yaml = Yaml(LoaderOptions())
+    private val yaml = Load(LoadSettings.builder().build())
 
     fun loadStatus(context: Context): AppStatusConfig {
         val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
@@ -22,7 +21,7 @@ object AppStatusManager {
         }
 
         return try {
-            val data = yaml.load(StringReader(file.readText())) as? Map<String, Any>
+            val data = yaml.loadFromString(file.readText()) as? Map<String, Any>
                 ?: return AppStatusConfig()
 
             AppStatusConfig(
@@ -42,10 +41,7 @@ object AppStatusManager {
 
     fun saveStatus(context: Context, status: AppStatusConfig) {
         try {
-            val options = DumperOptions()
-            options.defaultFlowStyle = DumperOptions.FlowStyle.BLOCK
-            options.indent = 2
-            val saveYaml = Yaml(options)
+            val saveYaml = Dump(DumpSettings.builder().build())
 
             val data = mapOf(
                 "version" to status.version,
@@ -57,13 +53,9 @@ object AppStatusManager {
                 "app_auto_start_on_boot" to status.appAutoStartOnBoot
             )
 
-            val writer = StringWriter()
-            saveYaml.dump(data, writer)
-            writer.close()
-
             val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
             val file = File(baseDir, STATUS_FILE_NAME)
-            file.writeText(writer.toString())
+            file.writeText(saveYaml.dumpToString(data))
             LogManager.appendLog("APP_STATUS", "Status saved")
         } catch (e: Exception) {
             LogManager.appendLog("APP_STATUS", "Failed to save status: ${e.message}")
