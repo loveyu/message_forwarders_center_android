@@ -31,7 +31,8 @@ fun WebViewScreen(
     title: String,
     htmlContent: String,
     isDarkTheme: Boolean,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    rawHtml: Boolean = false
 ) {
     var canGoBack by remember { mutableStateOf(false) }
 
@@ -46,7 +47,7 @@ fun WebViewScreen(
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { context ->
-            createWebView(context, title, htmlContent, isDarkTheme, onBack) { needsBack ->
+            createWebView(context, title, htmlContent, isDarkTheme, onBack, rawHtml) { needsBack ->
                 canGoBack = needsBack
             }.also { webView ->
                 webView.webViewClient = object : WebViewClient() {
@@ -72,6 +73,7 @@ private fun createWebView(
     content: String,
     isDarkTheme: Boolean,
     onBack: () -> Unit,
+    rawHtml: Boolean,
     onNavigationChanged: (Boolean) -> Unit
 ): WebView {
     return WebView(context).apply {
@@ -90,9 +92,10 @@ private fun createWebView(
         }
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
         addJavascriptInterface(WebViewInterface(onBack), "Android")
+        val html = if (rawHtml) content else wrapHtml(title, content, isDarkTheme)
         loadDataWithBaseURL(
             null,
-            wrapHtml(title, content, isDarkTheme),
+            html,
             "text/html",
             "UTF-8",
             null

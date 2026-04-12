@@ -161,7 +161,8 @@ fun SampleDetailScreen(
         title = sampleFile.name,
         htmlContent = htmlContent,
         isDarkTheme = isDarkTheme,
-        onBack = onBack
+        onBack = onBack,
+        rawHtml = true
     )
 }
 
