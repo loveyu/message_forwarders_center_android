@@ -173,15 +173,23 @@ private fun buildHtmlContent(content: String, fileName: String): String {
 
     val isMarkdown = fileName.endsWith(".md", ignoreCase = true)
 
+    val markdownScript = if (isMarkdown) """
+            document.getElementById('content').innerHTML = marked.parse(content);
+            document.querySelectorAll('pre code').forEach(function(block) {
+                hljs.highlightElement(block);
+            });
+            setTimeout(addCopyButtons, 0);
+    """ else """
+            hljs.highlightElement(document.getElementById('content'));
+            setTimeout(addCopyButtons, 0);
+    """
+
     return """
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/lib/marked.umd.js"></script>
     <style>
         :root {
             --bg-color: #ffffff;
@@ -442,6 +450,13 @@ private fun buildHtmlContent(content: String, fileName: String): String {
     </div>
     <script>
         (function() {
+            var isDarkTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (isDarkTheme) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+
             function addCopyButtons() {
                 document.querySelectorAll('pre code').forEach(function(codeBlock) {
                     var pre = codeBlock.parentElement;
@@ -494,28 +509,39 @@ private fun buildHtmlContent(content: String, fileName: String): String {
                 });
             }
 
-            var content = document.getElementById('content').textContent;
-            var isMarkdown = /^[#*`\\-\\[\\]|!]/.test(content.trim()) ||
-                             content.includes('##') ||
-                             content.includes('**') ||
-                             content.includes('[]:');
-
-            ${if (isMarkdown) """
-            document.getElementById('content').innerHTML = marked.parse(content);
-            document.querySelectorAll('pre code').forEach(function(block) {
-                hljs.highlightElement(block);
-            });
-            setTimeout(addCopyButtons, 0);
-            """ else """
-            hljs.highlightElement(document.getElementById('content'));
-            setTimeout(addCopyButtons, 0);
-            """}
-
-            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                document.documentElement.setAttribute('data-theme', 'dark');
-            } else {
-                document.documentElement.setAttribute('data-theme', 'light');
+            function loadCss(url) {
+                var link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = url;
+                document.head.appendChild(link);
             }
+
+            function loadScript(url, onload) {
+                var script = document.createElement('script');
+                script.src = url;
+                script.onload = onload;
+                document.head.appendChild(script);
+            }
+
+            var isMarkdown = ${isMarkdown};
+            var content = document.getElementById('content').textContent;
+
+            loadCss('https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css');
+
+            loadScript('https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js', function() {
+                if (isMarkdown) {
+                    loadScript('https://cdn.jsdelivr.net/npm/marked@9.1.6/lib/marked.umd.js', function() {
+                        document.getElementById('content').innerHTML = marked.parse(content);
+                        document.querySelectorAll('pre code').forEach(function(block) {
+                            hljs.highlightElement(block);
+                        });
+                        addCopyButtons();
+                    });
+                } else {
+                    hljs.highlightElement(document.getElementById('content'));
+                    addCopyButtons();
+                }
+            });
         })();
     </script>
 </body>
