@@ -46,6 +46,7 @@ import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.ConfigBackupManager
 import info.loveyu.mfca.util.ConfigDownloader
 import info.loveyu.mfca.util.LogManager
+import info.loveyu.mfca.ui.theme.MfcaTheme
 import info.loveyu.mfca.util.Preferences
 import java.io.File
 
@@ -55,7 +56,7 @@ class ConfigActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            MaterialTheme {
+            MfcaTheme {
                 ConfigScreenContent(
                     onBack = { finish() }
                 )

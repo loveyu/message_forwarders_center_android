@@ -42,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import java.io.IOException
+import info.loveyu.mfca.ui.theme.MfcaTheme
 
 data class SampleFile(
     val name: String,
@@ -55,7 +56,7 @@ class HelpActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            MaterialTheme {
+            MfcaTheme {
                 HelpScreenContent(
                     onBack = { finish() }
                 )

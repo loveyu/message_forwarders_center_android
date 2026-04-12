@@ -69,6 +69,7 @@ import info.loveyu.mfca.util.AppStatusManager
 import info.loveyu.mfca.util.ConfigBackupManager
 import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
+import info.loveyu.mfca.ui.theme.MfcaTheme
 import info.loveyu.mfca.util.Preferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -89,7 +90,7 @@ class SettingsActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            MaterialTheme {
+            MfcaTheme {
                 SettingsScreenContent(
                     onBack = { finish() },
                     onOpenLicenses = {
