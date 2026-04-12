@@ -45,8 +45,10 @@ jobs:
       id: find_apk
       run: |
         APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
-        echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
-        echo "apk_name=MFCenter-${{ github.ref_name }}-debug.apk" >> $GITHUB_OUTPUT
+        APK_NAME="MFCenter-${{ github.ref_name }}-debug.apk"
+        cp "$APK_PATH" "$APK_NAME"
+        echo "apk_path=$APK_NAME" >> $GITHUB_OUTPUT
+        echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
 
     - name: Upload Debug APK artifact
       uses: actions/upload-artifact@v4
@@ -115,8 +117,31 @@ jobs:
       id: find_apk
       run: |
         APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
-        echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
-        echo "apk_name=MFCenter-${{ steps.build_info.outputs.version_name }}-release.apk" >> $GITHUB_OUTPUT
+        APK_NAME="MFCenter-${{ steps.build_info.outputs.version_name }}-release.apk"
+        cp "$APK_PATH" "$APK_NAME"
+        echo "apk_path=$APK_NAME" >> $GITHUB_OUTPUT
+        echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
+
+    - name: Build Raw Release APK (Tag only)
+      if: github.event_name == 'release'
+      run: |
+        # Disable minification and resource shrinking using sed
+        sed -i 's/isMinifyEnabled = true/isMinifyEnabled = false/' app/build.gradle.kts
+        sed -i 's/isShrinkResources = true/isShrinkResources = false/' app/build.gradle.kts
+        ./gradlew assembleRelease -PversionName=${{ steps.build_info.outputs.version_name }}
+        # Restore original settings
+        sed -i 's/isMinifyEnabled = false/isMinifyEnabled = true/' app/build.gradle.kts
+        sed -i 's/isShrinkResources = false/isShrinkResources = true/' app/build.gradle.kts
+
+    - name: Find Raw Release APK
+      if: github.event_name == 'release'
+      id: find_raw_apk
+      run: |
+        APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+        APK_NAME="MFCenter-${{ steps.build_info.outputs.version_name }}-release-raw.apk"
+        cp "$APK_PATH" "$APK_NAME"
+        echo "apk_path=$APK_NAME" >> $GITHUB_OUTPUT
+        echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
 
     - name: Upload Release APK artifact
       uses: actions/upload-artifact@v4
@@ -125,11 +150,21 @@ jobs:
         path: ${{ steps.find_apk.outputs.apk_path }}
         retention-days: 30
 
+    - name: Upload Raw Release APK artifact
+      if: github.event_name == 'release'
+      uses: actions/upload-artifact@v4
+      with:
+        name: MFCenter-${{ steps.build_info.outputs.version_name }}-release-raw-apk
+        path: ${{ steps.find_raw_apk.outputs.apk_path }}
+        retention-days: 30
+
     - name: Upload to GitHub Release
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v2
       with:
-        files: ${{ steps.find_apk.outputs.apk_path }}
+        files: |
+          ${{ steps.find_apk.outputs.apk_name }}
+          ${{ steps.find_raw_apk.outputs.apk_name }}
         name: ${{ github.ref_name }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

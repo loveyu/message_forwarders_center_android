@@ -79,6 +79,7 @@ import info.loveyu.mfca.ui.ComponentStatusSheet
 import info.loveyu.mfca.ui.ComponentType
 import info.loveyu.mfca.ui.DrawerMenu
 import info.loveyu.mfca.ui.DrawerMenuItem
+import info.loveyu.mfca.ui.theme.MfcaTheme
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.ui.getEnabledAndDisabledComponents
 import info.loveyu.mfca.util.AppStatusManager
@@ -170,7 +171,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            MaterialTheme {
+            MfcaTheme {
                 val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
                 val scope = rememberCoroutineScope()
                 val preferences = remember { Preferences(this@MainActivity) }
