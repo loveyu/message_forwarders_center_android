@@ -23,7 +23,7 @@ links:
 
   # WebSocket 服务器
   - id: ws_server
-    url: ws://api.example.com/ws?readTimeout=30&writeTimeout=30&pingInterval=30&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=30
+    dsn: ws://api.example.com/ws?readTimeout=30&writeTimeout=30&pingInterval=30&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=30
 
   # 局域网 TCP 设备
   - id: tcp_device

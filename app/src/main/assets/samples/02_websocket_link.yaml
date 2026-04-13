@@ -1,32 +1,32 @@
 # WebSocket 连接示例
-# 演示：WebSocket 链接配置，类型通过 URL 协议自动判断 (ws:// → websocket, wss:// → websocket)
-# 所有参数通过 URL query 部分传递
+# 演示：WebSocket 链接配置，类型通过 DSN 协议自动判断 (ws:// → websocket, wss:// → websocket)
+# 所有参数通过 DSN query 部分传递
 
 
 links:
-  # 标准 WebSocket - 类型从 URL 自动识别
+  # 标准 WebSocket - 类型从 DSN 自动识别
   - id: ws_server
-    url: ws://localhost:8080/ws?readTimeout=30&writeTimeout=30&pingInterval=30&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=30
+    dsn: ws://localhost:8080/ws?readTimeout=30&writeTimeout=30&pingInterval=30&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=30
 
   # WSS (TLS) WebSocket
   - id: wss_server
-    url: wss://secure.example.com/ws?readTimeout=60&automaticReconnect=true
+    dsn: wss://secure.example.com/ws?readTimeout=60&automaticReconnect=true
     tls:
       ca: /data/certs/ca.pem
 
   # 带认证的 WebSocket
   # - id: ws_auth
-  #   url: ws://localhost:8080/ws?username=foo&password=foo
+  #   dsn: ws://localhost:8080/ws?username=foo&password=foo
 
   # Gotify WebSocket - 使用 protocol=gotify 启用 Gotify 协议
-  # URL 格式: ws(s)://host:port?token=xxx&protocol=gotify
+  # DSN 格式: ws(s)://host:port?token=xxx&protocol=gotify
   # 自动添加 /stream 路径，token 通过 query 参数传递
   - id: gotify_server
-    url: ws://gotify.example.com:80?token=YOUR_CLIENT_TOKEN&protocol=gotify&automaticReconnect=true&reconnectInterval=5
+    dsn: ws://gotify.example.com:80?token=YOUR_CLIENT_TOKEN&protocol=gotify&automaticReconnect=true&reconnectInterval=5
 
   # Gotify WSS (TLS) - 生产环境推荐
   # - id: gotify_secure
-  #   url: wss://gotify.example.com:443?token=YOUR_CLIENT_TOKEN&protocol=gotify&automaticReconnect=true
+  #   dsn: wss://gotify.example.com:443?token=YOUR_CLIENT_TOKEN&protocol=gotify&automaticReconnect=true
   #   tls:
   #     ca: /data/certs/ca.pem
 

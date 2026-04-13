@@ -12,7 +12,7 @@ links:
     dsn: mqtt://localhost:1883?clientId=forwarder_client
 
   - id: ws_server
-    url: ws://localhost:8080/ws
+    dsn: ws://localhost:8080/ws
 
 inputs:
   link:

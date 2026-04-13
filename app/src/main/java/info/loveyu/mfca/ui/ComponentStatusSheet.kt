@@ -101,7 +101,7 @@ fun getAllComponentStatuses(context: Context): List<ComponentStatus> {
                     config.port?.let { append(":$it") }
                 }
                 if (!connDetails.containsKey("host") && connDetails.isEmpty()) {
-                    config.url?.let { append("\nURL: $it") }
+                    config.dsn?.let { append("\nDSN: $it") }
                 }
 
                 // Network condition match details
@@ -301,8 +301,8 @@ private fun getLinkTypeString(config: LinkConfig): String {
         config.dsn?.startsWith("tcp") == true -> "TCP"
         config.dsn?.startsWith("https") == true -> "HTTPS"
         config.dsn?.startsWith("http") == true -> "HTTP"
-        config.url?.startsWith("wss") == true -> "WebSocket (SSL)"
-        config.url?.startsWith("ws") == true -> "WebSocket"
+        config.dsn?.startsWith("wss") == true -> "WebSocket (SSL)"
+        config.dsn?.startsWith("ws") == true -> "WebSocket"
         else -> "Unknown"
     }
 }

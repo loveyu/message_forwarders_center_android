@@ -48,7 +48,6 @@ object ConfigLoader {
                     id = map["id"] as? String ?: return@mapNotNull null,
                     dsn = map["dsn"] as? String,
                     clientId = (map["client_id"] as? String),
-                    url = map["url"] as? String,
                     host = map["host"] as? String,
                     port = (map["port"] as? Number)?.toInt(),
                     reconnect = null,

@@ -40,6 +40,8 @@ class WebSocketLink(override val config: LinkConfig) : Link {
     override var reconnectCallback: (() -> Boolean)? = null
     private var lastHandshake: Handshake? = null
     @Volatile private var resolvedIp: String? = null
+    private val connectionLock = Any()
+    @Volatile private var connecting = false
 
     private var params: Map<String, String> = emptyMap()
     private var autoReconnect = true
@@ -50,7 +52,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
 
     init {
         // Validate DSN protocol is ws or wss
-        val type = LinkType.fromDsn(config.dsn, config.url)
+        val type = LinkType.fromDsn(config.dsn)
         if (type != LinkType.websocket) {
             throw IllegalArgumentException("WebSocketLink requires ws:// or wss:// DSN")
         }
@@ -58,97 +60,107 @@ class WebSocketLink(override val config: LinkConfig) : Link {
 
     override fun connect(): Boolean {
         if (connected) return true
+        if (connecting) return true
 
-        val urlStr = config.url ?: return false
+        synchronized(connectionLock) {
+            // Double-check after acquiring lock
+            if (connected || connecting || webSocket != null) return true
+            connecting = true
 
-        // Parse URL params
-        val (cleanUrl, parsedParams) = parseUrlParams(urlStr)
-        params = parsedParams
+            val urlStr = config.dsn ?: return false
 
-        // Check for Gotify protocol
-        isGotifyProtocol = params["protocol"] == "gotify"
+            // Parse URL params
+            val (cleanUrl, parsedParams) = parseUrlParams(urlStr)
+            params = parsedParams
 
-        // Reconnect settings
-        autoReconnect = params["automaticReconnect"]?.toBoolean()
-            ?: (config.reconnect?.enabled ?: true)
-        reconnectDelay = params["reconnectInterval"]?.toLongOrNull()
-            ?: config.reconnect?.interval?.timeUnit?.toSeconds(config.reconnect?.interval?.millis ?: 3000) ?: 5L
-        maxReconnectDelay = params["reconnectMaxInterval"]?.toLongOrNull()
-            ?: config.reconnect?.maxInterval?.timeUnit?.toSeconds(config.reconnect?.maxInterval?.millis ?: 30000) ?: 30L
+            // Check for Gotify protocol
+            isGotifyProtocol = params["protocol"] == "gotify"
 
-        LogManager.appendLog("WS", "Connecting to $cleanUrl (gotify=$isGotifyProtocol)")
+            // Reconnect settings
+            autoReconnect = params["automaticReconnect"]?.toBoolean()
+                ?: (config.reconnect?.enabled ?: true)
+            reconnectDelay = params["reconnectInterval"]?.toLongOrNull()
+                ?: config.reconnect?.interval?.timeUnit?.toSeconds(config.reconnect?.interval?.millis ?: 3000) ?: 5L
+            maxReconnectDelay = params["reconnectMaxInterval"]?.toLongOrNull()
+                ?: config.reconnect?.maxInterval?.timeUnit?.toSeconds(config.reconnect?.maxInterval?.millis ?: 30000) ?: 30L
 
-        val client = buildOkHttpClient()
+            LogManager.appendLog("WS", "Connecting to $cleanUrl (gotify=$isGotifyProtocol)")
 
-        // Build URL - for Gotify, add /stream path if not present
-        val baseUrl = if (isGotifyProtocol && !cleanUrl.contains("/stream")) {
-            cleanUrl.trimEnd('/') + "/stream"
-        } else {
-            cleanUrl
+            val client = buildOkHttpClient()
+
+            // Build URL - for Gotify, add /stream path if not present
+            val baseUrl = if (isGotifyProtocol && !cleanUrl.contains("/stream")) {
+                cleanUrl.trimEnd('/') + "/stream"
+            } else {
+                cleanUrl
+            }
+
+            // For Gotify, token can be in params (extracted from query) - rebuild query with token
+            val finalUrl = if (isGotifyProtocol && params["token"] != null) {
+                val queryParams = params.filterKeys { it != "protocol" }
+                    .map { (k, v) -> "$k=${URLEncoder.encode(v, "UTF-8")}" }
+                    .joinToString("&")
+                "$baseUrl?$queryParams"
+            } else {
+                baseUrl
+            }
+
+            val requestBuilder = Request.Builder().url(finalUrl)
+
+            // Basic auth from params
+            params["username"]?.let { user ->
+                params["password"]?.let { pass ->
+                    val credentials = okhttp3.Credentials.basic(user, pass)
+                    requestBuilder.addHeader("Authorization", credentials)
+                }
+            }
+
+            LogManager.appendLog("WS", "Final URL: $finalUrl")
+
+            val request = requestBuilder.build()
+            val ws = client.newWebSocket(request, object : WebSocketListener() {
+                override fun onOpen(webSocket: WebSocket, response: Response) {
+                    connected = true
+                    connecting = false
+                    reconnectJob?.cancel()
+                    lastHandshake = response.handshake
+                    LogManager.appendLog("WS", "Connected: $id")
+                }
+
+                override fun onMessage(webSocket: WebSocket, text: String) {
+                    messageListener?.invoke(text.toByteArray())
+                    LogManager.appendLog("WS", "Message received: ${text.take(100)}")
+                }
+
+                override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+                    messageListener?.invoke(bytes.toByteArray())
+                    LogManager.appendLog("WS", "Message received: ${bytes.size} bytes")
+                }
+
+                override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                    LogManager.appendLog("WS", "Closing: $code $reason")
+                    webSocket.close(1000, null)
+                }
+
+                override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                    connected = false
+                    connecting = false
+                    LogManager.appendLog("WS", "Closed: $code $reason")
+                    scheduleReconnect()
+                }
+
+                override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                    connected = false
+                    connecting = false
+                    LogManager.appendLog("WS", "Error: ${t.message}")
+                    errorListener?.invoke(t as? Exception ?: Exception(t.message))
+                    scheduleReconnect()
+                }
+            })
+
+            webSocket = ws
+            return true
         }
-
-        // For Gotify, token can be in params (extracted from query) - rebuild query with token
-        val finalUrl = if (isGotifyProtocol && params["token"] != null) {
-            val queryParams = params.filterKeys { it != "protocol" }
-                .map { (k, v) -> "$k=${URLEncoder.encode(v, "UTF-8")}" }
-                .joinToString("&")
-            "$baseUrl?$queryParams"
-        } else {
-            baseUrl
-        }
-
-        val requestBuilder = Request.Builder().url(finalUrl)
-
-        // Basic auth from params
-        params["username"]?.let { user ->
-            params["password"]?.let { pass ->
-                val credentials = okhttp3.Credentials.basic(user, pass)
-                requestBuilder.addHeader("Authorization", credentials)
-            }
-        }
-
-        LogManager.appendLog("WS", "Final URL: $finalUrl")
-
-        val request = requestBuilder.build()
-        val ws = client.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(webSocket: WebSocket, response: Response) {
-                connected = true
-                reconnectJob?.cancel()
-                lastHandshake = response.handshake
-                LogManager.appendLog("WS", "Connected: $id")
-            }
-
-            override fun onMessage(webSocket: WebSocket, text: String) {
-                messageListener?.invoke(text.toByteArray())
-                LogManager.appendLog("WS", "Message received: ${text.take(100)}")
-            }
-
-            override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
-                messageListener?.invoke(bytes.toByteArray())
-                LogManager.appendLog("WS", "Message received: ${bytes.size} bytes")
-            }
-
-            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                LogManager.appendLog("WS", "Closing: $code $reason")
-                webSocket.close(1000, null)
-            }
-
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                connected = false
-                LogManager.appendLog("WS", "Closed: $code $reason")
-                scheduleReconnect()
-            }
-
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                connected = false
-                LogManager.appendLog("WS", "Error: ${t.message}")
-                errorListener?.invoke(t as? Exception ?: Exception(t.message))
-                scheduleReconnect()
-            }
-        })
-
-        webSocket = ws
-        return true
     }
 
     private fun buildOkHttpClient(): OkHttpClient {
@@ -180,6 +192,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
         webSocket?.close(1000, "Disconnect requested")
         webSocket = null
         connected = false
+        connecting = false
         LogManager.appendLog("WS", "Disconnected: $id")
     }
 
@@ -215,7 +228,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
 
     override fun getConnectionDetails(): Map<String, String> {
         val details = mutableMapOf<String, String>()
-        val urlStr = config.url ?: return details
+        val urlStr = config.dsn ?: return details
         details["protocol"] = if (urlStr.startsWith("wss://")) "WSS" else "WS"
         try {
             val uri = URI(urlStr)

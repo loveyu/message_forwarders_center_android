@@ -31,7 +31,6 @@ data class LinkConfig(
     val id: String,
     val dsn: String? = null,  // 连接字符串，格式: protocol://user:pass@host:port?param=value
     val clientId: String? = null,
-    val url: String? = null,
     val host: String? = null,
     val port: Int? = null,
     val reconnect: ReconnectConfig? = null,
@@ -47,11 +46,7 @@ enum class LinkType {
     mqtt, websocket, tcp, http;
 
     companion object {
-        fun fromDsn(dsn: String?, url: String? = null): LinkType {
-            // Check URL first for websocket (ws:// or wss://)
-            if (url != null && (url.startsWith("ws://") || url.startsWith("wss://"))) {
-                return websocket
-            }
+        fun fromDsn(dsn: String?): LinkType {
             if (dsn == null) return mqtt
             return when {
                 dsn.startsWith("mqtt://") || dsn.startsWith("mqtts://") -> mqtt

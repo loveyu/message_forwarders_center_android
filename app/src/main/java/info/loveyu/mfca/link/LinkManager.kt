@@ -70,7 +70,7 @@ object LinkManager {
         val ctx = applicationContext ?: return
         config.links.forEach { linkConfig ->
             // HTTP links are managed by SharedHttpInput in InputManager, skip them here
-            val type = LinkType.fromDsn(linkConfig.dsn, linkConfig.url)
+            val type = LinkType.fromDsn(linkConfig.dsn)
             if (type == LinkType.http) {
                 configs[linkConfig.id] = linkConfig
                 LogManager.appendLog("LINK", "Skipped HTTP link: ${linkConfig.id} (managed by SharedHttpInput)")
@@ -89,7 +89,7 @@ object LinkManager {
                 }
             }
             links[linkConfig.id] = link
-            LogManager.appendLog("LINK", "Registered link: ${linkConfig.id} (${LinkType.fromDsn(linkConfig.dsn, linkConfig.url)})")
+            LogManager.appendLog("LINK", "Registered link: ${linkConfig.id} (${LinkType.fromDsn(linkConfig.dsn)})")
         }
 
         // Start network monitoring (updateNetworkType won't trigger connections until initialized=true)
@@ -356,7 +356,7 @@ object LinkManager {
     private fun createLink(config: LinkConfig): Link {
         val ctx = applicationContext ?: throw IllegalStateException("Application context not set")
         // Derive type from DSN protocol or URL
-        val type = LinkType.fromDsn(config.dsn, config.url)
+        val type = LinkType.fromDsn(config.dsn)
         return when (type) {
             LinkType.mqtt -> MqttLink(config, ctx)
             LinkType.websocket -> WebSocketLink(config)
@@ -372,7 +372,7 @@ object LinkManager {
      */
     fun getHttpLinkConfigs(): Map<String, LinkConfig> {
         return configs.filter { (id, _) ->
-            val type = LinkType.fromDsn(configs[id]?.dsn, configs[id]?.url)
+            val type = LinkType.fromDsn(configs[id]?.dsn)
             type == LinkType.http
         }
     }

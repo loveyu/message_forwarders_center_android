@@ -35,7 +35,7 @@ links:
 
   # WebSocket (ws:// 或 wss://)
   - id: ws_link
-    url: ws://host:8080/path?param=value
+    dsn: ws://host:8080/path?param=value
 
   # TCP (tcp:// 或 ssl://)
   - id: tcp_link
