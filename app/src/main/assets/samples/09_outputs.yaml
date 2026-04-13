@@ -4,7 +4,7 @@
 #
 # 通知输出 (notify) 配置说明:
 #
-# 模板变量 (tag 和 id 支持):
+# 模板变量 (tag、group、id 支持):
 #   {channel}      - 输出配置的 channel
 #   {name}         - 输出配置的 name
 #   {seq}          - 全局递增序列号 (0-999 循环)
@@ -15,12 +15,19 @@
 #   {data.field}   - JSON 路径提取 (当 data 为 JSON 时)
 #   {meta.key}     - metadata 字段
 #
+# 标识字段:
+#   tag   - 通知替换域，相同 tag+id 的通知替换旧通知。默认为 name (输出名称)
+#   group - 通知栏视觉分组，相同 group 的通知折叠在一起。默认与 tag 相同
+#   id    - 通知唯一标识 (Int 值)。默认为秒级时间戳 * 1000 + 序列号
+#
 # 默认值:
-#   tag: channel:name 的 MD5 前12位 (如 "a1b2c3d4e5f6")
-#   id:  秒级时间戳 * 1000 + 序列号 (确保非1，避免与前台通知冲突)
+#   tag:   name (输出名称)
+#   group: 与 tag 相同 (按 tag 自动分组)
+#   id:    秒级时间戳 * 1000 + 序列号 (确保非1，避免与前台通知冲突)
 #
-# 运行时覆盖: 可通过 metadata 或 data JSON 中的 notify_tag / notify_id 字段指定
-#
+# 运行时覆盖:
+#   metadata:  notify_tag / notify_group / notify_id (带 notify_ 前缀)
+#   data JSON: tag / group / id (无前缀)
 
 
 links:
@@ -74,24 +81,27 @@ outputs:
       type: broadcast
       channel: app_events      # 广播通道名称
 
-    # 内部输出 - 通知 (使用默认 tag/id)
+    # 内部输出 - 通知 (使用默认 tag/group/id)
+    # tag 默认为 name ("default_notify")，group 默认与 tag 相同
     - name: default_notify
       type: notify
-      channel: default         # 通知渠道，tag 默认值为 md5("default:default_notify").take(12)
+      channel: default
 
-    # 内部输出 - 通知 (自定义 tag/id 模板)
+    # 内部输出 - 通知 (自定义 tag/group/id 模板)
     - name: custom_notify
       type: notify
       channel: alert
       options:
-        # 自定义 tag: 使用 channel 和日期分组
+        # tag: 使用 channel 和日期分组，同一天的通知共享替换域
         tag: "{channel}_{date:yyyyMMdd}"
-        # 自定义 id: 使用时间戳和序列号确保唯一性
-        id: "{timestamp}_{seq}"
+        # group: 通知栏视觉分组，相同 group 的通知折叠在一起
+        group: "mfca_{channel}"
+        # id: 纯数字模板，确保 toInt() 可解析
+        id: "{timestamp}"
         # 自定义标题/内容模板
         title: "来自 {meta.sender} 的消息"
         message: "{data.content}"
-        # 是否弹出通知
+        # 是否弹出通知 (仅支持 true/false 布尔值)
         popup: true
         # 是否持久化 (常驻通知)
         # persistent: false
@@ -104,10 +114,10 @@ outputs:
         # data 数据示例: {"title":"xxx","message":"xxx","priority":"high"}
         title: "{data.title}"
         message: "{data.message}"
-        # 从 data JSON 中提取嵌套字段
+        # 从 data JSON 中提取嵌套字段作为 tag
         tag: "{data.priority}_{date:HHmm}"
-        # 从 metadata 中提取字段
-        popup: "{meta.popup}"
+        # 按优先级分组
+        group: "mfca_priority_{data.priority}"
 
 rules:
   # 复制到剪贴板

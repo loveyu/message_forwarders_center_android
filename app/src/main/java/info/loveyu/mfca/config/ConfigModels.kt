@@ -235,7 +235,7 @@ enum class InternalOutputType {
 /**
  * 通知选项
  *
- * 模板变量说明:
+ * 模板变量说明 (tag、group、id 支持):
  * - {channel} - 输出配置的 channel
  * - {name} - 输出配置的 name
  * - {seq} - 全局递增序列号 (0-999 循环)
@@ -246,9 +246,14 @@ enum class InternalOutputType {
  * - {data.path} - JSON 路径提取 (当 data 为 JSON 时)
  * - {meta.key} - metadata 字段
  *
- * 默认值:
- * - tag: channel:name 的 MD5 前12位
- * - id: 秒级时间戳 * 1000 + 序列号
+ * 标识字段语义:
+ * - tag:   通知替换域，相同 tag+id 的通知替换旧通知。默认为 name (输出名称)
+ * - group: 通知栏视觉分组，相同 group 的通知折叠在一起。默认与 tag 相同
+ * - id:    通知唯一标识，Int 值。默认为秒级时间戳 * 1000 + 序列号
+ *
+ * 运行时覆盖:
+ * - metadata: notify_tag / notify_group / notify_id (带 notify_ 前缀)
+ * - data JSON: tag / group / id (无前缀)
  */
 data class NotifyOptions(
     var title: String? = null,
@@ -258,6 +263,7 @@ data class NotifyOptions(
     var popup: Boolean? = null,
     var persistent: Boolean? = null,
     var tag: String? = null,
+    var group: String? = null,
     var id: String? = null
 )
 

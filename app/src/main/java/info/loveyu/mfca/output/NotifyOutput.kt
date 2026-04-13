@@ -23,7 +23,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -55,9 +54,6 @@ class NotifyOutput(
 
         // 模板变量正则: {variable} 或 {date:format}
         private val TEMPLATE_REGEX = Pattern.compile("\\{(\\w+(?:\\.[\\w.]+)?|date:[^}]+)\\}")
-
-        // MD5 哈希正则 (用于 tag 默认值检测)
-        private val MD5_HEX_REGEX = Pattern.compile("^[a-f0-9]{32}$")
     }
 
     init {
@@ -101,9 +97,13 @@ class NotifyOutput(
             val popup = notifyOptions.popup
             val persistent = notifyOptions.persistent
 
-            // 计算 tag: 支持模板，默认值为 channel:name 的 MD5 前12位
+            // 计算 tag: 支持模板，默认值为输出名称
             val tag = notifyOptions.tag?.let { expandTemplate(it, item, channelId) }
-                ?: generateDefaultTag(channelId)
+                ?: generateDefaultTag()
+
+            // 计算 group: 支持模板，默认值与 tag 相同（按 tag 自动分组）
+            val group = notifyOptions.group?.let { expandTemplate(it, item, channelId) }
+                ?: tag
 
             // 计算 id: 支持模板，默认值为秒级时间戳 * 1000 + 序列号
             val id = notifyOptions.id?.let { expandTemplate(it, item, channelId) }?.toIntOrNull()
@@ -118,14 +118,14 @@ class NotifyOutput(
             }
 
             if (LogManager.isDebugEnabled()) {
-                LogManager.logDebug("NOTIFY", "sending - tag=$tag, id=$id, title=$title, hasIcon=${iconUrl != null}, popup=$popup")
+                LogManager.logDebug("NOTIFY", "sending - tag=$tag, group=$group, id=$id, title=$title, hasIcon=${iconUrl != null}, popup=$popup")
             }
 
             // 异步获取图标并发送通知
             scope.launch {
                 try {
                     val iconBitmap = iconCacheManager.getIcon(iconUrl, fixedIconId)
-                    showNotification(channelId, tag, id, title, content, iconBitmap, popup, persistent)
+                    showNotification(channelId, tag, group, id, title, content, iconBitmap, popup, persistent)
                     lastNotify[name] = text to now
                     callback?.invoke(true)
                 } catch (e: Exception) {
@@ -140,11 +140,10 @@ class NotifyOutput(
     }
 
     /**
-     * 生成默认 tag: channel:name 的 MD5 前12位
+     * 生成默认 tag: 直接使用输出名称
      */
-    private fun generateDefaultTag(channelId: String): String {
-        val input = "$channelId:$name"
-        return md5(input).take(12)
+    private fun generateDefaultTag(): String {
+        return name
     }
 
     /**
@@ -165,7 +164,7 @@ class NotifyOutput(
      * 支持的变量:
      * - {channel} - 输出配置的 channel
      * - {name} - 输出配置的 name
-     * - {seq} - 当前序列号 (0-999)
+     * - {seq} - 递增序列号 (0-999 循环)
      * - {timestamp} - 秒级时间戳 (10位)
      * - {unix} - 毫秒级时间戳 (13位)
      * - {date:format} - 格式化日期，如 {date:yyyyMMddHHmmss}
@@ -174,11 +173,6 @@ class NotifyOutput(
      * - {meta.key} - metadata 字段
      */
     fun expandTemplate(template: String, item: QueueItem, channelId: String): String {
-        // 检测是否已经是 MD5 格式（直接返回，不重复处理）
-        if (MD5_HEX_REGEX.matcher(template).matches()) {
-            return template
-        }
-
         val dataStr = String(item.data, Charsets.UTF_8)
         val sdfCache = mutableMapOf<String, SimpleDateFormat>()
 
@@ -187,7 +181,7 @@ class NotifyOutput(
             when {
                 key == "channel" -> channelId
                 key == "name" -> name
-                key == "seq" -> (sequence.get() % 1000).toString()
+                key == "seq" -> (sequence.incrementAndGet() % 1000).toString()
                 key == "timestamp" -> (System.currentTimeMillis() / 1000).toString()
                 key == "unix" -> System.currentTimeMillis().toString()
                 key.startsWith("date:") -> {
@@ -238,15 +232,6 @@ class NotifyOutput(
     }
 
     /**
-     * 计算 MD5 哈希 (返回32位十六进制小写字符串)
-     */
-    private fun md5(input: String): String {
-        val md = MessageDigest.getInstance("MD5")
-        val digest = md.digest(input.toByteArray(Charsets.UTF_8))
-        return digest.joinToString("") { "%02x".format(it) }
-    }
-
-    /**
      * 解析通知选项
      * 支持从 item.metadata、item.data JSON 或 config.options 中获取配置
      */
@@ -260,6 +245,7 @@ class NotifyOutput(
         item.metadata["notify_popup"]?.let { options.popup = it.toBoolean() }
         item.metadata["notify_persistent"]?.let { options.persistent = it.toBoolean() }
         item.metadata["notify_tag"]?.let { options.tag = it }
+        item.metadata["notify_group"]?.let { options.group = it }
         item.metadata["notify_id"]?.let { options.id = it }
 
         // 尝试解析 data 中的 JSON 对象 (次优先级)
@@ -274,6 +260,7 @@ class NotifyOutput(
                 if (json.has("popup") && options.popup == null) options.popup = json.getBoolean("popup")
                 if (json.has("persistent") && options.persistent == null) options.persistent = json.getBoolean("persistent")
                 if (json.has("tag") && options.tag == null) options.tag = json.getString("tag")
+                if (json.has("group") && options.group == null) options.group = json.getString("group")
                 if (json.has("id") && options.id == null) options.id = json.getString("id")
             }
         } catch (e: Exception) {
@@ -288,6 +275,7 @@ class NotifyOutput(
             if (options.popup == null) configOptions["popup"]?.let { options.popup = it as? Boolean ?: it.toString().toBoolean() }
             if (options.persistent == null) configOptions["persistent"]?.let { options.persistent = it as? Boolean ?: it.toString().toBoolean() }
             if (options.tag == null) configOptions["tag"]?.toString()?.let { options.tag = it }
+            if (options.group == null) configOptions["group"]?.toString()?.let { options.group = it }
             if (options.id == null) configOptions["id"]?.toString()?.let { options.id = it }
         }
 
@@ -300,6 +288,7 @@ class NotifyOutput(
     private fun showNotification(
         channelId: String,
         tag: String,
+        group: String,
         id: Int,
         title: String,
         content: String,
@@ -332,13 +321,14 @@ class NotifyOutput(
 
         // 构建通知
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(iconBitmap?.let { android.R.drawable.ic_dialog_info } ?: android.R.drawable.ic_dialog_info)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(content)
             .setStyle(NotificationCompat.BigTextStyle().bigText(content))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
+            .setGroup(group)
 
         // 设置大图标
         iconBitmap?.let {
@@ -359,7 +349,28 @@ class NotifyOutput(
 
         // 发送通知
         val notification = builder.build()
-        NotificationManagerCompat.from(context).notify(tag, id, notification)
-        LogManager.log("INTERNAL", "Notification sent: $title (tag=$tag, id=$id)")
+        val nm = NotificationManagerCompat.from(context)
+        nm.notify(tag, id, notification)
+
+        // 发送分组摘要通知 (Android 7.0+ 需要 summary 通知才能正确折叠)
+        val summaryId = group.hashCode()
+        val summaryBuilder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(title)
+            .setContentText(content)
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText(content)
+                    .setSummaryText(name)
+            )
+            .setGroup(group)
+            .setGroupSummary(true)
+            .setAutoCancel(true)
+        if (popup == true) {
+            summaryBuilder.setPriority(NotificationCompat.PRIORITY_HIGH)
+        }
+        nm.notify(group, summaryId, summaryBuilder.build())
+
+        LogManager.log("INTERNAL", "Notification sent: $title (tag=$tag, group=$group, id=$id)")
     }
 }

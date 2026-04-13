@@ -225,6 +225,13 @@ class ForwardService : Service() {
                 reloadConfig()
                 return START_STICKY
             }
+            "OPEN_NOTIFICATION" -> {
+                val outputName = intent.getStringExtra("output_name") ?: ""
+                val notificationTag = intent.getStringExtra("notification_tag") ?: ""
+                val notificationId = intent.getIntExtra("notification_id", -1)
+                LogManager.logInfo("INTERNAL", "Notification opened: output=$outputName, tag=$notificationTag, id=$notificationId")
+                return START_STICKY
+            }
         }
 
         // Load status from YAML config
