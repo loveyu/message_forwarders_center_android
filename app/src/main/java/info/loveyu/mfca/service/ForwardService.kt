@@ -29,6 +29,7 @@ import info.loveyu.mfca.queue.QueueManager
 import info.loveyu.mfca.server.HttpServer
 import info.loveyu.mfca.server.MessageForwarder
 import info.loveyu.mfca.util.AppStatusManager
+import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
 import java.util.concurrent.Executors
@@ -391,8 +392,8 @@ class ForwardService : Service() {
     }
 
     private fun handleMessage(message: InputMessage) {
-        android.util.Log.d("FS", "NATIVE handleMessage: source=${message.source}, data=${String(message.data).take(30)}")
-        LogManager.appendLog("TRACE:FS", "handleMessage called: source=${message.source}")
+        LogManager.appendLog(LogLevel.DEBUG, "FS", "NATIVE handleMessage: source=${message.source}, data=${String(message.data).take(30)}")
+        LogManager.appendLog(LogLevel.DEBUG, "TRACE:FS", "handleMessage called: source=${message.source}")
         if (!isReceivingEnabled) {
             LogManager.appendLog("TRACE:FS", "Receiving disabled, dropping message")
             return

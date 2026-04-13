@@ -284,6 +284,7 @@ fun MainScreen(
     var forwardedCount by remember { mutableIntStateOf(ForwardService.forwardedCount) }
     var isPaused by remember { mutableStateOf(LogManager.isPaused()) }
     var isFileLogging by remember { mutableStateOf(LogManager.isFileLoggingEnabled()) }
+    var isAllLogcatEnabled by remember { mutableStateOf(LogManager.isAllLogcatEnabled()) }
 
     // Bottom sheet states
     val componentSheetState = rememberModalBottomSheetState()
@@ -554,10 +555,26 @@ fun MainScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = stringResource(R.string.log_section),
-                            style = MaterialTheme.typography.titleMedium
-                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = stringResource(R.string.log_section),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = LogManager.getLogLevel().name,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (isAllLogcatEnabled) {
+                                Text(
+                                    text = "🐱",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
@@ -598,6 +615,14 @@ fun MainScreen(
                                     if (isFileLogging) stringResource(R.string.cancel_save_log)
                                     else stringResource(R.string.save_log)
                                 )
+                            }
+                            TextButton(
+                                onClick = {
+                                    LogManager.setAllLogcatEnabled(!isAllLogcatEnabled, preferences)
+                                    isAllLogcatEnabled = LogManager.isAllLogcatEnabled()
+                                }
+                            ) {
+                                Text("🐱")
                             }
                         }
                     }

@@ -5,6 +5,7 @@ import info.loveyu.mfca.config.RuleConfig
 import info.loveyu.mfca.input.InputMessage
 import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.queue.QueueItem
+import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -70,7 +71,7 @@ class RuleEngine(
      * 处理输入消息
      */
     fun process(inputMessage: InputMessage) {
-        android.util.Log.d("RULE", "NATIVE RuleEngine.process: source=${inputMessage.source}")
+        LogManager.appendLog(LogLevel.DEBUG, "RULE", "NATIVE RuleEngine.process: source=${inputMessage.source}")
         LogManager.appendLog("TRACE:RULE", "RuleEngine.process called: source=${inputMessage.source}, data=${String(inputMessage.data).take(50)}")
         val matchingRules = inputRulesMap[inputMessage.source]
         if (matchingRules == null) {

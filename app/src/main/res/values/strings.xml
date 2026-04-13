@@ -42,7 +42,7 @@
     <string name="pause_log">暂停</string>
     <string name="resume_log">继续</string>
     <string name="clear_log">清空</string>
-    <string name="save_log">保存日志</string>
+    <string name="save_log">保存</string>
     <string name="cancel_save_log">取消保存</string>
     <string name="log_saved">日志已保存</string>
     <string name="log_save_failed">日志保存失败</string>

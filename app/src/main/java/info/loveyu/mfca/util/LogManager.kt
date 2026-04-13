@@ -5,9 +5,11 @@ import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStreamWriter
+import java.lang.ref.WeakReference
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -31,13 +33,13 @@ object LogManager {
 
     private var logFile: File? = null
     private var logFileWriter: OutputStreamWriter? = null
-    private var context: Context? = null
+    private var contextRef: WeakReference<Context>? = null
 
     private val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     private val fileDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
 
     fun init(ctx: Context, prefs: Preferences) {
-        context = ctx.applicationContext
+        contextRef = WeakReference(ctx.applicationContext)
         loadSettings(prefs)
     }
 
@@ -51,30 +53,31 @@ object LogManager {
         }
     }
 
-    fun appendLog(tag: String, message: String) {
+    fun appendLog(level: LogLevel, tag: String, message: String, context: Any? = null) {
         if (isPaused) return
-
-        // Determine effective log level from tag prefix
-        val effectiveLevel = when {
-            tag.startsWith("ERROR") -> LogLevel.ERROR
-            tag.startsWith("WARN") -> LogLevel.WARN
-            tag.startsWith("INFO") -> LogLevel.INFO
-            tag.startsWith("DEBUG") -> LogLevel.DEBUG
-            else -> LogLevel.INFO
-        }
-
-        if (effectiveLevel.androidPriority < currentLogLevel.androidPriority) return
+        if (level.androidPriority < currentLogLevel.androidPriority) return
 
         val timestamp = dateFormat.format(Date())
-        val logLine = "[$timestamp] [$tag] $message"
+        val contextJson = context?.let {
+            try {
+                JSONObject().put("context", it)
+            } catch (e: Exception) {
+                null
+            }
+        }
+        val logLine = if (contextJson != null) {
+            "[$timestamp] [${level.tag}:$tag] $message $contextJson"
+        } else {
+            "[$timestamp] [${level.tag}:$tag] $message"
+        }
 
         // Write to logcat: WARN+ always, DEBUG/INFO based on isAllLogcatEnabled
         when {
             isAllLogcatEnabled -> Log.d(tag, message)
-            effectiveLevel == LogLevel.ERROR -> Log.e(tag, message)
-            effectiveLevel == LogLevel.WARN -> Log.w(tag, message)
-            effectiveLevel == LogLevel.INFO -> Log.i(tag, message)
-            effectiveLevel == LogLevel.DEBUG -> Log.d(tag, message)
+            level == LogLevel.ERROR -> Log.e(tag, message)
+            level == LogLevel.WARN -> Log.w(tag, message)
+            level == LogLevel.INFO -> Log.i(tag, message)
+            level == LogLevel.DEBUG -> Log.d(tag, message)
         }
 
         // Write to UI log
@@ -86,14 +89,14 @@ object LogManager {
         }
     }
 
-    fun appendLog(message: String) {
-        appendLog("APP", message)
+    fun appendLog(tag: String, message: String) {
+        appendLog(LogLevel.INFO, tag, message)
     }
 
-    fun logDebug(tag: String, message: String) = appendLog("DEBUG:$tag", message)
-    fun logInfo(tag: String, message: String) = appendLog("INFO:$tag", message)
-    fun logWarn(tag: String, message: String) = appendLog("WARN:$tag", message)
-    fun logError(tag: String, message: String) = appendLog("ERROR:$tag", message)
+    fun logDebug(tag: String, message: String) = appendLog(LogLevel.DEBUG, tag, message)
+    fun logInfo(tag: String, message: String) = appendLog(LogLevel.INFO, tag, message)
+    fun logWarn(tag: String, message: String) = appendLog(LogLevel.WARN, tag, message)
+    fun logError(tag: String, message: String) = appendLog(LogLevel.ERROR, tag, message)
 
     fun clearLogs() {
         _logs.value = emptyList()
@@ -136,7 +139,7 @@ object LogManager {
     fun isAllLogcatEnabled(): Boolean = isAllLogcatEnabled
 
     private fun startFileLogging() {
-        val ctx = context ?: return
+        val ctx = contextRef?.get() ?: return
         val baseDir = ctx.getExternalFilesDir(null) ?: ctx.filesDir
         val logDir = File(baseDir, "logs")
         if (!logDir.exists()) {

@@ -1,7 +1,8 @@
 package info.loveyu.mfca.server
 
-import android.util.Log
 import info.loveyu.mfca.constants.ApiConstants
+import info.loveyu.mfca.util.LogLevel
+import info.loveyu.mfca.util.LogManager
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.concurrent.thread
@@ -28,10 +29,10 @@ object MessageForwarder {
                 val responseCode = connection.responseCode
                 connection.disconnect()
 
-                Log.d(TAG, "Forwarded to $targetUrl, response: $responseCode")
+                LogManager.appendLog(LogLevel.DEBUG, TAG, "Forwarded to $targetUrl, response: $responseCode")
                 callback?.invoke(responseCode in 200..299)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to forward message to $targetUrl", e)
+                LogManager.appendLog(LogLevel.ERROR, TAG, "Failed to forward message to $targetUrl", e)
                 callback?.invoke(false)
             }
         }

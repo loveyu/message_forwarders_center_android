@@ -1,9 +1,10 @@
 package info.loveyu.mfca.server
 
-import android.util.Log
 import fi.iki.elonen.NanoHTTPD
 import info.loveyu.mfca.BuildConfig
 import info.loveyu.mfca.constants.ApiConstants
+import info.loveyu.mfca.util.LogLevel
+import info.loveyu.mfca.util.LogManager
 import java.io.IOException
 
 class HttpServer(
@@ -18,12 +19,12 @@ class HttpServer(
     @Throws(IOException::class)
     fun startServer() {
         start(SOCKET_READ_TIMEOUT, false)
-        Log.i(TAG, "HTTP server started on port $port")
+        LogManager.appendLog(LogLevel.INFO, TAG, "HTTP server started on port $port")
     }
 
     fun stopServer() {
         stop()
-        Log.i(TAG, "HTTP server stopped")
+        LogManager.appendLog(LogLevel.INFO, TAG, "HTTP server stopped")
     }
 
     override fun serve(session: IHTTPSession): Response {
@@ -71,7 +72,7 @@ class HttpServer(
                 )
             } else {
                 onMessageReceived(body)
-                Log.d(TAG, "Received message: ${body.take(200)}")
+                LogManager.appendLog(LogLevel.DEBUG, TAG, "Received message: ${body.take(200)}")
                 newFixedLengthResponse(
                     Response.Status.OK,
                     "application/json",
@@ -79,7 +80,7 @@ class HttpServer(
                 )
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error handling POST message", e)
+            LogManager.appendLog(LogLevel.ERROR, TAG, "Error handling POST message", e)
             newFixedLengthResponse(
                 Response.Status.INTERNAL_ERROR,
                 "application/json",
