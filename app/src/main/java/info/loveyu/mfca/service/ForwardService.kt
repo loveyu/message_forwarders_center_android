@@ -29,6 +29,7 @@ import info.loveyu.mfca.queue.QueueManager
 import info.loveyu.mfca.server.HttpServer
 import info.loveyu.mfca.server.MessageForwarder
 import info.loveyu.mfca.util.AppStatusManager
+import info.loveyu.mfca.util.NetworkChecker
 import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
@@ -112,9 +113,30 @@ class ForwardService : Service() {
         }
 
         fun refreshStats() {
-            linkCount = LinkManager.getAllLinks().size
-            inputCount = InputManager.getAllInputs().size
-            outputCount = OutputManager.getAllOutputs().size
+            // Only count enabled components based on whenCondition/deny
+            val config = currentConfig
+            if (config != null) {
+                val ctx = serviceInstance!!
+                linkCount = config.links.count { link ->
+                    NetworkChecker.shouldEnable(ctx, link.whenCondition, link.deny)
+                }
+                inputCount = config.inputs.http.count { input ->
+                    NetworkChecker.shouldEnable(ctx, input.whenCondition, input.deny)
+                } + config.inputs.link.count { input ->
+                    NetworkChecker.shouldEnable(ctx, input.whenCondition, input.deny)
+                }
+                // HTTP and Internal outputs don't have whenCondition/deny, so always enabled
+                // Only Link outputs have whenCondition/deny
+                outputCount = config.outputs.http.size + config.outputs.internal.size +
+                    config.outputs.link.count { output ->
+                        NetworkChecker.shouldEnable(ctx, output.whenCondition, output.deny)
+                    }
+            } else {
+                // Fallback to all components if config not loaded yet
+                linkCount = LinkManager.getAllLinks().size
+                inputCount = InputManager.getAllInputs().size
+                outputCount = OutputManager.getAllOutputs().size
+            }
             onStatsChanged?.invoke()
             serviceInstance?.updateNotification()
         }

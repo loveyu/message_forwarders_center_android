@@ -290,8 +290,6 @@ fun MainScreen(
 
     var isRunning by remember { mutableStateOf(ForwardService.isRunning) }
     var isStarting by remember { mutableStateOf(ForwardService.isStarting) }
-    var receivedCount by remember { mutableIntStateOf(ForwardService.receivedCount) }
-    var forwardedCount by remember { mutableIntStateOf(ForwardService.forwardedCount) }
     var isPaused by remember { mutableStateOf(LogManager.isPaused()) }
     var isFileLogging by remember { mutableStateOf(LogManager.isFileLoggingEnabled()) }
     var isAllLogcatEnabled by remember { mutableStateOf(LogManager.isAllLogcatEnabled()) }
@@ -312,8 +310,6 @@ fun MainScreen(
     }
 
     ForwardService.onStatsChanged = {
-        receivedCount = ForwardService.receivedCount
-        forwardedCount = ForwardService.forwardedCount
         isRunning = ForwardService.isRunning
         isStarting = ForwardService.isStarting
     }
@@ -322,8 +318,6 @@ fun MainScreen(
     LaunchedEffect(Unit) {
         isRunning = ForwardService.isRunning
         isStarting = ForwardService.isStarting
-        receivedCount = ForwardService.receivedCount
-        forwardedCount = ForwardService.forwardedCount
     }
 
     DisposableEffect(Unit) {
@@ -434,21 +428,6 @@ fun MainScreen(
                         }
                     }
 
-                    HorizontalDivider()
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        StatItem(
-                            label = stringResource(R.string.messages_received),
-                            value = receivedCount
-                        )
-                        StatItem(
-                            label = stringResource(R.string.messages_forwarded),
-                            value = forwardedCount
-                        )
-                    }
                 }
             }
 
