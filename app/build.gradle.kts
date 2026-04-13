@@ -46,7 +46,7 @@ android {
         minSdk = 33
         targetSdk = 36
         versionCode = 1
-        versionName = (project.findProperty("versionName") as String?) ?: "DEBUG"
+        versionName = (project.findProperty("versionName") as String?) ?: ""
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -74,7 +74,7 @@ android {
             applicationIdSuffix = ".debug"
             val dateFormat = SimpleDateFormat("yyMMddHHmm")
             val timestamp = dateFormat.format(Date())
-            versionNameSuffix = "-debug.$timestamp.$gitBranch"
+            versionNameSuffix = "debug.$timestamp.$gitBranch"
 
             isDebuggable = true
             isMinifyEnabled = false
