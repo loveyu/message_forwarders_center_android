@@ -268,6 +268,16 @@ private enum class Screen {
     Config, Help, Settings, Licenses
 }
 
+private fun getLogColor(log: String): Color {
+    return when {
+        log.contains("[E:") -> Color(0xFFE53935) // ERROR - Red
+        log.contains("[W:") -> Color(0xFFFFA726) // WARN - Orange
+        log.contains("[I:") -> Color(0xFF43A047) // INFO - Green
+        log.contains("[D:") -> Color(0xFF42A5F5) // DEBUG - Blue
+        else -> Color.Unspecified
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
@@ -568,12 +578,6 @@ fun MainScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            if (isAllLogcatEnabled) {
-                                Text(
-                                    text = "🐱",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
                         }
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -588,15 +592,12 @@ fun MainScreen(
                                     isPaused = LogManager.isPaused()
                                 }
                             ) {
-                                Text(
-                                    if (isPaused) stringResource(R.string.resume_log)
-                                    else stringResource(R.string.pause_log)
-                                )
+                                Text(if (isPaused) "▶️" else "⏸️")
                             }
                             TextButton(
                                 onClick = { LogManager.clearLogs() }
                             ) {
-                                Text(stringResource(R.string.clear_log))
+                                Text("🗑️")
                             }
                             TextButton(
                                 onClick = {
@@ -611,18 +612,19 @@ fun MainScreen(
                                     }
                                 }
                             ) {
-                                Text(
-                                    if (isFileLogging) stringResource(R.string.cancel_save_log)
-                                    else stringResource(R.string.save_log)
-                                )
+                                Text(if (isFileLogging) "❌" else "💾")
                             }
                             TextButton(
                                 onClick = {
-                                    LogManager.setAllLogcatEnabled(!isAllLogcatEnabled, preferences)
+                                    val newState = !isAllLogcatEnabled
+                                    LogManager.logWarn("UI", "Toggle logcat all: $isAllLogcatEnabled -> $newState")
+                                    LogManager.setAllLogcatEnabled(newState, preferences)
                                     isAllLogcatEnabled = LogManager.isAllLogcatEnabled()
                                 }
                             ) {
-                                Text("🐱")
+                                Text(
+                                    if (isAllLogcatEnabled) "🐱" else "🐾"
+                                )
                             }
                         }
                     }
@@ -639,6 +641,7 @@ fun MainScreen(
                             Text(
                                 text = log,
                                 style = MaterialTheme.typography.bodySmall,
+                                color = getLogColor(log),
                                 modifier = Modifier.padding(vertical = 2.dp)
                             )
                         }
