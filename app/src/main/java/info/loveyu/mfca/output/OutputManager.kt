@@ -5,6 +5,7 @@ import info.loveyu.mfca.config.AppConfig
 import info.loveyu.mfca.config.InternalOutputConfig
 import info.loveyu.mfca.config.InternalOutputType
 import info.loveyu.mfca.util.LogManager
+import java.lang.ref.WeakReference
 
 /**
  * 输出管理器
@@ -12,11 +13,11 @@ import info.loveyu.mfca.util.LogManager
 object OutputManager {
 
     private val outputs = mutableMapOf<String, Output>()
-    private var context: Context? = null
+    private var contextRef: WeakReference<Context>? = null
 
     fun initialize(ctx: Context, config: AppConfig) {
         clear()
-        context = ctx
+        contextRef = WeakReference(ctx.applicationContext)
 
         // HTTP outputs
         config.outputs.http.forEach { httpConfig ->
@@ -36,7 +37,7 @@ object OutputManager {
 
         // Internal outputs
         config.outputs.internal.forEach { internalConfig ->
-            val output = createInternalOutput(ctx, internalConfig)
+            val output = createInternalOutput(internalConfig)
             outputs[internalConfig.name] = output
             LogManager.log(
                 "OUTPUT",
@@ -77,7 +78,8 @@ object OutputManager {
         }
     }
 
-    private fun createInternalOutput(ctx: Context, config: InternalOutputConfig): InternalOutput {
+    private fun createInternalOutput(config: InternalOutputConfig): InternalOutput {
+        val ctx = contextRef?.get() ?: throw IllegalStateException("OutputManager not initialized")
         return when (config.type) {
             InternalOutputType.clipboard -> ClipboardOutput(ctx, config.name, config)
             InternalOutputType.file -> FileOutput(ctx, config.name, config)

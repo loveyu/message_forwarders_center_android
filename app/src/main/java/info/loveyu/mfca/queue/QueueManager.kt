@@ -3,6 +3,7 @@ package info.loveyu.mfca.queue
 import android.content.Context
 import info.loveyu.mfca.config.AppConfig
 import info.loveyu.mfca.util.LogManager
+import java.lang.ref.WeakReference
 
 /**
  * 队列管理器
@@ -10,11 +11,11 @@ import info.loveyu.mfca.util.LogManager
 object QueueManager {
 
     private val queues = mutableMapOf<String, Queue>()
-    private var context: Context? = null
+    private var contextRef: WeakReference<Context>? = null
 
     fun initialize(ctx: Context, config: AppConfig) {
         clear()
-        context = ctx
+        contextRef = WeakReference(ctx.applicationContext)
 
         // Initialize memory queues
         config.queues.memory.forEach { (name, memoryConfig) ->
@@ -24,6 +25,7 @@ object QueueManager {
 
         // Initialize SQLite queues
         config.queues.sqlite.forEach { (name, sqliteConfig) ->
+            val ctx = contextRef?.get() ?: return@forEach
             val queue = SqliteQueue(ctx, name, sqliteConfig)
             queues[name] = queue
             LogManager.log("QUEUE", "Registered SQLite queue: $name (path: ${sqliteConfig.path})")
