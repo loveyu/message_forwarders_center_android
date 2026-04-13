@@ -357,7 +357,8 @@ object ConfigLoader {
             extract = map["extract"] as? String,
             filter = map["filter"] as? String,
             detect = map["detect"] as? String,
-            format = map["format"] as? String
+            format = map["format"] as? String,
+            enrich = map["enrich"] as? String
         )
     }
 

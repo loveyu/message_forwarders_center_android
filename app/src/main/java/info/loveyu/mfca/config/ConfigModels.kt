@@ -289,7 +289,8 @@ data class TransformConfig(
     val extract: String? = null,
     val filter: String? = null,
     val detect: String? = null,
-    val format: String? = null
+    val format: String? = null,
+    val enrich: String? = null  // "enricherType:parameter", e.g., "gotifyIcon:gotify_link"
 )
 
 /**

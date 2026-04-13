@@ -156,6 +156,10 @@ class ForwardService : Service() {
         fun updateStatus(configUrl: String = currentConfigUrl) {
             serviceInstance?.saveStatus()
         }
+
+        fun clearIconCaches() {
+            serviceInstance?.ruleEngine?.clearEnricherCaches()
+        }
     }
 
     private var httpServer: HttpServer? = null
@@ -388,7 +392,7 @@ class ForwardService : Service() {
 
             // 5. Initialize Rule Engine
             LogManager.log("CONFIG", "Initializing rule engine...")
-            ruleEngine = RuleEngine(config) {
+            ruleEngine = RuleEngine(config, this) {
                 forwardedCount++
                 onStatsChanged?.invoke()
                 updateNotification()

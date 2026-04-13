@@ -1,5 +1,6 @@
 package info.loveyu.mfca.pipeline
 
+import android.content.Context
 import info.loveyu.mfca.config.AppConfig
 import info.loveyu.mfca.config.RuleConfig
 import info.loveyu.mfca.input.InputMessage
@@ -23,6 +24,7 @@ import java.util.concurrent.Executors
  */
 class RuleEngine(
     private val config: AppConfig,
+    private val context: Context? = null,
     private val onForwarded: (() -> Unit)? = null
 ) {
     private val rules = mutableMapOf<String, RuleConfig>()
@@ -35,6 +37,9 @@ class RuleEngine(
     private val workerPool = Executors.newFixedThreadPool(4).asCoroutineDispatcher()
     private val scope = CoroutineScope(workerPool + SupervisorJob())
 
+    // Enrichers
+    private val enrichers = ConcurrentHashMap<String, Enricher>()
+
     init {
         config.rules.forEach { rule ->
             rules[rule.name] = rule
@@ -43,6 +48,10 @@ class RuleEngine(
                 inputRulesMap.getOrPut(from) { mutableListOf() }.add(rule)
             }
         }
+
+        // Register built-in enrichers
+        val gotifyIconEnricher = GotifyIconEnricher(context)
+        enrichers[gotifyIconEnricher.type] = gotifyIconEnricher
 
         // 预编译所有规则中的表达式
         precompileExpressions()
@@ -122,6 +131,18 @@ class RuleEngine(
                 }
             }
 
+            // Apply enrich if specified (before other transforms)
+            if (!skipStep && transform?.enrich != null) {
+                try {
+                    val enriched = applyEnrich(transform.enrich, currentData)
+                    if (enriched != null) {
+                        currentData = enriched
+                    }
+                } catch (e: Exception) {
+                    LogManager.logWarn("RULE", "Rule [${rule.name}] enrich [${transform.enrich}] failed: ${e.message}")
+                }
+            }
+
             // Apply transform if present
             if (!skipStep && transform != null) {
                 val transformed = applyTransform(transform, currentData, inputMessage)
@@ -185,6 +206,21 @@ class RuleEngine(
                 if (!detectMedia(currentData, transform.detect)) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] detect [${transform.detect}] -> SKIPPED")
                     skipStep = true
+                }
+            }
+
+            // Apply enrich if specified (before other transforms)
+            if (!skipStep && transform?.enrich != null) {
+                try {
+                    // Run synchronously using runBlocking equivalent
+                    val enriched = kotlinx.coroutines.runBlocking {
+                        applyEnrich(transform.enrich, currentData)
+                    }
+                    if (enriched != null) {
+                        currentData = enriched
+                    }
+                } catch (e: Exception) {
+                    LogManager.logWarn("RULE", "Rule [${rule.name}] enrich [${transform.enrich}] failed: ${e.message}")
                 }
             }
 
@@ -377,6 +413,46 @@ class RuleEngine(
      * 获取表达式引擎（用于调试）
      */
     fun getExpressionEngine(): ExpressionEngine = expressionEngine
+
+    /**
+     * Apply enrich step: parse "type:parameter" → find enricher → call enrich()
+     */
+    private suspend fun applyEnrich(enrichSpec: String, data: ByteArray): ByteArray? {
+        val colonIndex = enrichSpec.indexOf(':')
+        if (colonIndex == -1) {
+            LogManager.logWarn("RULE", "Invalid enrich spec: $enrichSpec (expected type:parameter)")
+            return null
+        }
+        val type = enrichSpec.substring(0, colonIndex)
+        val parameter = enrichSpec.substring(colonIndex + 1)
+
+        val enricher = enrichers[type]
+        if (enricher == null) {
+            LogManager.logWarn("RULE", "Unknown enricher type: $type")
+            return null
+        }
+
+        val json = try {
+            JSONObject(String(data))
+        } catch (e: Exception) {
+            LogManager.logWarn("RULE", "Enrich requires JSON data, got non-JSON")
+            return null
+        }
+
+        val enriched = enricher.enrich(json, parameter) ?: return null
+        return enriched.toString().toByteArray()
+    }
+
+    /**
+     * 清理所有 enricher 内存缓存
+     */
+    fun clearEnricherCaches() {
+        enrichers.values.forEach { enricher ->
+            if (enricher is GotifyIconEnricher) {
+                enricher.clearCache()
+            }
+        }
+    }
 
     /**
      * 关闭引擎

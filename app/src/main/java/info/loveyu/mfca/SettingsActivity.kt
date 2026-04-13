@@ -62,6 +62,8 @@ import androidx.activity.compose.setContent
 import info.loveyu.mfca.ui.ComponentStatus
 import info.loveyu.mfca.util.AppStatusManager
 import info.loveyu.mfca.util.ConfigBackupManager
+import info.loveyu.mfca.service.ForwardService
+import info.loveyu.mfca.util.IconCacheManager
 import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.ui.theme.MfcaTheme
@@ -118,11 +120,22 @@ fun SettingsScreenContent(
     var showExportSuccess by remember { mutableStateOf<String?>(null) }
     var autoStart by remember { mutableStateOf(false) }
 
+    // Icon cache state
+    var iconCacheCount by remember { mutableIntStateOf(0) }
+    var iconCacheSize by remember { mutableStateOf(0L) }
+    var isClearingIconCache by remember { mutableStateOf(false) }
+    var showClearIconCacheDialog by remember { mutableStateOf(false) }
+
     // Load backup count and status
     LaunchedEffect(Unit) {
         backupCount = ConfigBackupManager.listBackups(context).size
         val status = AppStatusManager.loadStatus(context)
         autoStart = status.autoStart
+        // Load icon cache stats
+        val iconCacheManager = IconCacheManager(context)
+        val (count, size) = iconCacheManager.getCacheStats()
+        iconCacheCount = count
+        iconCacheSize = size
     }
 
     // File export launcher using Storage Access Framework
@@ -482,6 +495,80 @@ fun SettingsScreenContent(
                 }
             }
 
+            // 缓存管理
+            item {
+                Text(
+                    text = "缓存管理",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("图标缓存")
+                            Text(
+                                text = "$iconCacheCount 项 · ${iconCacheSize / 1024}KB",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Text(
+                            text = "Gotify 应用图标等远程图标资源的本地缓存，24 小时后自动失效。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        HorizontalDivider()
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "清理图标缓存",
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Button(
+                                onClick = { showClearIconCacheDialog = true },
+                                enabled = !isClearingIconCache,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.error
+                                )
+                            ) {
+                                if (isClearingIconCache) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("清理")
+                            }
+                        }
+                    }
+                }
+            }
+
             // 关于
             item {
                 Text(
@@ -588,6 +675,41 @@ fun SettingsScreenContent(
             },
             dismissButton = {
                 TextButton(onClick = { showClearConfirmDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // Clear icon cache confirmation dialog
+    if (showClearIconCacheDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearIconCacheDialog = false },
+            title = { Text("清理图标缓存") },
+            text = { Text("确定要清理所有图标缓存吗？下次使用时将重新从网络获取。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearIconCacheDialog = false
+                        isClearingIconCache = true
+                        scope.launch {
+                            withContext(Dispatchers.IO) {
+                                IconCacheManager(context).clearAll()
+                                ForwardService.clearIconCaches()
+                            }
+                            iconCacheCount = 0
+                            iconCacheSize = 0L
+                            Toast.makeText(context, "图标缓存已清理", Toast.LENGTH_SHORT).show()
+                            LogManager.log("SETTINGS", "Icon cache cleared")
+                            isClearingIconCache = false
+                        }
+                    }
+                ) {
+                    Text("确认清理", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearIconCacheDialog = false }) {
                     Text("取消")
                 }
             }
