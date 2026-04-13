@@ -129,6 +129,13 @@ object LogManager {
         prefs.logLevel = level.name
     }
 
+    fun showToast(message: String) {
+        val ctx = contextRef?.get() ?: return
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            android.widget.Toast.makeText(ctx, message, android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
     fun getLogLevel(): LogLevel = currentLogLevel
 
     fun setAllLogcatEnabled(enabled: Boolean, prefs: Preferences) {

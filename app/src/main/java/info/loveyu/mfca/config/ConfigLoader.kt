@@ -1,5 +1,6 @@
 package info.loveyu.mfca.config
 
+import info.loveyu.mfca.util.LogManager
 import org.snakeyaml.engine.v2.api.Load
 import org.snakeyaml.engine.v2.api.LoadSettings
 import java.io.File
@@ -290,7 +291,7 @@ object ConfigLoader {
             (output as? Map<String, Any>)?.let { map ->
                 InternalOutputConfig(
                     name = map["name"] as? String ?: return@mapNotNull null,
-                    type = parseInternalOutputType(map["type"] as? String),
+                    type = parseInternalOutputType(map["type"] as? String) ?: return@mapNotNull null,
                     basePath = map["basePath"] as? String,
                     fileName = map["fileName"] as? String,
                     options = map["options"] as? Map<String, Any>,
@@ -300,12 +301,17 @@ object ConfigLoader {
         }
     }
 
-    private fun parseInternalOutputType(type: String?): InternalOutputType {
+    private fun parseInternalOutputType(type: String?): InternalOutputType? {
         return when (type?.lowercase()) {
             "clipboard" -> InternalOutputType.clipboard
             "file" -> InternalOutputType.file
             "broadcast" -> InternalOutputType.broadcast
-            else -> InternalOutputType.clipboard
+            "notify" -> InternalOutputType.notify
+            else -> {
+                LogManager.logError("CONFIG", "Unknown internal output type: $type")
+                LogManager.showToast("未知的输出类型: $type")
+                null
+            }
         }
     }
 

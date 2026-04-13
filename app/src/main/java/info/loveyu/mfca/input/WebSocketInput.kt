@@ -36,7 +36,7 @@ class WebSocketInput(
                 data = data,
                 headers = emptyMap()
             )
-            LogManager.log("WS", "Message received: ${String(data).take(100)}")
+            LogManager.log("WS", "Message received: ${String(data).take(200)}")
             messageListener?.invoke(message)
             LogManager.log(LogLevel.DEBUG, "WSINPUT", "messageListener invoked, inputName=$inputName, listener=${messageListener != null}")
         }

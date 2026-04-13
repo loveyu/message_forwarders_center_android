@@ -229,8 +229,21 @@ data class InternalOutputConfig(
 )
 
 enum class InternalOutputType {
-    clipboard, file, broadcast
+    clipboard, file, broadcast, notify
 }
+
+/**
+ * 通知选项
+ */
+data class NotifyOptions(
+    var title: String? = null,
+    var message: String? = null,
+    var icon: String? = null,
+    var fixedIcon: String? = null,
+    var popup: Boolean? = null,
+    var persistent: Boolean? = null,
+    var tag: String? = null
+)
 
 /**
  * 转发规则配置

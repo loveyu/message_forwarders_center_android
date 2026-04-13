@@ -21,7 +21,10 @@ object OutputManager {
         // HTTP outputs
         config.outputs.http.forEach { httpConfig ->
             outputs[httpConfig.name] = HttpOutput(httpConfig.name, httpConfig)
-            LogManager.log("OUTPUT", "Registered HTTP output: ${httpConfig.name} -> ${httpConfig.url}")
+            LogManager.log(
+                "OUTPUT",
+                "Registered HTTP output: ${httpConfig.name} -> ${httpConfig.url}"
+            )
         }
 
         // Link-based outputs (MQTT, WebSocket, TCP)
@@ -35,7 +38,10 @@ object OutputManager {
         config.outputs.internal.forEach { internalConfig ->
             val output = createInternalOutput(ctx, internalConfig)
             outputs[internalConfig.name] = output
-            LogManager.log("OUTPUT", "Registered internal output: ${internalConfig.name} (${internalConfig.type})")
+            LogManager.log(
+                "OUTPUT",
+                "Registered internal output: ${internalConfig.name} (${internalConfig.type})"
+            )
         }
     }
 
@@ -50,6 +56,8 @@ object OutputManager {
     fun getFileOutput(name: String): FileOutput? = outputs[name] as? FileOutput
 
     fun getBroadcastOutput(name: String): BroadcastOutput? = outputs[name] as? BroadcastOutput
+
+    fun getNotifyOutput(name: String): NotifyOutput? = outputs[name] as? NotifyOutput
 
     fun clear() {
         outputs.clear()
@@ -74,6 +82,7 @@ object OutputManager {
             InternalOutputType.clipboard -> ClipboardOutput(ctx, config.name, config)
             InternalOutputType.file -> FileOutput(ctx, config.name, config)
             InternalOutputType.broadcast -> BroadcastOutput(ctx, config.name, config)
+            InternalOutputType.notify -> NotifyOutput(ctx, config.name, config)
         }
     }
 }
