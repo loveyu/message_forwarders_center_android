@@ -1,7 +1,9 @@
 package info.loveyu.mfca
 
+import android.content.ClipData
 import android.content.Context
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
@@ -35,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import info.loveyu.mfca.ui.webview.WebViewScreen
 import java.io.IOException
@@ -148,6 +151,7 @@ fun SampleDetailScreen(
     onBack: () -> Unit
 ) {
     val isDarkTheme = isSystemInDarkTheme()
+    val context = LocalContext.current
 
     val htmlContent = remember(sampleFile.content) {
         buildHtmlContent(sampleFile.content, sampleFile.name)
@@ -163,6 +167,15 @@ fun SampleDetailScreen(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "返回"
                         )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText(sampleFile.name, sampleFile.content))
+                        Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+                    }) {
+                        Text("\uD83D\uDCCB", fontSize = 18.sp)
                     }
                 }
             )
@@ -186,9 +199,9 @@ fun SampleDetailScreen(
 
 private fun buildHtmlContent(content: String, fileName: String): String {
     val escapedContent = content
-        .replace("\\", "\\\\")
-        .replace("`", "\\`")
-        .replace("$", "\\$")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
 
     val isMarkdown = fileName.endsWith(".md", ignoreCase = true)
     val languageClass = if (isMarkdown) "" else " class=\"language-yaml\""
