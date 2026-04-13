@@ -32,19 +32,19 @@ class SharedHttpInput(
 
     override fun start() {
         if (error != null) {
-            LogManager.log("HTTP", "Shared HTTP server skipped: ${error}")
+            LogManager.logWarn("HTTP", "Shared HTTP server skipped: $error")
             return
         }
         try {
             start(SOCKET_READ_TIMEOUT, false)
             running = true
-            LogManager.log("HTTP", "Shared HTTP server started with ${virtualInputs.size} virtual inputs")
+            LogManager.log("HTTP", "Shared HTTP server started with ${virtualInputs.size} virtual inputs on port ${listeningPort}")
         } catch (e: BindException) {
             error = "端口 ${listeningPort} 已被占用"
-            LogManager.log("HTTP", "Shared HTTP server port conflict: ${listeningPort} - ${e.message}")
+            LogManager.logError("HTTP", "Shared HTTP server port conflict: ${listeningPort} - ${e.message}")
         } catch (e: Exception) {
             error = "启动失败: ${e.message}"
-            LogManager.log("HTTP", "Failed to start shared HTTP server: ${e.message}")
+            LogManager.logError("HTTP", "Failed to start shared HTTP server: ${e.message}")
         }
     }
 
@@ -54,7 +54,7 @@ class SharedHttpInput(
             super.stop()
             LogManager.log("HTTP", "Shared HTTP server stopped")
         } catch (e: Exception) {
-            LogManager.log("HTTP", "Error stopping shared HTTP server: ${e.message}")
+            LogManager.logError("HTTP", "Error stopping shared HTTP server: ${e.message}")
         }
     }
 
@@ -67,6 +67,7 @@ class SharedHttpInput(
     }
 
     override fun serve(session: IHTTPSession): Response {
+        val uri = session.uri ?: "/"
         // Iterate virtual inputs in YAML definition order
         for (virtualInput in virtualInputs) {
             val response = virtualInput.matchAndHandle(session)
@@ -76,6 +77,9 @@ class SharedHttpInput(
         }
 
         // No virtual input matched
+        if (LogManager.isDebugEnabled()) {
+            LogManager.logDebug("HTTP", "No virtual input matched: $uri from ${session.remoteIpAddress}")
+        }
         return newFixedLengthResponse(
             Response.Status.NOT_FOUND,
             MIME_PLAINTEXT,

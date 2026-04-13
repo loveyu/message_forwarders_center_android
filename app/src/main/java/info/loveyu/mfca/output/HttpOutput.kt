@@ -25,6 +25,10 @@ class HttpOutput(
             var attempt = 0
             val maxAttempts = config.retry?.maxAttempts ?: 1
 
+            if (LogManager.isDebugEnabled()) {
+                LogManager.logDebug("HTTP", "send() - name=$name, ${config.method} ${config.url}, dataLen=${item.data.size}, maxAttempts=$maxAttempts")
+            }
+
             while (attempt < maxAttempts) {
                 try {
                     val result = doSend(item)
@@ -33,19 +37,23 @@ class HttpOutput(
                         callback?.invoke(true)
                         return@thread
                     } else {
-                        LogManager.log("HTTP", "HTTP output $name failed: ${(result as? OutputResult.Failure)?.error}")
+                        LogManager.logWarn("HTTP", "HTTP output $name failed: ${(result as? OutputResult.Failure)?.error}")
                     }
                 } catch (e: Exception) {
-                    LogManager.log("HTTP", "HTTP output $name error: ${e.message}")
+                    LogManager.logError("HTTP", "HTTP output $name error: ${e.message}")
                 }
 
                 attempt++
                 if (attempt < maxAttempts) {
                     val interval = config.retry?.interval?.millis ?: 1000
+                    if (LogManager.isDebugEnabled()) {
+                        LogManager.logDebug("HTTP", "Retry $attempt/$maxAttempts after ${interval}ms")
+                    }
                     Thread.sleep(interval)
                 }
             }
 
+            LogManager.logError("HTTP", "HTTP output $name exhausted all $maxAttempts attempts")
             callback?.invoke(false)
         }
     }

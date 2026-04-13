@@ -410,7 +410,7 @@ class ExpressionEngine {
             try {
                 CompiledFilter(expression, parseFilterExpression(expression), null)
             } catch (e: Exception) {
-                LogManager.log("EXPR", "Failed to compile filter: $expression - ${e.message}")
+                LogManager.logWarn("EXPR", "Failed to compile filter: $expression - ${e.message}")
                 CompiledFilter(expression, null, e)
             }
         }
@@ -858,7 +858,7 @@ class ExpressionEngine {
             return try {
                 handler(args)
             } catch (e: Exception) {
-                LogManager.log("EXPR", "Function $name error: ${e.message}")
+                LogManager.logWarn("EXPR", "Function $name error: ${e.message}")
                 null
             }
         }

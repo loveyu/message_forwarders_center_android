@@ -5,7 +5,6 @@ import info.loveyu.mfca.config.RuleConfig
 import info.loveyu.mfca.input.InputMessage
 import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.queue.QueueItem
-import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -63,28 +62,27 @@ class RuleEngine(
         }
 
         expressionEngine.precompileExpressions(expressions)
-        LogManager.log("RULE", "Precompiled ${expressions.size} expressions")
+        LogManager.logDebug("RULE", "Precompiled ${expressions.size} expressions")
     }
 
     /**
      * 处理输入消息
      */
     fun process(inputMessage: InputMessage) {
-        LogManager.log(LogLevel.DEBUG, "RULE", "NATIVE RuleEngine.process: source=${inputMessage.source}")
-        LogManager.log("TRACE:RULE", "RuleEngine.process called: source=${inputMessage.source}, data=${String(inputMessage.data).take(50)}")
+        LogManager.logDebug("RULE", "process: source=${inputMessage.source}, dataLen=${inputMessage.data.size}")
         val matchingRules = inputRulesMap[inputMessage.source]
         if (matchingRules == null) {
-            LogManager.log("TRACE:RULE", "No rules found for source=${inputMessage.source}, inputRulesMap keys=${inputRulesMap.keys}")
+            LogManager.logDebug("RULE", "No rules for source=${inputMessage.source}")
             return
         }
-        LogManager.log("TRACE:RULE", "Found ${matchingRules.size} matching rules for ${inputMessage.source}")
+        LogManager.log("RULE", "Source ${inputMessage.source} matched ${matchingRules.size} rules")
 
         matchingRules.forEach { rule ->
             scope.launch {
                 try {
                     processRule(rule, inputMessage)
                 } catch (e: Exception) {
-                    LogManager.log("RULE", "Error processing rule ${rule.name}: ${e.message}")
+                    LogManager.logError("RULE", "Error processing rule ${rule.name}: ${e.message}")
                     handleError(rule, inputMessage, e)
                 }
             }
@@ -101,14 +99,14 @@ class RuleEngine(
             try {
                 processRuleSync(rule, inputMessage)
             } catch (e: Exception) {
-                LogManager.log("RULE", "Error processing rule ${rule.name}: ${e.message}")
+                LogManager.logError("RULE", "Error processing rule ${rule.name}: ${e.message}")
                 handleError(rule, inputMessage, e)
             }
         }
     }
 
     private suspend fun processRule(rule: RuleConfig, inputMessage: InputMessage) {
-        LogManager.log("RULE", "Processing rule: ${rule.name}")
+        LogManager.logDebug("RULE", "Processing rule: ${rule.name} (${rule.pipeline.size} steps)")
 
         var currentData = inputMessage.data
 
@@ -119,7 +117,7 @@ class RuleEngine(
             // Apply detect first if specified
             if (transform?.detect != null) {
                 if (!detectMedia(currentData, transform.detect)) {
-                    LogManager.log("RULE", "Detect failed for ${transform.detect}")
+                    LogManager.logDebug("RULE", "Rule [${rule.name}] detect [${transform.detect}] -> SKIPPED")
                     skipStep = true
                 }
             }
@@ -128,7 +126,7 @@ class RuleEngine(
             if (!skipStep && transform != null) {
                 val transformed = applyTransform(transform, currentData, inputMessage)
                 if (transformed == null) {
-                    LogManager.log("RULE", "Transform returned null, skipping")
+                    LogManager.logDebug("RULE", "Rule [${rule.name}] extract [${transform.extract}] -> null, SKIPPED")
                     skipStep = true
                 } else {
                     currentData = transformed
@@ -141,7 +139,7 @@ class RuleEngine(
                     evaluateFilter(transform.filter!!, currentData, inputMessage.headers)
                 }
                 if (!passed) {
-                    LogManager.log("RULE", "Filter rejected message")
+                    LogManager.logDebug("RULE", "Rule [${rule.name}] filter [${transform.filter}] -> REJECTED")
                     skipStep = true
                 }
             }
@@ -159,18 +157,22 @@ class RuleEngine(
                         metadata = mapOf("rule" to rule.name)
                     )
                     output.send(item) { success ->
-                        LogManager.log("RULE", "Output $outputName: ${if (success) "OK" else "FAILED"}")
-                        if (success) onForwarded?.invoke()
+                        if (success) {
+                            LogManager.logDebug("RULE", "Rule [${rule.name}] -> $outputName: OK")
+                            onForwarded?.invoke()
+                        } else {
+                            LogManager.logWarn("RULE", "Rule [${rule.name}] -> $outputName: FAILED")
+                        }
                     }
                 } else {
-                    LogManager.log("RULE", "Output not found: $outputName")
+                    LogManager.logWarn("RULE", "Rule [${rule.name}] output not found: $outputName")
                 }
             }
         }
     }
 
     private fun processRuleSync(rule: RuleConfig, inputMessage: InputMessage) {
-        LogManager.log("RULE", "Processing rule: ${rule.name}")
+        LogManager.logDebug("RULE", "Processing rule (sync): ${rule.name} (${rule.pipeline.size} steps)")
 
         var currentData = inputMessage.data
 
@@ -181,7 +183,7 @@ class RuleEngine(
             // Apply detect first if specified
             if (transform?.detect != null) {
                 if (!detectMedia(currentData, transform.detect)) {
-                    LogManager.log("RULE", "Detect failed for ${transform.detect}")
+                    LogManager.logDebug("RULE", "Rule [${rule.name}] detect [${transform.detect}] -> SKIPPED")
                     skipStep = true
                 }
             }
@@ -190,7 +192,7 @@ class RuleEngine(
             if (!skipStep && transform != null) {
                 val transformed = applyTransform(transform, currentData, inputMessage)
                 if (transformed == null) {
-                    LogManager.log("RULE", "Transform returned null, skipping")
+                    LogManager.logDebug("RULE", "Rule [${rule.name}] extract [${transform.extract}] -> null, SKIPPED")
                     skipStep = true
                 } else {
                     currentData = transformed
@@ -200,7 +202,7 @@ class RuleEngine(
             // Apply filter if present
             if (!skipStep && transform?.filter != null) {
                 if (!evaluateFilter(transform.filter!!, currentData, inputMessage.headers)) {
-                    LogManager.log("RULE", "Filter rejected message")
+                    LogManager.logDebug("RULE", "Rule [${rule.name}] filter [${transform.filter}] -> REJECTED")
                     skipStep = true
                 }
             }
@@ -218,11 +220,15 @@ class RuleEngine(
                         metadata = mapOf("rule" to rule.name)
                     )
                     output.send(item) { success ->
-                        LogManager.log("RULE", "Output $outputName: ${if (success) "OK" else "FAILED"}")
-                        if (success) onForwarded?.invoke()
+                        if (success) {
+                            LogManager.logDebug("RULE", "Rule [${rule.name}] -> $outputName: OK")
+                            onForwarded?.invoke()
+                        } else {
+                            LogManager.logWarn("RULE", "Rule [${rule.name}] -> $outputName: FAILED")
+                        }
                     }
                 } else {
-                    LogManager.log("RULE", "Output not found: $outputName")
+                    LogManager.logWarn("RULE", "Rule [${rule.name}] output not found: $outputName")
                 }
             }
         }
@@ -352,7 +358,10 @@ class RuleEngine(
                             "error" to (error.message ?: "Unknown error")
                         )
                     )
+                    LogManager.logDebug("RULE", "Error handler sending to $outputName for rule [${rule.name}]")
                     output.send(item, null)
+                } else {
+                    LogManager.logWarn("RULE", "Error handler: output not found: $outputName for rule [${rule.name}]")
                 }
             }
         }

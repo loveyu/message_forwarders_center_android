@@ -31,13 +31,13 @@ class MqttInput(
     override fun start() {
         val link = mqttLink
         if (link == null) {
-            LogManager.log("MQTT", "MQTT link not found: ${config.linkId}")
+            LogManager.logError("MQTT", "Link not found: ${config.linkId} for input: $inputName")
             return
         }
 
         val topicsToSubscribe = getTopicsToSubscribe()
         if (topicsToSubscribe.isEmpty()) {
-            LogManager.log("MQTT", "No topics to subscribe for input: $inputName")
+            LogManager.logWarn("MQTT", "No topics to subscribe for input: $inputName")
             return
         }
 
@@ -50,6 +50,7 @@ class MqttInput(
         link.setOnMqttMessageListener { topic, msg ->
             // Check exclude_topics filter
             if (config.excludeTopics?.contains(topic) == true) {
+                LogManager.logDebug("MQTT", "Excluded topic: $topic for $inputName")
                 return@setOnMqttMessageListener
             }
 
@@ -62,7 +63,12 @@ class MqttInput(
                     "mqtt_retained" to msg.isRetained.toString()
                 )
             )
-            messageListener?.invoke(message)
+            LogManager.log("MQTT", "Message received on topic=$topic for $inputName (${msg.payload.size} bytes)")
+            if (messageListener != null) {
+                messageListener!!.invoke(message)
+            } else {
+                LogManager.logWarn("MQTT", "No message listener for $inputName, message dropped (topic=$topic)")
+            }
         }
 
         topicsToSubscribe.forEach { topic ->

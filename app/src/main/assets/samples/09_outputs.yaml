@@ -1,5 +1,26 @@
 # 输出模块示例
-# 演示：HTTP 输出、Link 输出、Internal 输出（剪贴板/文件/广播）
+# 演示：HTTP 输出、Link 输出、Internal 输出（剪贴板/文件/广播/通知）
+
+#
+# 通知输出 (notify) 配置说明:
+#
+# 模板变量 (tag 和 id 支持):
+#   {channel}      - 输出配置的 channel
+#   {name}         - 输出配置的 name
+#   {seq}          - 全局递增序列号 (0-999 循环)
+#   {timestamp}    - 秒级时间戳 (10位)
+#   {unix}         - 毫秒级时间戳 (13位)
+#   {date:format}  - 格式化日期，如 {date:yyyyMMddHHmmss}
+#   {data}         - 原始数据内容 (UTF-8 解码)
+#   {data.field}   - JSON 路径提取 (当 data 为 JSON 时)
+#   {meta.key}     - metadata 字段
+#
+# 默认值:
+#   tag: channel:name 的 MD5 前12位 (如 "a1b2c3d4e5f6")
+#   id:  秒级时间戳 * 1000 + 序列号 (确保非1，避免与前台通知冲突)
+#
+# 运行时覆盖: 可通过 metadata 或 data JSON 中的 notify_tag / notify_id 字段指定
+#
 
 
 links:
@@ -53,6 +74,41 @@ outputs:
       type: broadcast
       channel: app_events      # 广播通道名称
 
+    # 内部输出 - 通知 (使用默认 tag/id)
+    - name: default_notify
+      type: notify
+      channel: default         # 通知渠道，tag 默认值为 md5("default:default_notify").take(12)
+
+    # 内部输出 - 通知 (自定义 tag/id 模板)
+    - name: custom_notify
+      type: notify
+      channel: alert
+      options:
+        # 自定义 tag: 使用 channel 和日期分组
+        tag: "{channel}_{date:yyyyMMdd}"
+        # 自定义 id: 使用时间戳和序列号确保唯一性
+        id: "{timestamp}_{seq}"
+        # 自定义标题/内容模板
+        title: "来自 {meta.sender} 的消息"
+        message: "{data.content}"
+        # 是否弹出通知
+        popup: true
+        # 是否持久化 (常驻通知)
+        # persistent: false
+
+    # 内部输出 - 通知 (从 data JSON 提取字段)
+    - name: json_notify
+      type: notify
+      channel: json_alerts
+      options:
+        # data 数据示例: {"title":"xxx","message":"xxx","priority":"high"}
+        title: "{data.title}"
+        message: "{data.message}"
+        # 从 data JSON 中提取嵌套字段
+        tag: "{data.priority}_{date:HHmm}"
+        # 从 metadata 中提取字段
+        popup: "{meta.popup}"
+
 rules:
   # 复制到剪贴板
   - name: copy_to_clipboard
@@ -83,6 +139,24 @@ rules:
     from: http_in
     pipeline:
       - to: [local_broadcast]
+
+  # 发送默认通知
+  - name: send_default_notify
+    from: http_in
+    pipeline:
+      - to: [default_notify]
+
+  # 发送自定义通知 (支持模板变量)
+  - name: send_custom_notify
+    from: http_in
+    pipeline:
+      - to: [custom_notify]
+
+  # 发送 JSON 通知 (从 data 提取字段)
+  - name: send_json_notify
+    from: http_in
+    pipeline:
+      - to: [json_notify]
 
   # 多输出链
   - name: multi_output

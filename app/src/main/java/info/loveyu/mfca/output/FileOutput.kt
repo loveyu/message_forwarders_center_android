@@ -43,9 +43,13 @@ class FileOutput(
             val basePath = resolvePath(config.basePath ?: "data://output")
             val options = config.options ?: emptyMap()
 
+            if (LogManager.isDebugEnabled()) {
+                LogManager.logDebug("FILE", "send() - name=$name, itemId=${item.id}, basePath=$basePath")
+            }
+
             val dir = File(basePath)
             if (!dir.exists() && !dir.mkdirs()) {
-                LogManager.log("INTERNAL", "FileOutput [$name]: failed to create directory: ${dir.absolutePath}")
+                LogManager.logError("INTERNAL", "FileOutput [$name]: failed to create directory: ${dir.absolutePath}")
                 callback?.invoke(false)
                 return
             }
@@ -66,7 +70,7 @@ class FileOutput(
 
             val writeMode = when {
                 overwrite && append -> {
-                    LogManager.log("INTERNAL", "FileOutput [$name]: append and overwrite conflict, using overwrite")
+                    LogManager.logWarn("INTERNAL", "FileOutput [$name]: append and overwrite conflict, using overwrite")
                     WriteMode.OVERWRITE
                 }
                 append -> WriteMode.APPEND
@@ -74,8 +78,12 @@ class FileOutput(
                 else -> WriteMode.CREATE
             }
 
+            if (LogManager.isDebugEnabled()) {
+                LogManager.logDebug("FILE", "writeMode=$writeMode, file=${file.name}, dataLen=${dataToWrite.size}, useLock=$useLock")
+            }
+
             if (writeMode == WriteMode.CREATE && file.exists()) {
-                LogManager.log("INTERNAL", "FileOutput [$name]: file already exists, neither append nor overwrite set: ${file.absolutePath}")
+                LogManager.logWarn("INTERNAL", "FileOutput [$name]: file already exists: ${file.absolutePath}")
                 callback?.invoke(false)
                 return
             }
@@ -89,7 +97,7 @@ class FileOutput(
             LogManager.log("INTERNAL", "Written to file: ${file.absolutePath} (${writeMode.name.lowercase()}, ${dataToWrite.size} bytes)")
             callback?.invoke(true)
         } catch (e: Exception) {
-            LogManager.log("INTERNAL", "File write failed: ${e.message}")
+            LogManager.logError("INTERNAL", "File write failed: $name - ${e.message}")
             callback?.invoke(false)
         }
     }

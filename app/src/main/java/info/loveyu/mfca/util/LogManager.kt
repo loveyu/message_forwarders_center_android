@@ -138,6 +138,10 @@ object LogManager {
 
     fun getLogLevel(): LogLevel = currentLogLevel
 
+    fun isDebugEnabled(): Boolean = currentLogLevel == LogLevel.DEBUG
+
+    fun isLoggable(level: LogLevel): Boolean = !isPaused && level.androidPriority >= currentLogLevel.androidPriority
+
     fun setAllLogcatEnabled(enabled: Boolean, prefs: Preferences) {
         isAllLogcatEnabled = enabled
         prefs.logToLogcatAll = enabled

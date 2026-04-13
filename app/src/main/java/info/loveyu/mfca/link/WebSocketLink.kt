@@ -115,7 +115,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
                 }
             }
 
-            LogManager.log("WS", "Final URL: $finalUrl")
+            LogManager.logDebug("WS", "Final URL: $finalUrl")
 
             val request = requestBuilder.build()
             val ws = client.newWebSocket(request, object : WebSocketListener() {
@@ -129,12 +129,12 @@ class WebSocketLink(override val config: LinkConfig) : Link {
 
                 override fun onMessage(webSocket: WebSocket, text: String) {
                     messageListener?.invoke(text.toByteArray())
-                    LogManager.log("WS", "Message received: ${text.take(100)}")
+                    LogManager.logDebug("WS", "Message received: ${text.take(100)}")
                 }
 
                 override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
                     messageListener?.invoke(bytes.toByteArray())
-                    LogManager.log("WS", "Message received: ${bytes.size} bytes")
+                    LogManager.logDebug("WS", "Message received: ${bytes.size} bytes")
                 }
 
                 override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
@@ -152,7 +152,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                     connected = false
                     connecting = false
-                    LogManager.log("WS", "Error: ${t.message}")
+                    LogManager.logError("WS", "Error: ${t.message}")
                     errorListener?.invoke(t as? Exception ?: Exception(t.message))
                     scheduleReconnect()
                 }
@@ -200,21 +200,27 @@ class WebSocketLink(override val config: LinkConfig) : Link {
 
     override fun send(data: ByteArray): Boolean {
         if (!connected) {
-            LogManager.log("WS", "Cannot send: not connected")
+            LogManager.logWarn("WS", "Cannot send: not connected")
             return false
         }
 
         val result = webSocket?.send(ByteString.of(*data))
+        if (result != true) {
+            LogManager.logWarn("WS", "Binary send failed for $id")
+        }
         return result == true
     }
 
     override fun send(text: String): Boolean {
         if (!connected) {
-            LogManager.log("WS", "Cannot send: not connected")
+            LogManager.logWarn("WS", "Cannot send: not connected")
             return false
         }
 
         val result = webSocket?.send(text)
+        if (result != true) {
+            LogManager.logWarn("WS", "Text send failed for $id")
+        }
         return result == true
     }
 

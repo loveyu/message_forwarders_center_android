@@ -23,7 +23,7 @@ class TcpInput(
     override fun start() {
         val link = tcpLink
         if (link == null) {
-            LogManager.log("TCP", "TCP link not found: ${config.linkId}")
+            LogManager.logError("TCP", "Link not found: ${config.linkId} for input: $inputName")
             return
         }
 
@@ -33,7 +33,12 @@ class TcpInput(
                 data = data,
                 headers = emptyMap()
             )
-            messageListener?.invoke(message)
+            LogManager.log("TCP", "Message received for $inputName (${data.size} bytes)")
+            if (messageListener != null) {
+                messageListener!!.invoke(message)
+            } else {
+                LogManager.logWarn("TCP", "No message listener for $inputName, message dropped")
+            }
         }
 
         if (!link.isConnected()) {

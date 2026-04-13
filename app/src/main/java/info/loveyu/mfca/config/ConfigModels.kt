@@ -234,6 +234,21 @@ enum class InternalOutputType {
 
 /**
  * 通知选项
+ *
+ * 模板变量说明:
+ * - {channel} - 输出配置的 channel
+ * - {name} - 输出配置的 name
+ * - {seq} - 全局递增序列号 (0-999 循环)
+ * - {timestamp} - 秒级时间戳 (10位)
+ * - {unix} - 毫秒级时间戳 (13位)
+ * - {date:format} - 格式化日期，如 {date:yyyyMMddHHmmss}
+ * - {data} - 原始数据内容 (UTF-8 解码)
+ * - {data.path} - JSON 路径提取 (当 data 为 JSON 时)
+ * - {meta.key} - metadata 字段
+ *
+ * 默认值:
+ * - tag: channel:name 的 MD5 前12位
+ * - id: 秒级时间戳 * 1000 + 序列号
  */
 data class NotifyOptions(
     var title: String? = null,
@@ -242,7 +257,8 @@ data class NotifyOptions(
     var fixedIcon: String? = null,
     var popup: Boolean? = null,
     var persistent: Boolean? = null,
-    var tag: String? = null
+    var tag: String? = null,
+    var id: String? = null
 )
 
 /**

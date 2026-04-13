@@ -134,7 +134,7 @@ class TcpLink(override val config: LinkConfig) : Link {
             startReading()
             return true
         } catch (e: Exception) {
-            LogManager.log("TCP", "Connection error: ${e.message}")
+            LogManager.logError("TCP", "Connection error: ${e.message}")
             errorListener?.invoke(e)
             connected.set(false)
             scheduleReconnect()
@@ -162,7 +162,7 @@ class TcpLink(override val config: LinkConfig) : Link {
             socket = null
             LogManager.log("TCP", "Disconnected: $id")
         } catch (e: Exception) {
-            LogManager.log("TCP", "Disconnect error: ${e.message}")
+            LogManager.logWarn("TCP", "Disconnect error: ${e.message}")
         }
     }
 
@@ -186,15 +186,15 @@ class TcpLink(override val config: LinkConfig) : Link {
                 }
             }
             if (success == null) {
-                LogManager.log("TCP", "Write timeout (${writeTimeoutMs}ms), disconnecting")
+                LogManager.logWarn("TCP", "Write timeout (${writeTimeoutMs}ms), disconnecting")
                 disconnect()
                 false
             } else {
-                LogManager.log("TCP", "Sent frame: ${frameProtocol.name}, size=${framed.size}")
+                LogManager.logDebug("TCP", "Sent frame: ${frameProtocol.name}, size=${framed.size}")
                 true
             }
         } catch (e: Exception) {
-            LogManager.log("TCP", "Send error: ${e.message}")
+            LogManager.logError("TCP", "Send error: ${e.message}")
             errorListener?.invoke(e)
             false
         }
@@ -213,10 +213,10 @@ class TcpLink(override val config: LinkConfig) : Link {
                     maxLength = maxLength,
                     onMessage = { data ->
                         messageListener?.invoke(data)
-                        LogManager.log("TCP", "Received frame: ${frameProtocol.name}, length=${data.size}")
+                        LogManager.logDebug("TCP", "Received frame: ${frameProtocol.name}, length=${data.size}")
                     },
                     onInvalid = { reason ->
-                        LogManager.log("TCP", "$reason, disconnecting")
+                        LogManager.logWarn("TCP", "$reason, disconnecting")
                         disconnect()
                     }
                 )
@@ -227,7 +227,7 @@ class TcpLink(override val config: LinkConfig) : Link {
                     scheduleReconnect()
                 }
             } catch (e: SocketTimeoutException) {
-                LogManager.log("TCP", "Read timeout (${readTimeoutMs}ms), disconnecting")
+                LogManager.logWarn("TCP", "Read timeout (${readTimeoutMs}ms), disconnecting")
                 disconnect()
             } catch (e: EOFException) {
                 LogManager.log("TCP", "Server closed connection")
@@ -235,13 +235,13 @@ class TcpLink(override val config: LinkConfig) : Link {
                 scheduleReconnect()
             } catch (e: SocketException) {
                 if (connected.get()) {
-                    LogManager.log("TCP", "Read error: ${e.message}")
+                    LogManager.logError("TCP", "Read error: ${e.message}")
                     errorListener?.invoke(e)
                     scheduleReconnect()
                 }
             } catch (e: Exception) {
                 if (connected.get()) {
-                    LogManager.log("TCP", "Read error: ${e.message}")
+                    LogManager.logError("TCP", "Read error: ${e.message}")
                     errorListener?.invoke(e)
                     scheduleReconnect()
                 }

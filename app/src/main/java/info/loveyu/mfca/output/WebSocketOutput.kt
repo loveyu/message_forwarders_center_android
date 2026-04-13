@@ -21,7 +21,7 @@ class WebSocketOutput(
     override fun send(item: QueueItem, callback: ((Boolean) -> Unit)?) {
         val link = wsLink
         if (link == null) {
-            LogManager.log("WS", "WebSocket link not found: ${config.linkId}")
+            LogManager.logError("WS", "Link not found: ${config.linkId} for output: $name")
             callback?.invoke(false)
             return
         }
@@ -31,7 +31,16 @@ class WebSocketOutput(
             link.connect()
         }
 
+        if (LogManager.isDebugEnabled()) {
+            LogManager.logDebug("WS", "Sending data: dataLen=${item.data.size}")
+        }
+
         val success = link.send(item.data)
+        if (success) {
+            LogManager.log("WS", "Data sent via $name")
+        } else {
+            LogManager.logWarn("WS", "Failed to send via $name")
+        }
         callback?.invoke(success)
     }
 

@@ -21,7 +21,7 @@ class TcpOutput(
     override fun send(item: QueueItem, callback: ((Boolean) -> Unit)?) {
         val link = tcpLink
         if (link == null) {
-            LogManager.log("TCP", "TCP link not found: ${config.linkId}")
+            LogManager.logError("TCP", "Link not found: ${config.linkId} for output: $name")
             callback?.invoke(false)
             return
         }
@@ -31,7 +31,16 @@ class TcpOutput(
             link.connect()
         }
 
+        if (LogManager.isDebugEnabled()) {
+            LogManager.logDebug("TCP", "Sending data: dataLen=${item.data.size}")
+        }
+
         val success = link.send(item.data)
+        if (success) {
+            LogManager.log("TCP", "Data sent via $name")
+        } else {
+            LogManager.logWarn("TCP", "Failed to send via $name")
+        }
         callback?.invoke(success)
     }
 

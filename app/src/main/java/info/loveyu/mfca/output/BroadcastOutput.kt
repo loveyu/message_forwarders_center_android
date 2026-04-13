@@ -36,6 +36,10 @@ class BroadcastOutput(
         try {
             val channel = config.channel ?: "global"
 
+            if (LogManager.isDebugEnabled()) {
+                LogManager.logDebug("BROADCAST", "send() - name=$name, channel=$channel, itemId=${item.id}, dataLen=${item.data.size}")
+            }
+
             val intent = Intent("info.loveyu.mfca.broadcast.$channel").apply {
                 putExtra("data", item.data)
                 putExtra("source", name)
@@ -50,10 +54,10 @@ class BroadcastOutput(
             // Also send as system broadcast for other apps
             context.sendBroadcast(intent)
 
-            LogManager.log("INTERNAL", "Broadcast sent on channel: $channel")
+            LogManager.log("INTERNAL", "Broadcast sent on channel: $channel, action=${intent.action}")
             callback?.invoke(true)
         } catch (e: Exception) {
-            LogManager.log("INTERNAL", "Broadcast failed: ${e.message}")
+            LogManager.logError("INTERNAL", "Broadcast failed: $name - ${e.message}")
             callback?.invoke(false)
         }
     }

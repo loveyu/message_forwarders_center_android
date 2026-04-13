@@ -54,6 +54,7 @@ object InputManager {
     fun initialize(config: AppConfig, messageHandler: (InputMessage) -> Unit) {
         clear()
         globalMessageListener = messageHandler
+        LogManager.log("INPUT", "Initializing InputManager with ${config.inputs.http.size} HTTP inputs, ${config.inputs.link.size} link inputs")
 
         // HTTP inputs - group by linkId for shared mode
         val standaloneInputs = mutableListOf<HttpInputConfig>()
@@ -88,9 +89,9 @@ object InputManager {
         sharedGroups.forEach { (linkId, httpConfigs) ->
             val linkConfig = config.links.find { it.id == linkId }
             if (linkConfig == null) {
-                LogManager.log("INPUT", "Shared HTTP group skipped: link_id '$linkId' not found in links")
+                LogManager.logWarn("INPUT", "Shared HTTP group skipped: link_id '$linkId' not found in links")
                 httpConfigs.forEach { httpConfig ->
-                    LogManager.log("INPUT", "  → skipping HTTP input: ${httpConfig.name}")
+                    LogManager.logWarn("INPUT", "  -> skipping HTTP input: ${httpConfig.name}")
                 }
                 return@forEach
             }
@@ -154,6 +155,7 @@ object InputManager {
 
         // Start health check
         startHealthCheck()
+        LogManager.log("INPUT", "InputManager initialized: ${entries.size} inputs registered")
     }
 
     /**
@@ -201,7 +203,7 @@ object InputManager {
                     // Check network conditions from link's when/deny
                     if (!NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
                         if (input.isRunning()) {
-                            LogManager.log("INPUT", "Stopping shared HTTP server ${config.name}: network conditions not met")
+                            LogManager.logDebug("INPUT", "Stopping shared HTTP server ${config.name}: network conditions not met")
                             input.stop()
                         }
                     } else if (!input.isRunning() && input.getError() == null) {
@@ -209,7 +211,7 @@ object InputManager {
                         try {
                             input.start()
                         } catch (e: Exception) {
-                            LogManager.log("INPUT", "Restart failed for shared HTTP server: ${e.message}")
+                            LogManager.logError("INPUT", "Restart failed for shared HTTP server: ${e.message}")
                         }
                     }
                 }
@@ -219,7 +221,7 @@ object InputManager {
             // Check network conditions (when/deny)
             if (!NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
                 if (input.isRunning()) {
-                    LogManager.log("INPUT", "Stopping ${config.name}: network conditions not met")
+                    LogManager.logDebug("INPUT", "Stopping ${config.name}: network conditions not met")
                     input.stop()
                 }
                 return@forEach
@@ -230,7 +232,7 @@ object InputManager {
                 val link = LinkManager.getLink(config.linkId)
                 if (link == null || !link.isConnected()) {
                     if (input.isRunning()) {
-                        LogManager.log("INPUT", "Stopping ${config.name}: link ${config.linkId} not connected")
+                        LogManager.logDebug("INPUT", "Stopping ${config.name}: link ${config.linkId} not connected")
                         input.stop()
                     }
                     return@forEach
@@ -247,20 +249,21 @@ object InputManager {
                 try {
                     input.start()
                 } catch (e: Exception) {
-                    LogManager.log("INPUT", "Restart failed for ${config.name}: ${e.message}")
+                    LogManager.logError("INPUT", "Restart failed for ${config.name}: ${e.message}")
                 }
             }
         }
     }
 
     fun startAll() {
+        LogManager.log("INPUT", "Starting all inputs (${entries.size} entries)")
         entries.forEach { entry ->
             try {
                 if (!entry.input.isRunning()) {
                     entry.input.start()
                 }
             } catch (e: Exception) {
-                LogManager.log("INPUT", "Failed to start ${entry.config.name}: ${e.message}")
+                LogManager.logError("INPUT", "Failed to start ${entry.config.name}: ${e.message}")
             }
         }
     }
@@ -270,7 +273,7 @@ object InputManager {
             try {
                 entry.input.stop()
             } catch (e: Exception) {
-                LogManager.log("INPUT", "Error stopping ${entry.config.name}: ${e.message}")
+                LogManager.logError("INPUT", "Error stopping ${entry.config.name}: ${e.message}")
             }
         }
     }

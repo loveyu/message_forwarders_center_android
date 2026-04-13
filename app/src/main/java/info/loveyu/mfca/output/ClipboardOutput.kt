@@ -42,10 +42,14 @@ class ClipboardOutput(
             val text = item.text
             val now = System.currentTimeMillis()
 
+            if (LogManager.isDebugEnabled()) {
+                LogManager.logDebug("CLIPBOARD", "send() - name=$name, itemId=${item.id}, dataLen=${item.data.size}")
+            }
+
             // 检查去重：内容相同且距离上次写入不足30秒则跳过
             val lastWriteEntry = lastWrite[name]
             if (lastWriteEntry != null && lastWriteEntry.first == text && now - lastWriteEntry.second < DEDUP_INTERVAL_MS) {
-                LogManager.log("INTERNAL", "Clipboard skipped (duplicated): $name")
+                LogManager.logWarn("INTERNAL", "Clipboard skipped (duplicated): $name")
                 callback?.invoke(true)
                 return
             }
@@ -57,16 +61,16 @@ class ClipboardOutput(
                 history.removeFirst()
             }
             history.addLast(contentHash)
-            LogManager.log("INTERNAL", "Clipboard content, hash: $contentHash, text: $text")
 
             // 写入剪贴板
             val clip = ClipData.newPlainText("MessageForwarder", text)
             clipboardManager?.setPrimaryClip(clip)
             lastWrite[name] = text to now
-            LogManager.log("INTERNAL", "Written to clipboard: $name")
+
+            LogManager.log("INTERNAL", "Written to clipboard: $name (hash=$contentHash, len=${text.length})")
             callback?.invoke(true)
         } catch (e: Exception) {
-            LogManager.log("INTERNAL", "Clipboard write failed: ${e.message}")
+            LogManager.logError("INTERNAL", "Clipboard write failed: $name - ${e.message}")
             callback?.invoke(false)
         }
     }

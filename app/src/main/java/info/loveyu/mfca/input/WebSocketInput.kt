@@ -2,7 +2,6 @@ package info.loveyu.mfca.input
 
 import info.loveyu.mfca.config.LinkInputConfig
 import info.loveyu.mfca.link.LinkManager
-import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
 
 /**
@@ -22,23 +21,26 @@ class WebSocketInput(
         get() = LinkManager.getLink(config.linkId) as? info.loveyu.mfca.link.WebSocketLink
 
     override fun start() {
-        LogManager.log(LogLevel.DEBUG, "WSINPUT", "WebSocketInput.start called: inputName=$inputName, linkId=${config.linkId}")
+        LogManager.logDebug("WSINPUT", "WebSocketInput.start called: inputName=$inputName, linkId=${config.linkId}")
         val link = wsLink
         if (link == null) {
-            LogManager.log("WS", "WebSocket link not found: ${config.linkId}")
+            LogManager.logError("WS", "Link not found: ${config.linkId} for input: $inputName")
             return
         }
 
         link.setOnMessageListener { data ->
-            LogManager.log(LogLevel.DEBUG, "WSINPUT", "WebSocketInput.listener invoked: inputName=$inputName")
+            LogManager.logDebug("WSINPUT", "listener invoked: inputName=$inputName")
             val message = InputMessage(
                 source = inputName,
                 data = data,
                 headers = emptyMap()
             )
-            LogManager.log("WS", "Message received: ${String(data).take(200)}")
-            messageListener?.invoke(message)
-            LogManager.log(LogLevel.DEBUG, "WSINPUT", "messageListener invoked, inputName=$inputName, listener=${messageListener != null}")
+            LogManager.log("WS", "Message received for $inputName (${data.size} bytes)")
+            if (messageListener != null) {
+                messageListener!!.invoke(message)
+            } else {
+                LogManager.logWarn("WS", "No message listener for $inputName, message dropped")
+            }
         }
 
         if (!link.isConnected()) {
@@ -57,7 +59,7 @@ class WebSocketInput(
     override fun isRunning(): Boolean = running
 
     override fun setOnMessageListener(listener: (InputMessage) -> Unit) {
-        LogManager.log(LogLevel.DEBUG, "WSINPUT", "setOnMessageListener called for $inputName, listener=$listener")
+        LogManager.logDebug("WSINPUT", "setOnMessageListener called for $inputName")
         messageListener = listener
     }
 }

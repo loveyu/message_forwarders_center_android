@@ -21,14 +21,14 @@ class MqttOutput(
     override fun send(item: QueueItem, callback: ((Boolean) -> Unit)?) {
         val link = mqttLink
         if (link == null) {
-            LogManager.log("MQTT", "MQTT link not found: ${config.linkId}")
+            LogManager.logError("MQTT", "Link not found: ${config.linkId} for output: $name")
             callback?.invoke(false)
             return
         }
 
         val topic = config.topic
         if (topic == null) {
-            LogManager.log("MQTT", "No topic specified for output: $name")
+            LogManager.logWarn("MQTT", "No topic specified for output: $name")
             callback?.invoke(false)
             return
         }
@@ -38,8 +38,17 @@ class MqttOutput(
             link.connect()
         }
 
+        if (LogManager.isDebugEnabled()) {
+            LogManager.logDebug("MQTT", "Sending to topic: $topic, qos=${config.qos ?: 1}, dataLen=${item.data.size}")
+        }
+
         val qos = config.qos ?: 1
         val success = link.sendToTopic(topic, item.data, qos)
+        if (success) {
+            LogManager.log("MQTT", "Sent to topic: $topic via $name")
+        } else {
+            LogManager.logWarn("MQTT", "Failed to send to topic: $topic via $name")
+        }
         callback?.invoke(success)
     }
 

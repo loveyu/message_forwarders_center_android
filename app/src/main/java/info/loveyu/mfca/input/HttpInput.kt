@@ -33,7 +33,7 @@ class HttpInput(
             HttpInputDsnParser.parse(httpConfig.dsn)
         } catch (e: Exception) {
             error = "DSN 解析失败: ${e.message}"
-            LogManager.log("HTTP", "DSN parse error for $inputName: ${e.message}")
+            LogManager.logError("HTTP", "DSN parse error for $inputName: ${e.message}")
             // Fallback config so NanoHTTPD doesn't crash
             HttpInputParsedConfig(listen = "0.0.0.0", port = 0)
         }
@@ -41,7 +41,7 @@ class HttpInput(
 
     override fun start() {
         if (error != null) {
-            LogManager.log("HTTP", "HTTP input $inputName skipped: ${error}")
+            LogManager.logWarn("HTTP", "HTTP input $inputName skipped: $error")
             return
         }
         try {
@@ -50,10 +50,10 @@ class HttpInput(
             LogManager.log("HTTP", "HTTP input started: $inputName on ${parsedConfig.listen}:${parsedConfig.port} paths=${httpConfig.paths}")
         } catch (e: BindException) {
             error = "端口 ${parsedConfig.port} 已被占用"
-            LogManager.log("HTTP", "HTTP input $inputName port conflict: ${parsedConfig.port} - ${e.message}")
+            LogManager.logError("HTTP", "HTTP input $inputName port conflict: ${parsedConfig.port} - ${e.message}")
         } catch (e: Exception) {
             error = "启动失败: ${e.message}"
-            LogManager.log("HTTP", "Failed to start HTTP input: $inputName - ${e.message}")
+            LogManager.logError("HTTP", "Failed to start HTTP input: $inputName - ${e.message}")
         }
     }
 
@@ -63,7 +63,7 @@ class HttpInput(
             super.stop()
             LogManager.log("HTTP", "HTTP input stopped: $inputName")
         } catch (e: Exception) {
-            LogManager.log("HTTP", "Error stopping HTTP input: $inputName - ${e.message}")
+            LogManager.logError("HTTP", "Error stopping HTTP input: $inputName - ${e.message}")
         }
     }
 
@@ -91,6 +91,7 @@ class HttpInput(
 
         // Authentication - all configured methods must pass
         if (!authenticate(session, parsedConfig)) {
+            LogManager.logWarn("HTTP", "Auth failed for $inputName from $remoteIp")
             return newFixedLengthResponse(
                 Response.Status.UNAUTHORIZED,
                 MIME_PLAINTEXT,
@@ -101,6 +102,9 @@ class HttpInput(
         // Multi-path matching (empty paths = allow all)
         val uri = session.uri ?: "/"
         if (httpConfig.paths.isNotEmpty() && !httpConfig.paths.contains(uri)) {
+            if (LogManager.isDebugEnabled()) {
+                LogManager.logDebug("HTTP", "Path not matched: $uri for $inputName (allowed: ${httpConfig.paths})")
+            }
             return newFixedLengthResponse(
                 Response.Status.NOT_FOUND,
                 MIME_PLAINTEXT,
@@ -111,6 +115,7 @@ class HttpInput(
         // Method check (empty methods = allow all)
         if (parsedConfig.methods.isNotEmpty()) {
             if (!parsedConfig.methods.contains(session.method.name.uppercase())) {
+                LogManager.logDebug("HTTP", "Method ${session.method} not allowed for $inputName (allowed: ${parsedConfig.methods})")
                 return newFixedLengthResponse(
                     Response.Status.NOT_FOUND,
                     MIME_PLAINTEXT,
@@ -265,8 +270,12 @@ class HttpInput(
                     headers = headersMap
                 )
 
-                messageListener?.invoke(message)
-                LogManager.log("HTTP", "Message received from $sourceName path=$uri")
+                if (messageListener != null) {
+                    messageListener.invoke(message)
+                } else {
+                    LogManager.logWarn("HTTP", "No message listener for $sourceName, message dropped (path=$uri)")
+                }
+                LogManager.log("HTTP", "Message received from $sourceName path=$uri (${body.size} bytes)")
 
                 return NanoHTTPD.newFixedLengthResponse(
                     NanoHTTPD.Response.Status.OK,
@@ -274,7 +283,7 @@ class HttpInput(
                     "OK"
                 )
             } catch (e: Exception) {
-                LogManager.log("HTTP", "Error processing request: ${e.message}")
+                LogManager.logError("HTTP", "Error processing request from $sourceName: ${e.message}")
                 return NanoHTTPD.newFixedLengthResponse(
                     NanoHTTPD.Response.Status.INTERNAL_ERROR,
                     NanoHTTPD.MIME_PLAINTEXT,
@@ -307,7 +316,7 @@ class HttpVirtualInput(
             HttpInputDsnParser.parse(httpConfig.dsn)
         } catch (e: Exception) {
             error = "DSN 解析失败: ${e.message}"
-            LogManager.log("HTTP", "DSN parse error for virtual input $inputName: ${e.message}")
+            LogManager.logError("HTTP", "DSN parse error for virtual input $inputName: ${e.message}")
             HttpInputParsedConfig(listen = "0.0.0.0", port = 0)
         }
     }
@@ -345,7 +354,7 @@ class HttpVirtualInput(
         // IP access control
         val remoteIp = session.remoteIpAddress
         if (!HttpInput.checkIpAccess(remoteIp, parsedConfig)) {
-            LogManager.log("HTTP", "IP denied: $remoteIp for $inputName")
+            LogManager.logWarn("HTTP", "IP denied: $remoteIp for $inputName")
             return NanoHTTPD.newFixedLengthResponse(
                 NanoHTTPD.Response.Status.FORBIDDEN,
                 NanoHTTPD.MIME_PLAINTEXT,
@@ -355,6 +364,7 @@ class HttpVirtualInput(
 
         // Authentication
         if (!HttpInput.authenticate(session, parsedConfig)) {
+            LogManager.logWarn("HTTP", "Auth failed for virtual input $inputName from $remoteIp")
             return NanoHTTPD.newFixedLengthResponse(
                 NanoHTTPD.Response.Status.UNAUTHORIZED,
                 NanoHTTPD.MIME_PLAINTEXT,
@@ -365,6 +375,7 @@ class HttpVirtualInput(
         // Method check
         if (parsedConfig.methods.isNotEmpty()) {
             if (!parsedConfig.methods.contains(session.method.name.uppercase())) {
+                LogManager.logDebug("HTTP", "Method ${session.method} not allowed for virtual input $inputName")
                 return NanoHTTPD.newFixedLengthResponse(
                     NanoHTTPD.Response.Status.NOT_FOUND,
                     NanoHTTPD.MIME_PLAINTEXT,
