@@ -25,6 +25,13 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
+    - name: Replace mirror sources with official sources
+      run: |
+        # 替换 Gradle wrapper 分发地址（腾讯云 → 官方）
+        sed -i 's|mirrors.cloud.tencent.com/gradle|services.gradle.org/distributions|g' gradle/wrapper/gradle-wrapper.properties
+        # 删除阿里云 Maven 镜像行（官方源 google()/mavenCentral()/gradlePluginPortal() 已存在）
+        sed -i '/maven.aliyun.com/d' settings.gradle.kts
+
     - name: Cache Gradle packages
       uses: actions/cache@v4
       with:
@@ -71,6 +78,13 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
+
+    - name: Replace mirror sources with official sources
+      run: |
+        # 替换 Gradle wrapper 分发地址（腾讯云 → 官方）
+        sed -i 's|mirrors.cloud.tencent.com/gradle|services.gradle.org/distributions|g' gradle/wrapper/gradle-wrapper.properties
+        # 删除阿里云 Maven 镜像行（官方源 google()/mavenCentral()/gradlePluginPortal() 已存在）
+        sed -i '/maven.aliyun.com/d' settings.gradle.kts
 
     - name: Cache Gradle packages
       uses: actions/cache@v4
