@@ -47,3 +47,13 @@ rules:
     from: ws_input
     pipeline:
       - to: [ws_output]
+
+  # Gotify 消息转发为通知（带应用图标）
+  # enrich 通过 Gotify REST API 获取应用图标 URL 并注入到消息 JSON 的 icon 字段
+  # 通知输出会自动读取 icon 字段显示应用图标
+  # - name: gotify_notify
+  #   from: ws_input
+  #   pipeline:
+  #     - transform:
+  #         enrich: "gotifyIcon:gotify_server"   # 格式: gotifyIcon:<linkId>
+  #       to: [gotify_notification]

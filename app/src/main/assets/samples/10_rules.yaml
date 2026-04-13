@@ -156,7 +156,29 @@ rules:
     onError:
       - to: [clipboard_out]             # 处理失败时复制到剪贴板
 
-  # 示例14：from 使用数组，匹配多个输入源
+  # 示例14：enrich 丰富数据 - 通过 Gotify REST API 获取应用图标注入消息
+  # Gotify 消息包含 appid 字段，enricher 调用 API 获取图标 URL 写入 icon 字段
+  # 通知输出会自动读取 icon 字段显示对应应用图标
+  # 需要配置 Gotify WebSocket link，格式: enrich: "gotifyIcon:<linkId>"
+  # - name: gotify_with_icon
+  #   from: gotify_input
+  #   pipeline:
+  #     - transform:
+  #         enrich: "gotifyIcon:gotify_link"
+  #       to: [gotify_notification]
+
+  # 示例15：enrich 与其他 transform 组合使用
+  # enrich 在 detect 之后、extract/filter 之前执行
+  # - name: gotify_enrich_then_extract
+  #   from: gotify_input
+  #   pipeline:
+  #     - transform:
+  #         enrich: "gotifyIcon:gotify_link"
+  #         extract: "$raw"
+  #         filter: "appid > 0"
+  #       to: [gotify_notification]
+
+  # 示例16：from 使用数组，匹配多个输入源
   # 当 sensor_data 或 filtered_clipboard 任一输入源收到消息时都会触发此规则
   # - name: multi_source_rule
   #   from: [sensor_data, filtered_clipboard]
