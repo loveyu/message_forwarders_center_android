@@ -105,7 +105,7 @@ private fun createWebView(
 
 private fun generateThemeSwitchScript(isDarkTheme: Boolean): String {
     val theme = if (isDarkTheme) "dark" else "light"
-    return "document.body.setAttribute('data-theme', '$theme');"
+    return "document.documentElement.setAttribute('data-theme', '$theme');"
 }
 
 private fun wrapHtml(title: String, content: String, isDarkTheme: Boolean): String {

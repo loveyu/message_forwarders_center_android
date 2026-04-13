@@ -1,17 +1,13 @@
 package info.loveyu.mfca
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -157,13 +153,35 @@ fun SampleDetailScreen(
         buildHtmlContent(sampleFile.content, sampleFile.name)
     }
 
-    WebViewScreen(
-        title = sampleFile.name,
-        htmlContent = htmlContent,
-        isDarkTheme = isDarkTheme,
-        onBack = onBack,
-        rawHtml = true
-    )
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(sampleFile.name) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "返回"
+                        )
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            WebViewScreen(
+                title = sampleFile.name,
+                htmlContent = htmlContent,
+                isDarkTheme = isDarkTheme,
+                onBack = onBack,
+                rawHtml = true
+            )
+        }
+    }
 }
 
 private fun buildHtmlContent(content: String, fileName: String): String {
@@ -173,16 +191,17 @@ private fun buildHtmlContent(content: String, fileName: String): String {
         .replace("$", "\\$")
 
     val isMarkdown = fileName.endsWith(".md", ignoreCase = true)
+    val languageClass = if (isMarkdown) "" else " class=\"language-yaml\""
 
     val markdownScript = if (isMarkdown) """
             document.getElementById('content').innerHTML = marked.parse(content);
             document.querySelectorAll('pre code').forEach(function(block) {
                 hljs.highlightElement(block);
             });
-            setTimeout(addCopyButtons, 0);
+            addCopyButtons();
     """ else """
             hljs.highlightElement(document.getElementById('content'));
-            setTimeout(addCopyButtons, 0);
+            addCopyButtons();
     """
 
     return """
@@ -191,6 +210,8 @@ private fun buildHtmlContent(content: String, fileName: String): String {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css" media="(prefers-color-scheme: dark)">
     <style>
         :root {
             --bg-color: #ffffff;
@@ -199,8 +220,6 @@ private fun buildHtmlContent(content: String, fileName: String): String {
             --border-color: #d0d7de;
             --link-color: #0969da;
             --blockquote-color: #656d76;
-            --header-bg: #f6f8fa;
-            --header-border: #d0d7de;
             --copy-btn-bg: #e8e8e8;
             --copy-btn-hover: #d4d4d4;
             --copy-success-color: #28a745;
@@ -213,8 +232,6 @@ private fun buildHtmlContent(content: String, fileName: String): String {
             --border-color: #30363d;
             --link-color: #58a6ff;
             --blockquote-color: #8b949e;
-            --header-bg: #161b22;
-            --header-border: #30363d;
             --copy-btn-bg: #2d333b;
             --copy-btn-hover: #3d444d;
             --copy-success-color: #3fb950;
@@ -235,8 +252,6 @@ private fun buildHtmlContent(content: String, fileName: String): String {
         }
 
         body {
-            display: flex;
-            flex-direction: column;
             background-color: var(--bg-color);
             color: var(--text-color);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
@@ -244,48 +259,8 @@ private fun buildHtmlContent(content: String, fileName: String): String {
             line-height: 1.6;
         }
 
-        .header {
-            display: flex;
-            align-items: center;
-            padding: 12px 16px;
-            background-color: var(--header-bg);
-            border-bottom: 1px solid var(--header-border);
-            flex-shrink: 0;
-            -webkit-backdrop-filter: blur(10px);
-        }
-
-        .back-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 36px;
-            height: 36px;
-            margin-right: 12px;
-            background: transparent;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            color: var(--link-color);
-            font-size: 20px;
-            transition: background-color 0.15s;
-        }
-
-        .back-btn:active {
-            background-color: var(--border-color);
-        }
-
-        .title {
-            flex: 1;
-            font-size: 18px;
-            font-weight: 600;
-            color: var(--text-color);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
         .content {
-            flex: 1;
+            height: 100%;
             overflow-y: auto;
             padding: 16px;
             -webkit-overflow-scrolling: touch;
@@ -308,7 +283,7 @@ private fun buildHtmlContent(content: String, fileName: String): String {
 
         code {
             font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace;
-            font-size: 85%;
+            font-size: 12px;
         }
 
         pre code {
@@ -338,7 +313,7 @@ private fun buildHtmlContent(content: String, fileName: String): String {
             color: var(--text-color);
             font-size: 14px;
             transition: all 0.15s;
-            opacity: 0;
+            opacity: 0.4;
         }
 
         .code-wrapper:hover .copy-btn,
@@ -442,12 +417,8 @@ private fun buildHtmlContent(content: String, fileName: String): String {
     </style>
 </head>
 <body>
-    <div class="header">
-        <button class="back-btn" id="backBtn" onclick="Android.navigateBack()" aria-label="返回">←</button>
-        <div class="title" id="title">${fileName.replace("'", "\\'")}</div>
-    </div>
     <div class="content">
-        <pre><code id="content">${escapedContent}</code></pre>
+        <pre><code id="content"$languageClass>${escapedContent}</code></pre>
     </div>
     <script>
         (function() {
@@ -510,13 +481,6 @@ private fun buildHtmlContent(content: String, fileName: String): String {
                 });
             }
 
-            function loadCss(url) {
-                var link = document.createElement('link');
-                link.rel = 'stylesheet';
-                link.href = url;
-                document.head.appendChild(link);
-            }
-
             function loadScript(url, onload) {
                 var script = document.createElement('script');
                 script.src = url;
@@ -524,23 +488,16 @@ private fun buildHtmlContent(content: String, fileName: String): String {
                 document.head.appendChild(script);
             }
 
-            var isMarkdown = ${isMarkdown};
+            var isMarkdown = $isMarkdown;
             var content = document.getElementById('content').textContent;
-
-            loadCss('https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css');
 
             loadScript('https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js', function() {
                 if (isMarkdown) {
                     loadScript('https://cdn.jsdelivr.net/npm/marked@9.1.6/lib/marked.umd.js', function() {
-                        document.getElementById('content').innerHTML = marked.parse(content);
-                        document.querySelectorAll('pre code').forEach(function(block) {
-                            hljs.highlightElement(block);
-                        });
-                        addCopyButtons();
+                        $markdownScript
                     });
                 } else {
-                    hljs.highlightElement(document.getElementById('content'));
-                    addCopyButtons();
+                    $markdownScript
                 }
             });
         })();
@@ -548,20 +505,6 @@ private fun buildHtmlContent(content: String, fileName: String): String {
 </body>
 </html>
     """.trimIndent()
-}
-
-/**
- * 复制文本到剪贴板
- */
-private fun copyToClipboard(context: Context, content: String, fileName: String) {
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    val clip = ClipData.newPlainText(fileName, content)
-    clipboard.setPrimaryClip(clip)
-
-    // 显示 Toast 提示
-    Handler(Looper.getMainLooper()).post {
-        Toast.makeText(context, "已复制 $fileName 到剪贴板", Toast.LENGTH_SHORT).show()
-    }
 }
 
 private fun loadSampleFiles(context: Context): List<SampleFile> {
@@ -617,6 +560,10 @@ private fun loadSampleFiles(context: Context): List<SampleFile> {
         SampleFileInfo(
             fileName = "12_clipboard_forward.yaml",
             description = "剪贴板转发 - MQTT 到本地剪贴板"
+        ),
+        SampleFileInfo(
+            fileName = "13_http_shared_input.yaml",
+            description = "HTTP 共享输入 - 多转发器共享输入配置"
         )
     )
 
