@@ -12,7 +12,7 @@ import java.net.URLDecoder
  * 网络状态检查器
  *
  * when/deny 条件格式 (URI query string):
- *   network=wifi|mobile|any          - 网络类型
+ *   network=wifi|mobile|ethernet|any  - 网络类型，逗号分隔支持多值(OR)，如 network=wifi,mobile
  *   ssid=MyWiFi,~MyWiFi-.*          - WiFi名称，支持正则(前缀~)
  *   bssid=AA:BB:CC:DD:EE:FF          - WiFi MAC地址
  *   ipRanges=192.168.1.0/24,10.0.0.10 - IP段，逗号分隔
@@ -217,18 +217,29 @@ object NetworkChecker {
     }
 
     /**
-     * 检查网络类型
+     * 检查网络类型，支持逗号分隔多值(OR逻辑)
+     * 例如: "wifi" / "wifi,mobile" / "any"
      */
     private fun checkNetworkType(context: Context, type: String): Boolean {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val network = connectivityManager.activeNetwork ?: return type == "any"
-        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        val network = connectivityManager.activeNetwork
+        val capabilities = network?.let { connectivityManager.getNetworkCapabilities(it) }
 
-        return when (type.lowercase()) {
-            "wifi" -> capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-            "mobile" -> capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
-            "any" -> true
-            else -> true
+        val types = type.lowercase().split(",").map { it.trim() }
+
+        // 如果包含 "any"，直接返回 true（无网络时也通过）
+        if (types.contains("any")) return true
+
+        // 无网络时，所有类型都不匹配
+        if (capabilities == null) return false
+
+        return types.any { t ->
+            when (t) {
+                "wifi" -> capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                "mobile" -> capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                "ethernet" -> capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+                else -> true
+            }
         }
     }
 

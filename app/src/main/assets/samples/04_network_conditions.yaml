@@ -2,13 +2,14 @@
 # 演示：基于网络类型、WiFi SSID/BSSID、IP段的链接启用/禁用控制
 #
 # when/deny 条件格式 (URI query string):
-#   network=wifi|mobile|any          - 网络类型
+#   network=wifi|mobile|ethernet|any  - 网络类型，逗号分隔支持多值(OR)，如 network=wifi,mobile
 #   ssid=MyWiFi,~MyWiFi-.*          - WiFi名称，支持正则(前缀~)，逗号分隔多个
 #   bssid=AA:BB:CC:DD:EE:FF          - WiFi MAC地址，逗号分隔多个
 #   ipRanges=192.168.1.0/24,10.0.0.10 - IP段，逗号分隔
 #
 # 示例:
 #   when: network=wifi                    # 仅 WiFi 下启用
+#   when: network=wifi,mobile             # WiFi 或移动网络下启用
 #   when: network=wifi&ssid=MyHomeWiFi   # WiFi + 特定 SSID
 #   when: network=wifi&ipRanges=192.168.1.0/24  # WiFi + IP 段
 #   deny: network=mobile                  # 移动网络下禁用
@@ -25,36 +26,46 @@ links:
     dsn: mqtt://backup.example.com:1883
     when: network=mobile
 
-  # 示例3：WiFi 名称白名单（支持精确匹配和正则）
+  # 示例3：WiFi 或移动网络均可（多值 OR）
+  - id: wifi_or_mobile_mqtt
+    dsn: mqtt://general-server.example.com:1883
+    when: network=wifi,mobile
+
+  # 示例3b：仅以太网（适用于 Android TV、机顶盒等）
+  - id: ethernet_only_mqtt
+    dsn: mqtt://wired-server.local:1883
+    when: network=ethernet
+
+  # 示例4：WiFi 名称白名单（支持精确匹配和正则）
   - id: home_wifi_mqtt
     dsn: mqtt://home-server.local:1883
     when: network=wifi&ssid=MyHomeWiFi,MyHomeWiFi-5G
 
-  # 示例4：WiFi BSSID 白名单
+  # 示例5：WiFi BSSID 白名单
   - id: specific_ap_mqtt
     dsn: mqtt://192.168.1.1:1883
     when: network=wifi&bssid=AA:BB:CC:DD:EE:FF,11:22:33:44:55:66
 
-  # 示例5：IP 段限制（仅在指定 IP 范围内启用）
+  # 示例6：IP 段限制（仅在指定 IP 范围内启用）
   - id: local_network_mqtt
     dsn: mqtt://192.168.1.100:1883
     when: network=wifi&ipRanges=192.168.1.0/24,192.168.2.0/24,10.0.0.10
 
-  # 示例6：同时限制网络类型和 WiFi 条件
+  # 示例7：同时限制网络类型和 WiFi 条件
   - id: strict_home_mqtt
     dsn: mqtt://home-server.local:1883
     when: network=wifi&ssid=MyHomeWiFi&bssid=AA:BB:CC:DD:EE:FF&ipRanges=192.168.1.0/24
 
-  # 示例7：任意网络类型（默认行为，不设置 when）
+  # 示例8：任意网络类型（默认行为，不设置 when）
   - id: always_on_mqtt
     dsn: mqtt://any-server.example.com:1883
 
-  # 示例8：deny 条件 - 禁止在移动网络下连接
+  # 示例9：deny 条件 - 禁止在移动网络下连接
   - id: no_mobile_mqtt
     dsn: mqtt://secure-server.example.com:1883
     deny: network=mobile
 
-  # 示例9：同时使用 when 和 deny
+  # 示例10：同时使用 when 和 deny
   - id: complex_condition_mqtt
     dsn: mqtt://complex-server.example.com:1883
     when: network=wifi&ipRanges=192.168.1.0/24

@@ -64,7 +64,7 @@ protocol://[username:password@]host:port[?param1=value1&param2=value2...]
 ## 网络条件控制
 
 `when`/`deny` 字段支持：
-- `network=wifi|mobile|any`
+- `network=wifi|mobile|ethernet|any`（逗号分隔多值表示 OR，如 `network=wifi,mobile`）
 - `ssid=WiFi名称`（支持正则，前缀 `~`）
 - `bssid=MAC地址`
 - `ipRanges=192.168.1.0/24`（CIDR 格式）
