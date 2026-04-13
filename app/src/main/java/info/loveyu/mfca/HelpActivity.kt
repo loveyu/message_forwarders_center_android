@@ -194,7 +194,10 @@ private fun buildHtmlContent(content: String, fileName: String): String {
     val languageClass = if (isMarkdown) "" else " class=\"language-yaml\""
 
     val markdownScript = if (isMarkdown) """
-            document.getElementById('content').innerHTML = marked.parse(content);
+            var md = window.markdownit({ linkify: false, breaks: true });
+            md.renderer.rules.link_open = function() { return ''; };
+            md.renderer.rules.link_close = function() { return ''; };
+            document.getElementById('content-area').innerHTML = md.render(content);
             document.querySelectorAll('pre code').forEach(function(block) {
                 hljs.highlightElement(block);
             });
@@ -262,20 +265,20 @@ private fun buildHtmlContent(content: String, fileName: String): String {
         .content {
             height: 100%;
             overflow-y: auto;
-            padding: 16px;
+            padding: 8px;
             -webkit-overflow-scrolling: touch;
         }
 
         .code-wrapper {
             position: relative;
-            margin: 8px 0;
+            margin: 4px 0;
         }
 
         pre {
             background-color: var(--code-bg) !important;
             border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 12px !important;
+            border-radius: 4px;
+            padding: 8px !important;
             padding-right: 48px !important;
             overflow-x: auto;
             margin: 0;
@@ -339,12 +342,9 @@ private fun buildHtmlContent(content: String, fileName: String): String {
         }
 
         a {
-            color: var(--link-color);
+            color: var(--text-color);
             text-decoration: none;
-        }
-
-        a:hover {
-            text-decoration: underline;
+            pointer-events: none;
         }
 
         blockquote {
@@ -361,7 +361,7 @@ private fun buildHtmlContent(content: String, fileName: String): String {
 
         table th, table td {
             border: 1px solid var(--border-color);
-            padding: 6px 13px;
+            padding: 4px 8px;
         }
 
         table tr:nth-child(2n) {
@@ -371,12 +371,12 @@ private fun buildHtmlContent(content: String, fileName: String): String {
         hr {
             border: none;
             border-top: 1px solid var(--border-color);
-            margin: 24px 0;
+            margin: 12px 0;
         }
 
         h1, h2, h3, h4, h5, h6 {
-            margin-top: 24px;
-            margin-bottom: 16px;
+            margin-top: 16px;
+            margin-bottom: 8px;
             font-weight: 600;
             line-height: 1.25;
         }
@@ -390,7 +390,7 @@ private fun buildHtmlContent(content: String, fileName: String): String {
 
         ul, ol {
             padding-left: 2em;
-            margin: 8px 0;
+            margin: 4px 0;
         }
 
         li + li {
@@ -417,7 +417,7 @@ private fun buildHtmlContent(content: String, fileName: String): String {
     </style>
 </head>
 <body>
-    <div class="content">
+    <div class="content" id="content-area">
         <pre><code id="content"$languageClass>${escapedContent}</code></pre>
     </div>
     <script>
@@ -493,7 +493,7 @@ private fun buildHtmlContent(content: String, fileName: String): String {
 
             loadScript('https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js', function() {
                 if (isMarkdown) {
-                    loadScript('https://cdn.jsdelivr.net/npm/marked@9.1.6/lib/marked.umd.js', function() {
+                    loadScript('https://cdn.jsdelivr.net/npm/markdown-it@14/dist/markdown-it.min.js', function() {
                         $markdownScript
                     });
                 } else {
