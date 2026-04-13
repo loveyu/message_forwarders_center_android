@@ -32,9 +32,9 @@ links:
 # ============================================
 # 输入配置
 # ============================================
-# link_id 支持字符串或数组：
-#   link_id: mqtt_broker                  # 单个 link（字符串）
-#   link_id: [mqtt_broker, ws_server]     # 多个 link（数组）
+# linkId 支持字符串或数组：
+#   linkId: mqtt_broker                  # 单个 link（字符串）
+#   linkId: [mqtt_broker, ws_server]     # 多个 link（数组）
 inputs:
   http:
     # HTTP Webhook 接收口 (Bearer 认证 + 指定路径)
@@ -207,4 +207,4 @@ deadLetter:
 quick_settings:
   # 输入法切换按钮：在服务通知栏显示"输入"按钮，点击弹出输入法选择器
   # 设为 false 可隐藏该按钮
-  input_method_switcher: true
+  inputMethodSwitcher: true

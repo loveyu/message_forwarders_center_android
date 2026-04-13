@@ -11,7 +11,7 @@ quick_settings:
   # 输入法切换按钮（默认 true）
   # 在服务通知栏显示"输入"按钮，点击弹出系统输入法选择器
   # 无论服务是否运行，该按钮都会显示在通知栏中
-  input_method_switcher: true
+  inputMethodSwitcher: true
 
   # 设为 false 可隐藏该按钮
-  # input_method_switcher: false
+  # inputMethodSwitcher: false

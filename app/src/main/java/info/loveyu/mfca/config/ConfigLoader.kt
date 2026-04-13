@@ -21,8 +21,8 @@ object ConfigLoader {
                 queues = parseQueues(data["queues"]),
                 outputs = parseOutputs(data["outputs"]),
                 rules = parseRules(data["rules"]),
-                deadLetter = parseDeadLetter(data["dead_letter"]),
-                quickSettings = parseQuickSettings(data["quick_settings"])
+                deadLetter = parseDeadLetter(data["deadLetter"]),
+                quickSettings = parseQuickSettings(data["quickSettings"])
             )
         } catch (e: Exception) {
             throw ConfigLoadException("Failed to parse config: ${e.message}", e)
@@ -47,7 +47,7 @@ object ConfigLoader {
                 LinkConfig(
                     id = map["id"] as? String ?: return@mapNotNull null,
                     dsn = map["dsn"] as? String,
-                    clientId = (map["client_id"] as? String),
+                    clientId = (map["clientId"] as? String),
                     host = map["host"] as? String,
                     port = (map["port"] as? Number)?.toInt(),
                     reconnect = null,
@@ -90,7 +90,7 @@ object ConfigLoader {
                     name = map["name"] as? String ?: return@mapNotNull null,
                     dsn = map["dsn"] as? String ?: return@mapNotNull null,
                     paths = (map["paths"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
-                    linkId = map["link_id"] as? String,
+                    linkId = map["linkId"] as? String,
                     whenCondition = map["when"] as? String,
                     deny = map["deny"] as? String
                 )
@@ -103,7 +103,7 @@ object ConfigLoader {
 
         return (link as List<*>).mapNotNull { input ->
             (input as? Map<String, Any>)?.let { map ->
-                val linkIds = parseStringOrList(map["link_id"])
+                val linkIds = parseStringOrList(map["linkId"])
                 if (linkIds.isEmpty()) return@mapNotNull null
                 LinkInputConfig(
                     name = map["name"] as? String ?: return@mapNotNull null,
@@ -183,9 +183,9 @@ object ConfigLoader {
             (config as? Map<String, Any>)?.let { map ->
                 result[name] = SqliteQueueConfig(
                     path = map["path"] as? String ?: "",
-                    batchSize = (map["batch_size"] as? Number)?.toInt() ?: 20,
-                    retryInterval = Duration(map["retry_interval"] as? String ?: "5s"),
-                    maxRetry = (map["max_retry"] as? Number)?.toInt() ?: 10,
+                    batchSize = (map["batchSize"] as? Number)?.toInt() ?: 20,
+                    retryInterval = Duration(map["retryInterval"] as? String ?: "5s"),
+                    maxRetry = (map["maxRetry"] as? Number)?.toInt() ?: 10,
                     backoff = parseBackoff(map["backoff"]),
                     cleanup = parseCleanup(map["cleanup"])
                 )
@@ -212,7 +212,7 @@ object ConfigLoader {
         if (cleanup == null) return null
         val map = cleanup as Map<String, Any>
         return CleanupConfig(
-            maxAge = Duration(map["max_age"] as? String ?: "7d")
+            maxAge = Duration(map["maxAge"] as? String ?: "7d")
         )
     }
 
@@ -250,7 +250,7 @@ object ConfigLoader {
         if (retry == null) return null
         val map = retry as Map<String, Any>
         return RetryConfig(
-            maxAttempts = (map["max_attempts"] as? Number)?.toInt() ?: 1,
+            maxAttempts = (map["maxAttempts"] as? Number)?.toInt() ?: 1,
             interval = Duration(map["interval"] as? String ?: "1s")
         )
     }
@@ -260,8 +260,8 @@ object ConfigLoader {
         val map = queue as Map<String, Any>
         return QueueRefConfig(
             priority = map["priority"] as? String,
-            memoryQueue = map["memory_queue"] as? String,
-            sqliteQueue = map["sqlite_queue"] as? String
+            memoryQueue = map["memoryQueue"] as? String,
+            sqliteQueue = map["sqliteQueue"] as? String
         )
     }
 
@@ -272,7 +272,7 @@ object ConfigLoader {
             (output as? Map<String, Any>)?.let { map ->
                 LinkOutputConfig(
                     name = map["name"] as? String ?: return@mapNotNull null,
-                    linkId = map["link_id"] as? String ?: return@mapNotNull null,
+                    linkId = map["linkId"] as? String ?: return@mapNotNull null,
                     role = parseLinkRole(map["role"] as? String),
                     topic = map["topic"] as? String,
                     queue = parseQueueRef(map["queue"]),
@@ -323,7 +323,7 @@ object ConfigLoader {
                     from = froms.first(),
                     froms = froms,
                     pipeline = parsePipeline(map["pipeline"]),
-                    onError = parsePipeline(map["on_error"]),
+                    onError = parsePipeline(map["onError"]),
                     whenCondition = map["when"] as? String,
                     deny = map["deny"] as? String
                 )
@@ -363,7 +363,7 @@ object ConfigLoader {
         val map = deadLetter as Map<String, Any>
         return DeadLetterConfig(
             enabled = map["enabled"] as? Boolean ?: false,
-            maxRetry = (map["max_retry"] as? Number)?.toInt() ?: 10,
+            maxRetry = (map["maxRetry"] as? Number)?.toInt() ?: 10,
             action = parsePipeline(map["action"])
         )
     }
@@ -375,7 +375,7 @@ object ConfigLoader {
 
         val map = quickSettings as Map<String, Any>
         return QuickSettingsConfig(
-            inputMethodSwitcher = map["input_method_switcher"] as? Boolean ?: true
+            inputMethodSwitcher = map["inputMethodSwitcher"] as? Boolean ?: true
         )
     }
 }

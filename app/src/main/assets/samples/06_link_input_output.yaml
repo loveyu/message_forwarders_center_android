@@ -2,9 +2,9 @@
 # 演示：MQTT/WebSocket/TCP 作为数据源或目标
 # 类型通过 DSN 协议自动判断
 #
-# link_id 支持字符串或数组：
-#   link_id: mqtt_broker                  # 单个 link
-#   link_id: [mqtt_broker, ws_server]     # 多个 link（同时订阅多个连接）
+# linkId 支持字符串或数组：
+#   linkId: mqtt_broker                  # 单个 link
+#   linkId: [mqtt_broker, ws_server]     # 多个 link（同时订阅多个连接）
 
 
 links:
@@ -28,9 +28,9 @@ inputs:
       linkId: ws_server
       role: consumer
 
-    # 示例：link_id 使用数组，同时从多个连接订阅相同主题
+    # 示例：linkId 使用数组，同时从多个连接订阅相同主题
     # - name: multi_source
-    #   link_id: [mqtt_broker, ws_server]
+    #   linkId: [mqtt_broker, ws_server]
     #   role: consumer
     #   topic: events/#
 

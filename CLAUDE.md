@@ -43,6 +43,16 @@ Message Forwarders Center Android - Android 消息转发中心，基于 Android 
 | 配置 | `config/` | YAML 配置加载器 |
 | HTTP 服务器 | `server/` | NanoHTTPD 实现 |
 
+## 配置文件规范
+
+**所有配置字段名称必须使用驼峰命名（camelCase），不支持下划线命名（snake_case）。**
+
+例如：
+- ✅ `linkId`, `clientId`, `batchSize`, `retryInterval`, `maxRetry`, `maxAge`
+- ❌ `link_id`, `client_id`, `batch_size`, `retry_interval`, `max_retry`, `max_age`
+
+例外：队列名称、ID 值、路径协议（`data://`, `sdcard://`）以及 YAML 注释不受此限制。
+
 ## 配置文件协议
 
 路径配置使用协议前缀：

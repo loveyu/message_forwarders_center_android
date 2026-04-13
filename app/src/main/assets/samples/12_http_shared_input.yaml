@@ -1,7 +1,7 @@
 # HTTP 共享输入示例
 # 演示：多个 HTTP input 共用同一个端口（Shared HTTP Input）
 #
-# 通过 links 定义 HTTP 服务器地址，inputs.http 中使用 link_id 引用该 link，
+# 通过 links 定义 HTTP 服务器地址，inputs.http 中使用 linkId 引用该 link，
 # 实现多个 input 共享同一个监听端口，各自有独立的认证和路径。
 #
 # 路由匹配规则：精确匹配优先，多个 input 匹配同一路径时按 YAML 定义顺序取第一个
@@ -14,22 +14,22 @@ links:
 
 inputs:
   http:
-    # 有 link_id → 共享服务器，DSN 仅 query 参数
+    # 有 linkId → 共享服务器，DSN 仅 query 参数
     # 通知接口：Bearer Token 认证
     - name: http_notify
-      link_id: http_server
+      linkId: http_server
       dsn: "?bearerToken=notify-secret-token"
       paths:
         - /notify
 
     # 管理接口：Basic 认证
     - name: http_admin
-      link_id: http_server
+      linkId: http_server
       dsn: "?basicAuth=user:pass"
       paths:
         - /admin
 
-    # 无 link_id → 独立服务器（完全向后兼容）
+    # 无 linkId → 独立服务器
     - name: http_standalone
       dsn: "http://0.0.0.0:31775?bearerToken=standalone-token"
       paths:

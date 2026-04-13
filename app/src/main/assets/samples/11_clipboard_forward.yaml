@@ -2,7 +2,7 @@
 # 场景：订阅多个 MQTT broker 的剪贴板消息，统一处理后写入本地剪贴板
 #
 # 新特性：
-#   link_id 支持字符串或数组，可同时订阅多个 link
+#   linkId 支持字符串或数组，可同时订阅多个 link
 #   from 支持字符串或数组，可匹配多个输入源
 
 
@@ -16,18 +16,18 @@ links:
 
 inputs:
   link:
-    # 方式1：link_id 使用数组，同时订阅多个 broker 的同一主题
+    # 方式1：linkId 使用数组，同时订阅多个 broker 的同一主题
     - name: mqtt_clipboard
-      link_id:
+      linkId:
         - mqtt_zzc
         - mqtt_home
       role: consumer
       topic: $share/phone-k50/phone-clipboard/#
       qos: 1
 
-    # 方式2：link_id 使用字符串（向后兼容）
+    # 方式2：linkId 使用字符串
     # - name: mqtt_zzc_clipboard
-    #   link_id: mqtt_zzc
+    #   linkId: mqtt_zzc
     #   role: consumer
     #   topic: $share/phone-k50/phone-clipboard/#
     #   qos: 1

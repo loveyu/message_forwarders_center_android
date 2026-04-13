@@ -579,20 +579,20 @@ private fun loadSampleFiles(context: Context): List<SampleFile> {
             description = "规则引擎 - 提取、过滤、检测"
         ),
         SampleFileInfo(
-            fileName = "11_full_demo.yaml",
-            description = "完整演示 - 智能家居场景"
-        ),
-        SampleFileInfo(
-            fileName = "12_clipboard_forward.yaml",
+            fileName = "11_clipboard_forward.yaml",
             description = "剪贴板转发 - MQTT 到本地剪贴板"
         ),
         SampleFileInfo(
-            fileName = "13_http_shared_input.yaml",
+            fileName = "12_http_shared_input.yaml",
             description = "HTTP 共享输入 - 多转发器共享输入配置"
         ),
         SampleFileInfo(
-            fileName = "14_quick_settings.yaml",
+            fileName = "13_quick_settings.yaml",
             description = "快捷设置 - 通知栏按钮开关"
+        ),
+        SampleFileInfo(
+            fileName = "99_full_demo.yaml",
+            description = "完整演示 - 智能家居场景"
         )
     )
 

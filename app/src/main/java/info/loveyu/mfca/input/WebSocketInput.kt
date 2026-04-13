@@ -21,6 +21,7 @@ class WebSocketInput(
         get() = LinkManager.getLink(config.linkId) as? info.loveyu.mfca.link.WebSocketLink
 
     override fun start() {
+        android.util.Log.d("WSINPUT", "WebSocketInput.start called: inputName=$inputName, linkId=${config.linkId}")
         val link = wsLink
         if (link == null) {
             LogManager.appendLog("WS", "WebSocket link not found: ${config.linkId}")
@@ -28,12 +29,15 @@ class WebSocketInput(
         }
 
         link.setOnMessageListener { data ->
+            android.util.Log.d("WSINPUT", "WebSocketInput.listener invoked: inputName=$inputName")
             val message = InputMessage(
                 source = inputName,
                 data = data,
                 headers = emptyMap()
             )
+            LogManager.appendLog("WS", "Message received: ${String(data).take(100)}")
             messageListener?.invoke(message)
+            android.util.Log.d("WSINPUT", "messageListener invoked, inputName=$inputName, listener=${messageListener != null}")
         }
 
         if (!link.isConnected()) {
@@ -52,6 +56,7 @@ class WebSocketInput(
     override fun isRunning(): Boolean = running
 
     override fun setOnMessageListener(listener: (InputMessage) -> Unit) {
+        android.util.Log.d("WSINPUT", "setOnMessageListener called for $inputName, listener=$listener")
         messageListener = listener
     }
 }

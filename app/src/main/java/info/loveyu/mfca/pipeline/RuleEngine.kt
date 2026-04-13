@@ -70,7 +70,14 @@ class RuleEngine(
      * 处理输入消息
      */
     fun process(inputMessage: InputMessage) {
-        val matchingRules = inputRulesMap[inputMessage.source] ?: return
+        android.util.Log.d("RULE", "NATIVE RuleEngine.process: source=${inputMessage.source}")
+        LogManager.appendLog("TRACE:RULE", "RuleEngine.process called: source=${inputMessage.source}, data=${String(inputMessage.data).take(50)}")
+        val matchingRules = inputRulesMap[inputMessage.source]
+        if (matchingRules == null) {
+            LogManager.appendLog("TRACE:RULE", "No rules found for source=${inputMessage.source}, inputRulesMap keys=${inputRulesMap.keys}")
+            return
+        }
+        LogManager.appendLog("TRACE:RULE", "Found ${matchingRules.size} matching rules for ${inputMessage.source}")
 
         matchingRules.forEach { rule ->
             scope.launch {

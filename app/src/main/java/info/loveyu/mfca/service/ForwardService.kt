@@ -391,13 +391,19 @@ class ForwardService : Service() {
     }
 
     private fun handleMessage(message: InputMessage) {
-        if (!isReceivingEnabled) return
+        android.util.Log.d("FS", "NATIVE handleMessage: source=${message.source}, data=${String(message.data).take(30)}")
+        LogManager.appendLog("TRACE:FS", "handleMessage called: source=${message.source}")
+        if (!isReceivingEnabled) {
+            LogManager.appendLog("TRACE:FS", "Receiving disabled, dropping message")
+            return
+        }
 
         receivedCount++
         onStatsChanged?.invoke()
         updateNotification()
 
         // Process through rule engine
+        LogManager.appendLog("TRACE:FS", "Calling ruleEngine.process for ${message.source}")
         ruleEngine?.process(message)
 
         // Record headers

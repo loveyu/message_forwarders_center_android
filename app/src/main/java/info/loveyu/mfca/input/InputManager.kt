@@ -137,7 +137,7 @@ object InputManager {
             val ids = if (linkConfig.linkIds.isNotEmpty()) linkConfig.linkIds else listOf(linkConfig.linkId)
             ids.forEach { linkId ->
                 val perLinkConfig = linkConfig.copy(linkId = linkId)
-                val input = createLinkInput(perLinkConfig)
+                val input = createLinkInput(perLinkConfig, config.links)
                 entries.add(InputEntry(
                     input = input,
                     config = InputSourceConfig(
@@ -310,10 +310,12 @@ object InputManager {
         }?.input?.getError()
     }
 
-    private fun createLinkInput(config: info.loveyu.mfca.config.LinkInputConfig): InputSource {
-        return when {
-            config.linkId.contains("mqtt", ignoreCase = true) -> MqttInput(config)
-            config.linkId.contains("ws", ignoreCase = true) -> WebSocketInput(config)
+    private fun createLinkInput(config: info.loveyu.mfca.config.LinkInputConfig, links: List<info.loveyu.mfca.config.LinkConfig>): InputSource {
+        val linkConfig = links.find { it.id == config.linkId }
+        val linkType = linkConfig?.let { info.loveyu.mfca.config.LinkType.fromDsn(it.dsn) } ?: info.loveyu.mfca.config.LinkType.mqtt
+        return when (linkType) {
+            info.loveyu.mfca.config.LinkType.mqtt -> MqttInput(config)
+            info.loveyu.mfca.config.LinkType.websocket -> WebSocketInput(config)
             else -> TcpInput(config)
         }
     }
