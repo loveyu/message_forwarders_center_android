@@ -18,6 +18,18 @@ links:
   # - id: ws_auth
   #   url: ws://localhost:8080/ws?username=foo&password=foo
 
+  # Gotify WebSocket - 使用 protocol=gotify 启用 Gotify 协议
+  # URL 格式: ws(s)://host:port?token=xxx&protocol=gotify
+  # 自动添加 /stream 路径，token 通过 query 参数传递
+  - id: gotify_server
+    url: ws://gotify.example.com:80?token=YOUR_CLIENT_TOKEN&protocol=gotify&automaticReconnect=true&reconnectInterval=5
+
+  # Gotify WSS (TLS) - 生产环境推荐
+  # - id: gotify_secure
+  #   url: wss://gotify.example.com:443?token=YOUR_CLIENT_TOKEN&protocol=gotify&automaticReconnect=true
+  #   tls:
+  #     ca: /data/certs/ca.pem
+
 inputs:
   link:
     - name: ws_input

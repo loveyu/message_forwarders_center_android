@@ -14,6 +14,7 @@ import okio.ByteString
 import java.net.InetAddress
 import java.net.URI
 import java.net.URLDecoder
+import java.net.URLEncoder
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
@@ -22,9 +23,13 @@ import java.util.concurrent.TimeUnit
  * URL 参数支持：
  *   readTimeout, writeTimeout, pingInterval (秒)
  *   automaticReconnect, reconnectInterval, reconnectMaxInterval (秒)
- *   username, password (认证)
+ *   username, password (Basic 认证)
+ *   token (Gotify token 认证)
+ *   protocol=gotify (启用 Gotify WebSocket 协议，自动添加 /stream 路径)
  */
 class WebSocketLink(override val config: LinkConfig) : Link {
+
+    private var isGotifyProtocol = false
 
     override val id: String = config.id
 
@@ -60,6 +65,9 @@ class WebSocketLink(override val config: LinkConfig) : Link {
         val (cleanUrl, parsedParams) = parseUrlParams(urlStr)
         params = parsedParams
 
+        // Check for Gotify protocol
+        isGotifyProtocol = params["protocol"] == "gotify"
+
         // Reconnect settings
         autoReconnect = params["automaticReconnect"]?.toBoolean()
             ?: (config.reconnect?.enabled ?: true)
@@ -68,11 +76,28 @@ class WebSocketLink(override val config: LinkConfig) : Link {
         maxReconnectDelay = params["reconnectMaxInterval"]?.toLongOrNull()
             ?: config.reconnect?.maxInterval?.timeUnit?.toSeconds(config.reconnect?.maxInterval?.millis ?: 30000) ?: 30L
 
-        LogManager.appendLog("WS", "Connecting to $cleanUrl")
+        LogManager.appendLog("WS", "Connecting to $cleanUrl (gotify=$isGotifyProtocol)")
 
         val client = buildOkHttpClient()
 
-        val requestBuilder = Request.Builder().url(cleanUrl)
+        // Build URL - for Gotify, add /stream path if not present
+        val baseUrl = if (isGotifyProtocol && !cleanUrl.contains("/stream")) {
+            cleanUrl.trimEnd('/') + "/stream"
+        } else {
+            cleanUrl
+        }
+
+        // For Gotify, token can be in params (extracted from query) - rebuild query with token
+        val finalUrl = if (isGotifyProtocol && params["token"] != null) {
+            val queryParams = params.filterKeys { it != "protocol" }
+                .map { (k, v) -> "$k=${URLEncoder.encode(v, "UTF-8")}" }
+                .joinToString("&")
+            "$baseUrl?$queryParams"
+        } else {
+            baseUrl
+        }
+
+        val requestBuilder = Request.Builder().url(finalUrl)
 
         // Basic auth from params
         params["username"]?.let { user ->
@@ -82,8 +107,9 @@ class WebSocketLink(override val config: LinkConfig) : Link {
             }
         }
 
-        val request = requestBuilder.build()
+        LogManager.appendLog("WS", "Final URL: $finalUrl")
 
+        val request = requestBuilder.build()
         val ws = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 connected = true
