@@ -13,6 +13,7 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import info.loveyu.mfca.InputMethodFloatingActivity
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
 import info.loveyu.mfca.config.AppConfig
@@ -534,6 +535,20 @@ class ForwardService : Service() {
                 Icon.createWithResource(this, R.drawable.ic_notification_forward),
                 forwardTitle,
                 forwardPendingIntent
+            ).build())
+        }
+
+        // Input method switch action (always visible, controlled by config)
+        if (currentConfig?.quickSettings?.inputMethodSwitcher != false) {
+            val inputMethodIntent = Intent(this, InputMethodFloatingActivity::class.java)
+            val inputMethodPendingIntent = PendingIntent.getActivity(
+                this, 3, inputMethodIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.addAction(Notification.Action.Builder(
+                Icon.createWithResource(this, R.drawable.ic_tile_input_method),
+                getString(R.string.notification_action_input_method),
+                inputMethodPendingIntent
             ).build())
         }
 

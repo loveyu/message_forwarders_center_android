@@ -3,6 +3,13 @@ package info.loveyu.mfca.config
 import java.util.concurrent.TimeUnit
 
 /**
+ * 快捷设置配置（通知栏按钮开关）
+ */
+data class QuickSettingsConfig(
+    val inputMethodSwitcher: Boolean = true
+)
+
+/**
  * 应用完整配置
  */
 data class AppConfig(
@@ -12,7 +19,8 @@ data class AppConfig(
     val queues: QueuesConfig = QueuesConfig(),
     val outputs: OutputsConfig = OutputsConfig(),
     val rules: List<RuleConfig> = emptyList(),
-    val deadLetter: DeadLetterConfig = DeadLetterConfig()
+    val deadLetter: DeadLetterConfig = DeadLetterConfig(),
+    val quickSettings: QuickSettingsConfig = QuickSettingsConfig()
 )
 
 /**

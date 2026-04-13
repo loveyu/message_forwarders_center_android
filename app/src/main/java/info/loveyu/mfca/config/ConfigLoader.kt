@@ -21,7 +21,8 @@ object ConfigLoader {
                 queues = parseQueues(data["queues"]),
                 outputs = parseOutputs(data["outputs"]),
                 rules = parseRules(data["rules"]),
-                deadLetter = parseDeadLetter(data["dead_letter"])
+                deadLetter = parseDeadLetter(data["dead_letter"]),
+                quickSettings = parseQuickSettings(data["quick_settings"])
             )
         } catch (e: Exception) {
             throw ConfigLoadException("Failed to parse config: ${e.message}", e)
@@ -365,6 +366,17 @@ object ConfigLoader {
             enabled = map["enabled"] as? Boolean ?: false,
             maxRetry = (map["max_retry"] as? Number)?.toInt() ?: 10,
             action = parsePipeline(map["action"])
+        )
+    }
+
+    // ==================== Quick Settings Parsing ====================
+
+    private fun parseQuickSettings(quickSettings: Any?): QuickSettingsConfig {
+        if (quickSettings == null) return QuickSettingsConfig()
+
+        val map = quickSettings as Map<String, Any>
+        return QuickSettingsConfig(
+            inputMethodSwitcher = map["input_method_switcher"] as? Boolean ?: true
         )
     }
 }

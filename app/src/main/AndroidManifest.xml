@@ -78,6 +78,16 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- 输入法切换浮动Activity -->
+        <activity
+            android:name=".InputMethodFloatingActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:finishOnTaskLaunch="true"
+            android:noHistory="true"
+            android:taskAffinity="" />
+
         <receiver
             android:name=".receiver.BootCompletedReceiver"
             android:exported="false">

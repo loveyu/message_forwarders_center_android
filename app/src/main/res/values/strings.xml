@@ -73,4 +73,6 @@
     <string name="system_settings">系统设置</string>
     <string name="component_status">组件状态</string>
     <string name="github">GitHub</string>
+    <string name="tile_input_method_switcher">切换输入法</string>
+    <string name="notification_action_input_method">输入</string>
 </resources>
