@@ -13,7 +13,6 @@
 #   when: network=wifi&ipRanges=192.168.1.0/24  # WiFi + IP 段
 #   deny: network=mobile                  # 移动网络下禁用
 
-version: "0.1"
 
 links:
   # 示例1：仅在 WiFi 环境下启用

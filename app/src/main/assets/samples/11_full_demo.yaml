@@ -5,7 +5,6 @@
 #   when: network=wifi,ssid=MyWiFi,bssid=AA:BB:CC:DD:EE:FF,ipRanges=192.168.1.0/24
 #   deny: network=mobile
 
-version: "0.1"
 
 # ============================================
 # 链接配置（支持 MQTT / WebSocket / TCP）
@@ -201,3 +200,11 @@ deadLetter:
   action:
     # 失败后保存到独立文件
     - to: [raw_data_log]
+
+# ============================================
+# 快捷设置配置（通知栏按钮开关）
+# ============================================
+quick_settings:
+  # 输入法切换按钮：在服务通知栏显示"输入"按钮，点击弹出输入法选择器
+  # 设为 false 可隐藏该按钮
+  input_method_switcher: true

@@ -7,5 +7,4 @@ object ApiConstants {
     const val ENDPOINT_VERSION = "/api/version"
     const val CONNECT_TIMEOUT = 5000
     const val READ_TIMEOUT = 10000
-    const val VERSION_NAME = "0.1.0"
 }

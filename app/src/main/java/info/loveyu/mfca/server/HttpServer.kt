@@ -2,6 +2,7 @@ package info.loveyu.mfca.server
 
 import android.util.Log
 import fi.iki.elonen.NanoHTTPD
+import info.loveyu.mfca.BuildConfig
 import info.loveyu.mfca.constants.ApiConstants
 import java.io.IOException
 
@@ -42,7 +43,7 @@ class HttpServer(
                 newFixedLengthResponse(
                     Response.Status.OK,
                     "application/json",
-                    """{"version":"${ApiConstants.VERSION_NAME}"}"""
+                    """{"version":"${BuildConfig.VERSION_NAME}"}"""
                 )
             }
 

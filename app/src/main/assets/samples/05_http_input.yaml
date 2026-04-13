@@ -11,7 +11,6 @@
 #   methods=GET,POST                   - 允许的 HTTP 方法(空则不限)
 # paths: dsn 同级字段，YAML 数组格式，空则允许全部路径
 
-version: "0.1"
 
 inputs:
   http:

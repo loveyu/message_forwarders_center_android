@@ -2,7 +2,6 @@
 # 演示：MQTT 链接配置，类型通过 DSN 协议自动判断 (mqtt:// → mqtt, mqtts:// → mqtt)
 # 所有连接参数通过 DSN 的 query 部分传递，支持 URL 编码
 
-version: "0.1"
 
 links:
   - id: local_mqtt

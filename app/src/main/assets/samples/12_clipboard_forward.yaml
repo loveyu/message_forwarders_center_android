@@ -5,7 +5,6 @@
 #   link_id 支持字符串或数组，可同时订阅多个 link
 #   from 支持字符串或数组，可匹配多个输入源
 
-version: "0.1"
 
 links:
   - id: mqtt_zzc

@@ -6,7 +6,6 @@
 #
 # 路由匹配规则：精确匹配优先，多个 input 匹配同一路径时按 YAML 定义顺序取第一个
 
-version: "0.1"
 
 # 定义 HTTP 链接（仅 http://host:port，无额外参数）
 links:

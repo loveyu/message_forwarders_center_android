@@ -2,7 +2,6 @@
 # 演示：WebSocket 链接配置，类型通过 URL 协议自动判断 (ws:// → websocket, wss:// → websocket)
 # 所有参数通过 URL query 部分传递
 
-version: "0.1"
 
 links:
   # 标准 WebSocket - 类型从 URL 自动识别

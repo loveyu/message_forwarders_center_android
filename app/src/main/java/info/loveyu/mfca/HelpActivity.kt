@@ -205,6 +205,7 @@ private fun buildHtmlContent(content: String, fileName: String): String {
 
     val isMarkdown = fileName.endsWith(".md", ignoreCase = true)
     val languageClass = if (isMarkdown) "" else " class=\"language-yaml\""
+    val viewClass = if (isMarkdown) "md-view" else "yaml-view"
 
     val markdownScript = if (isMarkdown) """
             var md = window.markdownit({ linkify: false, breaks: true });
@@ -217,7 +218,6 @@ private fun buildHtmlContent(content: String, fileName: String): String {
             addCopyButtons();
     """ else """
             hljs.highlightElement(document.getElementById('content'));
-            addCopyButtons();
     """
 
     return """
@@ -282,12 +282,23 @@ private fun buildHtmlContent(content: String, fileName: String): String {
             -webkit-overflow-scrolling: touch;
         }
 
-        .code-wrapper {
+        /* YAML 文件：顶级代码块无装饰 */
+        .yaml-view pre {
+            background-color: transparent !important;
+            border: none;
+            border-radius: 0;
+            padding: 0 !important;
+            overflow-x: auto;
+            margin: 0;
+        }
+
+        /* MD 文件：内部代码块有边框背景 */
+        .md-view .code-wrapper {
             position: relative;
             margin: 4px 0;
         }
 
-        pre {
+        .md-view pre {
             background-color: var(--code-bg) !important;
             border: 1px solid var(--border-color);
             border-radius: 4px;
@@ -370,6 +381,7 @@ private fun buildHtmlContent(content: String, fileName: String): String {
         table {
             border-collapse: collapse;
             width: 100%;
+            min-width: 800px;
         }
 
         table th, table td {
@@ -430,7 +442,7 @@ private fun buildHtmlContent(content: String, fileName: String): String {
     </style>
 </head>
 <body>
-    <div class="content" id="content-area">
+    <div class="content $viewClass" id="content-area">
         <pre><code id="content"$languageClass>${escapedContent}</code></pre>
     </div>
     <script>
@@ -577,6 +589,10 @@ private fun loadSampleFiles(context: Context): List<SampleFile> {
         SampleFileInfo(
             fileName = "13_http_shared_input.yaml",
             description = "HTTP 共享输入 - 多转发器共享输入配置"
+        ),
+        SampleFileInfo(
+            fileName = "14_quick_settings.yaml",
+            description = "快捷设置 - 通知栏按钮开关"
         )
     )
 

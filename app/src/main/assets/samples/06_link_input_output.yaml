@@ -6,7 +6,6 @@
 #   link_id: mqtt_broker                  # 单个 link
 #   link_id: [mqtt_broker, ws_server]     # 多个 link（同时订阅多个连接）
 
-version: "0.1"
 
 links:
   - id: mqtt_broker

@@ -15,7 +15,7 @@ object ConfigLoader {
                 ?: throw IllegalArgumentException("Invalid YAML format")
 
             AppConfig(
-                version = data["version"] as? String ?: "0.1",
+                version = data["version"] as? String ?: "",
                 links = parseLinks(data["links"]),
                 inputs = parseInputs(data["inputs"]),
                 queues = parseQueues(data["queues"]),

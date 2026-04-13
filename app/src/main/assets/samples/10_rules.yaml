@@ -5,7 +5,6 @@
 #   from: sensor_data                     # 单个输入源（字符串）
 #   from: [sensor_data, filtered_clipboard]  # 多个输入源（数组，任一输入源匹配时触发）
 
-version: "0.1"
 
 links:
   - id: mqtt_broker

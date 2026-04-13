@@ -18,6 +18,8 @@
 | `10_rules.yaml` | 规则引擎 - 提取、过滤、检测 |
 | `11_full_demo.yaml` | **完整演示** - 智能家居场景 |
 | `12_clipboard_forward.yaml` | 剪贴板转发 - MQTT 到本地剪贴板 |
+| `13_http_shared_input.yaml` | HTTP 共享端口 - 多输入共用端口 |
+| `14_quick_settings.yaml` | **快捷设置** - 通知栏按钮开关 |
 
 ## 链接配置说明
 
