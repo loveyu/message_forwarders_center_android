@@ -29,14 +29,14 @@ class HttpOutput(
                 try {
                     val result = doSend(item)
                     if (result is OutputResult.Success) {
-                        LogManager.appendLog("HTTP", "HTTP output $name succeeded (${result.responseCode})")
+                        LogManager.log("HTTP", "HTTP output $name succeeded (${result.responseCode})")
                         callback?.invoke(true)
                         return@thread
                     } else {
-                        LogManager.appendLog("HTTP", "HTTP output $name failed: ${(result as? OutputResult.Failure)?.error}")
+                        LogManager.log("HTTP", "HTTP output $name failed: ${(result as? OutputResult.Failure)?.error}")
                     }
                 } catch (e: Exception) {
-                    LogManager.appendLog("HTTP", "HTTP output $name error: ${e.message}")
+                    LogManager.log("HTTP", "HTTP output $name error: ${e.message}")
                 }
 
                 attempt++

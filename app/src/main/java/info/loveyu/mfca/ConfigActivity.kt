@@ -25,7 +25,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -119,22 +118,22 @@ fun ConfigScreenContent(
         }
 
         isLoading = true
-        LogManager.appendLog("CONFIG", "开始下载配置: $configUrl")
+        LogManager.log("CONFIG", "开始下载配置: $configUrl")
 
         ConfigDownloader.downloadConfig(configUrl) { result ->
             isLoading = false
             result.fold(
                 onSuccess = { content ->
-                    LogManager.appendLog("CONFIG", "配置下载成功，开始解析...")
+                    LogManager.log("CONFIG", "配置下载成功，开始解析...")
 
                     try {
                         val config = ConfigLoader.loadConfig(content)
-                        LogManager.appendLog("CONFIG", "配置解析成功，版本: ${config.version}")
+                        LogManager.log("CONFIG", "配置解析成功，版本: ${config.version}")
 
                         val currentConfig = preferences.loadFullConfig()
                         if (currentConfig != null) {
                             ConfigBackupManager.backupCurrentConfig(context, currentConfig)
-                            LogManager.appendLog("CONFIG", "原配置已备份")
+                            LogManager.log("CONFIG", "原配置已备份")
                         }
 
                         preferences.saveFullConfig(content)
@@ -142,19 +141,19 @@ fun ConfigScreenContent(
 
                         val success = ForwardService.loadConfig(content, configUrl)
                         if (success) {
-                            LogManager.appendLog("CONFIG", "YAML配置应用成功")
+                            LogManager.log("CONFIG", "YAML配置应用成功")
                             Toast.makeText(context, R.string.config_download_success, Toast.LENGTH_SHORT).show()
                         } else {
-                            LogManager.appendLog("CONFIG", "配置加载失败")
+                            LogManager.log("CONFIG", "配置加载失败")
                             Toast.makeText(context, R.string.config_validate_failed, Toast.LENGTH_SHORT).show()
                         }
                     } catch (e: Exception) {
-                        LogManager.appendLog("CONFIG", "配置解析失败: ${e.message}")
+                        LogManager.log("CONFIG", "配置解析失败: ${e.message}")
                         Toast.makeText(context, R.string.config_validate_failed, Toast.LENGTH_SHORT).show()
                     }
                 },
                 onFailure = { error ->
-                    LogManager.appendLog("CONFIG", "配置下载失败: ${error.message}")
+                    LogManager.log("CONFIG", "配置下载失败: ${error.message}")
                     Toast.makeText(context, R.string.config_download_failed, Toast.LENGTH_SHORT).show()
                 }
             )
@@ -166,22 +165,22 @@ fun ConfigScreenContent(
         if (savedConfig != null) {
             try {
                 ConfigLoader.loadConfig(savedConfig)
-                LogManager.appendLog("CONFIG", "配置解析成功")
+                LogManager.log("CONFIG", "配置解析成功")
 
                 val success = ForwardService.loadConfig(savedConfig)
                 if (success) {
-                    LogManager.appendLog("CONFIG", "配置重载成功")
+                    LogManager.log("CONFIG", "配置重载成功")
                     Toast.makeText(context, R.string.config_reload_success, Toast.LENGTH_SHORT).show()
                 } else {
-                    LogManager.appendLog("CONFIG", "配置重载失败")
+                    LogManager.log("CONFIG", "配置重载失败")
                     Toast.makeText(context, R.string.config_reload_failed, Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
-                LogManager.appendLog("CONFIG", "配置重载失败: ${e.message}")
+                LogManager.log("CONFIG", "配置重载失败: ${e.message}")
                 Toast.makeText(context, R.string.config_reload_failed, Toast.LENGTH_SHORT).show()
             }
         } else {
-            LogManager.appendLog("CONFIG", "无保存的配置")
+            LogManager.log("CONFIG", "无保存的配置")
             Toast.makeText(context, R.string.config_reload_failed, Toast.LENGTH_SHORT).show()
         }
     }
@@ -200,14 +199,14 @@ fun ConfigScreenContent(
 
                 val success = ForwardService.loadConfig(content)
                 if (success) {
-                    LogManager.appendLog("CONFIG", "已恢复备份: ${backup.displayName}")
+                    LogManager.log("CONFIG", "已恢复备份: ${backup.displayName}")
                     Toast.makeText(context, R.string.config_restore_success, Toast.LENGTH_SHORT).show()
                 } else {
-                    LogManager.appendLog("CONFIG", "备份恢复失败")
+                    LogManager.log("CONFIG", "备份恢复失败")
                     Toast.makeText(context, R.string.config_restore_failed, Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
-                LogManager.appendLog("CONFIG", "备份恢复失败: ${e.message}")
+                LogManager.log("CONFIG", "备份恢复失败: ${e.message}")
                 Toast.makeText(context, R.string.config_restore_failed, Toast.LENGTH_SHORT).show()
             }
         } else {
@@ -218,14 +217,14 @@ fun ConfigScreenContent(
     fun handleDeleteBackup(backup: ConfigBackupManager.BackupInfo) {
         if (ConfigBackupManager.deleteBackup(backup)) {
             backupList = ConfigBackupManager.listBackups(context)
-            LogManager.appendLog("CONFIG", "已删除备份: ${backup.displayName}")
+            LogManager.log("CONFIG", "已删除备份: ${backup.displayName}")
         }
     }
 
     fun handleClearAllBackups() {
         ConfigBackupManager.clearAllBackups(context)
         backupList = ConfigBackupManager.listBackups(context)
-        LogManager.appendLog("CONFIG", "已清空所有备份")
+        LogManager.log("CONFIG", "已清空所有备份")
     }
 
     Scaffold(

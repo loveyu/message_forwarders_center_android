@@ -21,7 +21,7 @@ class WebSocketOutput(
     override fun send(item: QueueItem, callback: ((Boolean) -> Unit)?) {
         val link = wsLink
         if (link == null) {
-            LogManager.appendLog("WS", "WebSocket link not found: ${config.linkId}")
+            LogManager.log("WS", "WebSocket link not found: ${config.linkId}")
             callback?.invoke(false)
             return
         }

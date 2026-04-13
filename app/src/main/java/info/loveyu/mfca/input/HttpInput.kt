@@ -33,7 +33,7 @@ class HttpInput(
             HttpInputDsnParser.parse(httpConfig.dsn)
         } catch (e: Exception) {
             error = "DSN 解析失败: ${e.message}"
-            LogManager.appendLog("HTTP", "DSN parse error for $inputName: ${e.message}")
+            LogManager.log("HTTP", "DSN parse error for $inputName: ${e.message}")
             // Fallback config so NanoHTTPD doesn't crash
             HttpInputParsedConfig(listen = "0.0.0.0", port = 0)
         }
@@ -41,19 +41,19 @@ class HttpInput(
 
     override fun start() {
         if (error != null) {
-            LogManager.appendLog("HTTP", "HTTP input $inputName skipped: ${error}")
+            LogManager.log("HTTP", "HTTP input $inputName skipped: ${error}")
             return
         }
         try {
             start(SOCKET_READ_TIMEOUT, false)
             running = true
-            LogManager.appendLog("HTTP", "HTTP input started: $inputName on ${parsedConfig.listen}:${parsedConfig.port} paths=${httpConfig.paths}")
+            LogManager.log("HTTP", "HTTP input started: $inputName on ${parsedConfig.listen}:${parsedConfig.port} paths=${httpConfig.paths}")
         } catch (e: BindException) {
             error = "端口 ${parsedConfig.port} 已被占用"
-            LogManager.appendLog("HTTP", "HTTP input $inputName port conflict: ${parsedConfig.port} - ${e.message}")
+            LogManager.log("HTTP", "HTTP input $inputName port conflict: ${parsedConfig.port} - ${e.message}")
         } catch (e: Exception) {
             error = "启动失败: ${e.message}"
-            LogManager.appendLog("HTTP", "Failed to start HTTP input: $inputName - ${e.message}")
+            LogManager.log("HTTP", "Failed to start HTTP input: $inputName - ${e.message}")
         }
     }
 
@@ -61,9 +61,9 @@ class HttpInput(
         running = false
         try {
             super.stop()
-            LogManager.appendLog("HTTP", "HTTP input stopped: $inputName")
+            LogManager.log("HTTP", "HTTP input stopped: $inputName")
         } catch (e: Exception) {
-            LogManager.appendLog("HTTP", "Error stopping HTTP input: $inputName - ${e.message}")
+            LogManager.log("HTTP", "Error stopping HTTP input: $inputName - ${e.message}")
         }
     }
 
@@ -81,7 +81,7 @@ class HttpInput(
         // IP access control
         val remoteIp = session.remoteIpAddress
         if (!checkIpAccess(remoteIp, parsedConfig)) {
-            LogManager.appendLog("HTTP", "IP denied: $remoteIp for $inputName")
+            LogManager.log("HTTP", "IP denied: $remoteIp for $inputName")
             return newFixedLengthResponse(
                 Response.Status.FORBIDDEN,
                 MIME_PLAINTEXT,
@@ -266,7 +266,7 @@ class HttpInput(
                 )
 
                 messageListener?.invoke(message)
-                LogManager.appendLog("HTTP", "Message received from $sourceName path=$uri")
+                LogManager.log("HTTP", "Message received from $sourceName path=$uri")
 
                 return NanoHTTPD.newFixedLengthResponse(
                     NanoHTTPD.Response.Status.OK,
@@ -274,7 +274,7 @@ class HttpInput(
                     "OK"
                 )
             } catch (e: Exception) {
-                LogManager.appendLog("HTTP", "Error processing request: ${e.message}")
+                LogManager.log("HTTP", "Error processing request: ${e.message}")
                 return NanoHTTPD.newFixedLengthResponse(
                     NanoHTTPD.Response.Status.INTERNAL_ERROR,
                     NanoHTTPD.MIME_PLAINTEXT,
@@ -307,7 +307,7 @@ class HttpVirtualInput(
             HttpInputDsnParser.parse(httpConfig.dsn)
         } catch (e: Exception) {
             error = "DSN 解析失败: ${e.message}"
-            LogManager.appendLog("HTTP", "DSN parse error for virtual input $inputName: ${e.message}")
+            LogManager.log("HTTP", "DSN parse error for virtual input $inputName: ${e.message}")
             HttpInputParsedConfig(listen = "0.0.0.0", port = 0)
         }
     }
@@ -345,7 +345,7 @@ class HttpVirtualInput(
         // IP access control
         val remoteIp = session.remoteIpAddress
         if (!HttpInput.checkIpAccess(remoteIp, parsedConfig)) {
-            LogManager.appendLog("HTTP", "IP denied: $remoteIp for $inputName")
+            LogManager.log("HTTP", "IP denied: $remoteIp for $inputName")
             return NanoHTTPD.newFixedLengthResponse(
                 NanoHTTPD.Response.Status.FORBIDDEN,
                 NanoHTTPD.MIME_PLAINTEXT,

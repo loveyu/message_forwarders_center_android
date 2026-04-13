@@ -84,7 +84,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
             maxReconnectDelay = params["reconnectMaxInterval"]?.toLongOrNull()
                 ?: config.reconnect?.maxInterval?.timeUnit?.toSeconds(config.reconnect?.maxInterval?.millis ?: 30000) ?: 30L
 
-            LogManager.appendLog("WS", "Connecting to $cleanUrl (gotify=$isGotifyProtocol)")
+            LogManager.log("WS", "Connecting to $cleanUrl (gotify=$isGotifyProtocol)")
 
             val client = buildOkHttpClient()
 
@@ -115,7 +115,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
                 }
             }
 
-            LogManager.appendLog("WS", "Final URL: $finalUrl")
+            LogManager.log("WS", "Final URL: $finalUrl")
 
             val request = requestBuilder.build()
             val ws = client.newWebSocket(request, object : WebSocketListener() {
@@ -124,35 +124,35 @@ class WebSocketLink(override val config: LinkConfig) : Link {
                     connecting = false
                     reconnectJob?.cancel()
                     lastHandshake = response.handshake
-                    LogManager.appendLog("WS", "Connected: $id")
+                    LogManager.log("WS", "Connected: $id")
                 }
 
                 override fun onMessage(webSocket: WebSocket, text: String) {
                     messageListener?.invoke(text.toByteArray())
-                    LogManager.appendLog("WS", "Message received: ${text.take(100)}")
+                    LogManager.log("WS", "Message received: ${text.take(100)}")
                 }
 
                 override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
                     messageListener?.invoke(bytes.toByteArray())
-                    LogManager.appendLog("WS", "Message received: ${bytes.size} bytes")
+                    LogManager.log("WS", "Message received: ${bytes.size} bytes")
                 }
 
                 override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                    LogManager.appendLog("WS", "Closing: $code $reason")
+                    LogManager.log("WS", "Closing: $code $reason")
                     webSocket.close(1000, null)
                 }
 
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                     connected = false
                     connecting = false
-                    LogManager.appendLog("WS", "Closed: $code $reason")
+                    LogManager.log("WS", "Closed: $code $reason")
                     scheduleReconnect()
                 }
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                     connected = false
                     connecting = false
-                    LogManager.appendLog("WS", "Error: ${t.message}")
+                    LogManager.log("WS", "Error: ${t.message}")
                     errorListener?.invoke(t as? Exception ?: Exception(t.message))
                     scheduleReconnect()
                 }
@@ -181,7 +181,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
             kotlinx.coroutines.delay(reconnectDelay * 1000)
-            LogManager.appendLog("WS", "Attempting reconnect: $id")
+            LogManager.log("WS", "Attempting reconnect: $id")
             reconnectCallback?.invoke() ?: connect()
         }
     }
@@ -193,14 +193,14 @@ class WebSocketLink(override val config: LinkConfig) : Link {
         webSocket = null
         connected = false
         connecting = false
-        LogManager.appendLog("WS", "Disconnected: $id")
+        LogManager.log("WS", "Disconnected: $id")
     }
 
     override fun isConnected(): Boolean = connected
 
     override fun send(data: ByteArray): Boolean {
         if (!connected) {
-            LogManager.appendLog("WS", "Cannot send: not connected")
+            LogManager.log("WS", "Cannot send: not connected")
             return false
         }
 
@@ -210,7 +210,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
 
     override fun send(text: String): Boolean {
         if (!connected) {
-            LogManager.appendLog("WS", "Cannot send: not connected")
+            LogManager.log("WS", "Cannot send: not connected")
             return false
         }
 

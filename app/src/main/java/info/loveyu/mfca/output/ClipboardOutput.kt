@@ -4,7 +4,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import info.loveyu.mfca.config.InternalOutputConfig
-import info.loveyu.mfca.output.OutputType
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.util.LogManager
 import java.security.MessageDigest
@@ -46,7 +45,7 @@ class ClipboardOutput(
             // 检查去重：内容相同且距离上次写入不足30秒则跳过
             val lastWriteEntry = lastWrite[name]
             if (lastWriteEntry != null && lastWriteEntry.first == text && now - lastWriteEntry.second < DEDUP_INTERVAL_MS) {
-                LogManager.appendLog("INTERNAL", "Clipboard skipped (duplicated): $name")
+                LogManager.log("INTERNAL", "Clipboard skipped (duplicated): $name")
                 callback?.invoke(true)
                 return
             }
@@ -58,16 +57,16 @@ class ClipboardOutput(
                 history.removeFirst()
             }
             history.addLast(contentHash)
-            LogManager.appendLog("INTERNAL", "Clipboard content, hash: $contentHash, text: $text")
+            LogManager.log("INTERNAL", "Clipboard content, hash: $contentHash, text: $text")
 
             // 写入剪贴板
             val clip = ClipData.newPlainText("MessageForwarder", text)
             clipboardManager?.setPrimaryClip(clip)
             lastWrite[name] = text to now
-            LogManager.appendLog("INTERNAL", "Written to clipboard: $name")
+            LogManager.log("INTERNAL", "Written to clipboard: $name")
             callback?.invoke(true)
         } catch (e: Exception) {
-            LogManager.appendLog("INTERNAL", "Clipboard write failed: ${e.message}")
+            LogManager.log("INTERNAL", "Clipboard write failed: ${e.message}")
             callback?.invoke(false)
         }
     }

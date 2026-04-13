@@ -21,7 +21,7 @@ class TcpOutput(
     override fun send(item: QueueItem, callback: ((Boolean) -> Unit)?) {
         val link = tcpLink
         if (link == null) {
-            LogManager.appendLog("TCP", "TCP link not found: ${config.linkId}")
+            LogManager.log("TCP", "TCP link not found: ${config.linkId}")
             callback?.invoke(false)
             return
         }

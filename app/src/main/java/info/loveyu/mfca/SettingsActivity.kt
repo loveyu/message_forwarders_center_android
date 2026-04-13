@@ -59,12 +59,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import info.loveyu.mfca.BuildConfig
-import info.loveyu.mfca.ui.ComponentDetailSheet
 import info.loveyu.mfca.ui.ComponentStatus
-import info.loveyu.mfca.ui.ComponentStatusSheet
-import info.loveyu.mfca.ui.ComponentType
-import info.loveyu.mfca.ui.getEnabledAndDisabledComponents
 import info.loveyu.mfca.util.AppStatusManager
 import info.loveyu.mfca.util.ConfigBackupManager
 import info.loveyu.mfca.util.LogLevel
@@ -143,13 +138,13 @@ fun SettingsScreenContent(
                     }
                     if (result != null) {
                         showExportSuccess = result
-                        LogManager.appendLog("SETTINGS", "Export completed: $result")
+                        LogManager.log("SETTINGS", "Export completed: $result")
                     } else {
                         Toast.makeText(context, R.string.export_failed, Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
                     Toast.makeText(context, R.string.export_failed, Toast.LENGTH_SHORT).show()
-                    LogManager.appendLog("SETTINGS", "Export error: ${e.message}")
+                    LogManager.log("SETTINGS", "Export error: ${e.message}")
                 } finally {
                     isExporting = false
                 }
@@ -314,7 +309,7 @@ fun SettingsScreenContent(
                                         context.startActivity(Intent.createChooser(intent, "浏览数据文件"))
                                         Toast.makeText(context, "数据目录: ${dataDir.absolutePath}", Toast.LENGTH_LONG).show()
                                     } catch (e: Exception) {
-                                        LogManager.appendLog("UI", "打开数据目录失败: ${e.message}")
+                                        LogManager.log("UI", "打开数据目录失败: ${e.message}")
                                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                         clipboard.setPrimaryClip(ClipData.newPlainText("数据目录", dataDir.absolutePath))
                                         Toast.makeText(context, "已复制路径: ${dataDir.absolutePath}", Toast.LENGTH_LONG).show()
@@ -359,7 +354,7 @@ fun SettingsScreenContent(
                                 val currentStatus = AppStatusManager.loadStatus(context)
                                 val newStatus = currentStatus.copy(autoStart = enabled)
                                 AppStatusManager.saveStatus(context, newStatus)
-                                LogManager.appendLog("SETTINGS", "Auto-start ${if (enabled) "enabled" else "disabled"}")
+                                LogManager.log("SETTINGS", "Auto-start ${if (enabled) "enabled" else "disabled"}")
                             }
                         )
                     }
@@ -580,7 +575,7 @@ fun SettingsScreenContent(
                             if (success) {
                                 backupCount = 0
                                 Toast.makeText(context, R.string.clear_success, Toast.LENGTH_SHORT).show()
-                                LogManager.appendLog("SETTINGS", "All backups cleared")
+                                LogManager.log("SETTINGS", "All backups cleared")
                             } else {
                                 Toast.makeText(context, R.string.clear_failed, Toast.LENGTH_SHORT).show()
                             }
@@ -633,7 +628,7 @@ private suspend fun exportAppDataToZip(context: Context, outputUri: Uri): String
             }
             return@withContext outputUri.lastPathSegment
         } catch (e: Exception) {
-            LogManager.appendLog("SETTINGS", "Export error: ${e.message}")
+            LogManager.log("SETTINGS", "Export error: ${e.message}")
             null
         }
     }
@@ -672,7 +667,7 @@ private fun zipDirectory(
                         zipOut.closeEntry()
                     }
                 } catch (e: Exception) {
-                    LogManager.appendLog("SETTINGS", "Failed to zip file ${file.name}: ${e.message}")
+                    LogManager.log("SETTINGS", "Failed to zip file ${file.name}: ${e.message}")
                 }
             }
         }

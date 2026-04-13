@@ -3,7 +3,6 @@ package info.loveyu.mfca.input
 import info.loveyu.mfca.config.LinkInputConfig
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.util.LogManager
-import org.eclipse.paho.client.mqttv3.MqttMessage
 
 /**
  * MQTT 消费者输入
@@ -32,13 +31,13 @@ class MqttInput(
     override fun start() {
         val link = mqttLink
         if (link == null) {
-            LogManager.appendLog("MQTT", "MQTT link not found: ${config.linkId}")
+            LogManager.log("MQTT", "MQTT link not found: ${config.linkId}")
             return
         }
 
         val topicsToSubscribe = getTopicsToSubscribe()
         if (topicsToSubscribe.isEmpty()) {
-            LogManager.appendLog("MQTT", "No topics to subscribe for input: $inputName")
+            LogManager.log("MQTT", "No topics to subscribe for input: $inputName")
             return
         }
 
@@ -70,12 +69,12 @@ class MqttInput(
             link.subscribe(topic, qos)
         }
         running = true
-        LogManager.appendLog("MQTT", "MQTT input started: $inputName (topics: $topicsToSubscribe, qos: $qos)")
+        LogManager.log("MQTT", "MQTT input started: $inputName (topics: $topicsToSubscribe, qos: $qos)")
     }
 
     override fun stop() {
         running = false
-        LogManager.appendLog("MQTT", "MQTT input stopped: $inputName")
+        LogManager.log("MQTT", "MQTT input stopped: $inputName")
     }
 
     override fun isRunning(): Boolean = running

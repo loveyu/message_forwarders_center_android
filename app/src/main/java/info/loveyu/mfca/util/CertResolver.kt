@@ -66,7 +66,7 @@ object CertResolver {
                 downloadAndCacheCert(certPath, context)
             }
             else -> {
-                LogManager.appendLog(TAG, "不支持的证书路径协议: $certPath，需使用 file://, sdcard://, data:// 或 http(s)://")
+                LogManager.log(TAG, "不支持的证书路径协议: $certPath，需使用 file://, sdcard://, data:// 或 http(s)://")
                 null
             }
         }
@@ -106,7 +106,7 @@ object CertResolver {
         downloadedCerts[url]?.let { cachedPath ->
             val cachedFile = File(cachedPath)
             if (cachedFile.exists()) {
-                LogManager.appendLog(TAG, "使用缓存证书: $cachedPath")
+                LogManager.log(TAG, "使用缓存证书: $cachedPath")
                 return cachedPath
             }
         }
@@ -114,7 +114,7 @@ object CertResolver {
         // 创建证书目录
         val certDir = getCertDir(context)
         if (certDir == null) {
-            LogManager.appendLog(TAG, "无法创建证书目录")
+            LogManager.log(TAG, "无法创建证书目录")
             return null
         }
 
@@ -125,13 +125,13 @@ object CertResolver {
 
             // 检查文件是否已存在
             if (certFile.exists()) {
-                LogManager.appendLog(TAG, "证书已存在（hash匹配）: ${certFile.absolutePath}")
+                LogManager.log(TAG, "证书已存在（hash匹配）: ${certFile.absolutePath}")
                 downloadedCerts[url] = certFile.absolutePath
                 return certFile.absolutePath
             }
 
             // 下载证书
-            LogManager.appendLog(TAG, "开始下载证书: $url")
+            LogManager.log(TAG, "开始下载证书: $url")
             val certContent = downloadFromHttp(url)
 
             // 写入文件
@@ -139,11 +139,11 @@ object CertResolver {
                 fos.write(certContent.toByteArray())
             }
 
-            LogManager.appendLog(TAG, "证书下载完成: ${certFile.absolutePath}")
+            LogManager.log(TAG, "证书下载完成: ${certFile.absolutePath}")
             downloadedCerts[url] = certFile.absolutePath
             certFile.absolutePath
         } catch (e: Exception) {
-            LogManager.appendLog(TAG, "证书下载失败: ${e.message}")
+            LogManager.log(TAG, "证书下载失败: ${e.message}")
             null
         }
     }

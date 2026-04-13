@@ -34,7 +34,7 @@ object AppStatusManager {
                 appAutoStartOnBoot = data["app_auto_start_on_boot"] as? Boolean ?: false
             )
         } catch (e: Exception) {
-            LogManager.appendLog("APP_STATUS", "Failed to load status: ${e.message}")
+            LogManager.log("APP_STATUS", "Failed to load status: ${e.message}")
             AppStatusConfig()
         }
     }
@@ -56,9 +56,9 @@ object AppStatusManager {
             val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
             val file = File(baseDir, STATUS_FILE_NAME)
             file.writeText(saveYaml.dumpToString(data))
-            LogManager.appendLog("APP_STATUS", "Status saved")
+            LogManager.log("APP_STATUS", "Status saved")
         } catch (e: Exception) {
-            LogManager.appendLog("APP_STATUS", "Failed to save status: ${e.message}")
+            LogManager.log("APP_STATUS", "Failed to save status: ${e.message}")
         }
     }
 }

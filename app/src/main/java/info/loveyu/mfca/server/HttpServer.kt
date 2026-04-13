@@ -19,12 +19,12 @@ class HttpServer(
     @Throws(IOException::class)
     fun startServer() {
         start(SOCKET_READ_TIMEOUT, false)
-        LogManager.appendLog(LogLevel.INFO, TAG, "HTTP server started on port $port")
+        LogManager.log(LogLevel.INFO, TAG, "HTTP server started on port $port")
     }
 
     fun stopServer() {
         stop()
-        LogManager.appendLog(LogLevel.INFO, TAG, "HTTP server stopped")
+        LogManager.log(LogLevel.INFO, TAG, "HTTP server stopped")
     }
 
     override fun serve(session: IHTTPSession): Response {
@@ -72,7 +72,7 @@ class HttpServer(
                 )
             } else {
                 onMessageReceived(body)
-                LogManager.appendLog(LogLevel.DEBUG, TAG, "Received message: ${body.take(200)}")
+                LogManager.log(LogLevel.DEBUG, TAG, "Received message: ${body.take(200)}")
                 newFixedLengthResponse(
                     Response.Status.OK,
                     "application/json",
@@ -80,7 +80,7 @@ class HttpServer(
                 )
             }
         } catch (e: Exception) {
-            LogManager.appendLog(LogLevel.ERROR, TAG, "Error handling POST message", e)
+            LogManager.log(LogLevel.ERROR, TAG, "Error handling POST message", e)
             newFixedLengthResponse(
                 Response.Status.INTERNAL_ERROR,
                 "application/json",

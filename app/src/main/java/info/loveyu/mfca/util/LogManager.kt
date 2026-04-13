@@ -53,7 +53,7 @@ object LogManager {
         }
     }
 
-    fun appendLog(level: LogLevel, tag: String, message: String, context: Any? = null) {
+    fun log(level: LogLevel, tag: String, message: String, context: Any? = null) {
         if (isPaused) return
         if (level.androidPriority < currentLogLevel.androidPriority) return
 
@@ -89,14 +89,14 @@ object LogManager {
         }
     }
 
-    fun appendLog(tag: String, message: String) {
-        appendLog(LogLevel.INFO, tag, message)
+    fun log(tag: String, message: String) {
+        log(LogLevel.INFO, tag, message)
     }
 
-    fun logDebug(tag: String, message: String) = appendLog(LogLevel.DEBUG, tag, message)
-    fun logInfo(tag: String, message: String) = appendLog(LogLevel.INFO, tag, message)
-    fun logWarn(tag: String, message: String) = appendLog(LogLevel.WARN, tag, message)
-    fun logError(tag: String, message: String) = appendLog(LogLevel.ERROR, tag, message)
+    fun logDebug(tag: String, message: String) = log(LogLevel.DEBUG, tag, message)
+    fun logInfo(tag: String, message: String) = log(LogLevel.INFO, tag, message)
+    fun logWarn(tag: String, message: String) = log(LogLevel.WARN, tag, message)
+    fun logError(tag: String, message: String) = log(LogLevel.ERROR, tag, message)
 
     fun clearLogs() {
         _logs.value = emptyList()

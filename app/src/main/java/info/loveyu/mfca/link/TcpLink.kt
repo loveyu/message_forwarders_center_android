@@ -117,7 +117,7 @@ class TcpLink(override val config: LinkConfig) : Link {
             val keepAlive = params["keepAlive"]?.toBoolean() ?: true
             val noDelay = params["noDelay"]?.toBoolean() ?: true
 
-            LogManager.appendLog("TCP", "Connecting to $host:$port (protocol=${frameProtocol.name})")
+            LogManager.log("TCP", "Connecting to $host:$port (protocol=${frameProtocol.name})")
 
             socket = Socket().apply {
                 connect(java.net.InetSocketAddress(host, port), connectTimeout * 1000)
@@ -129,12 +129,12 @@ class TcpLink(override val config: LinkConfig) : Link {
             connected.set(true)
             reconnectJob?.cancel()
             resolvedIp = (socket?.remoteSocketAddress as? java.net.InetSocketAddress)?.address?.hostAddress
-            LogManager.appendLog("TCP", "Connected: $id (${frameProtocol.name})")
+            LogManager.log("TCP", "Connected: $id (${frameProtocol.name})")
 
             startReading()
             return true
         } catch (e: Exception) {
-            LogManager.appendLog("TCP", "Connection error: ${e.message}")
+            LogManager.log("TCP", "Connection error: ${e.message}")
             errorListener?.invoke(e)
             connected.set(false)
             scheduleReconnect()
@@ -147,7 +147,7 @@ class TcpLink(override val config: LinkConfig) : Link {
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
             kotlinx.coroutines.delay(reconnectDelay * 1000)
-            LogManager.appendLog("TCP", "Attempting reconnect: $id")
+            LogManager.log("TCP", "Attempting reconnect: $id")
             reconnectCallback?.invoke() ?: connect()
         }
     }
@@ -160,9 +160,9 @@ class TcpLink(override val config: LinkConfig) : Link {
             readerJob?.cancel()
             socket?.close()
             socket = null
-            LogManager.appendLog("TCP", "Disconnected: $id")
+            LogManager.log("TCP", "Disconnected: $id")
         } catch (e: Exception) {
-            LogManager.appendLog("TCP", "Disconnect error: ${e.message}")
+            LogManager.log("TCP", "Disconnect error: ${e.message}")
         }
     }
 
@@ -172,7 +172,7 @@ class TcpLink(override val config: LinkConfig) : Link {
 
     override fun send(data: ByteArray): Boolean {
         if (!connected.get() || socket == null) {
-            LogManager.appendLog("TCP", "Cannot send: not connected")
+            LogManager.log("TCP", "Cannot send: not connected")
             return false
         }
         return try {
@@ -186,15 +186,15 @@ class TcpLink(override val config: LinkConfig) : Link {
                 }
             }
             if (success == null) {
-                LogManager.appendLog("TCP", "Write timeout (${writeTimeoutMs}ms), disconnecting")
+                LogManager.log("TCP", "Write timeout (${writeTimeoutMs}ms), disconnecting")
                 disconnect()
                 false
             } else {
-                LogManager.appendLog("TCP", "Sent frame: ${frameProtocol.name}, size=${framed.size}")
+                LogManager.log("TCP", "Sent frame: ${frameProtocol.name}, size=${framed.size}")
                 true
             }
         } catch (e: Exception) {
-            LogManager.appendLog("TCP", "Send error: ${e.message}")
+            LogManager.log("TCP", "Send error: ${e.message}")
             errorListener?.invoke(e)
             false
         }
@@ -213,35 +213,35 @@ class TcpLink(override val config: LinkConfig) : Link {
                     maxLength = maxLength,
                     onMessage = { data ->
                         messageListener?.invoke(data)
-                        LogManager.appendLog("TCP", "Received frame: ${frameProtocol.name}, length=${data.size}")
+                        LogManager.log("TCP", "Received frame: ${frameProtocol.name}, length=${data.size}")
                     },
                     onInvalid = { reason ->
-                        LogManager.appendLog("TCP", "$reason, disconnecting")
+                        LogManager.log("TCP", "$reason, disconnecting")
                         disconnect()
                     }
                 )
                 // readLoop returned normally — stream EOF
                 if (connected.get()) {
-                    LogManager.appendLog("TCP", "Server closed connection")
+                    LogManager.log("TCP", "Server closed connection")
                     connected.set(false)
                     scheduleReconnect()
                 }
             } catch (e: SocketTimeoutException) {
-                LogManager.appendLog("TCP", "Read timeout (${readTimeoutMs}ms), disconnecting")
+                LogManager.log("TCP", "Read timeout (${readTimeoutMs}ms), disconnecting")
                 disconnect()
             } catch (e: EOFException) {
-                LogManager.appendLog("TCP", "Server closed connection")
+                LogManager.log("TCP", "Server closed connection")
                 connected.set(false)
                 scheduleReconnect()
             } catch (e: SocketException) {
                 if (connected.get()) {
-                    LogManager.appendLog("TCP", "Read error: ${e.message}")
+                    LogManager.log("TCP", "Read error: ${e.message}")
                     errorListener?.invoke(e)
                     scheduleReconnect()
                 }
             } catch (e: Exception) {
                 if (connected.get()) {
-                    LogManager.appendLog("TCP", "Read error: ${e.message}")
+                    LogManager.log("TCP", "Read error: ${e.message}")
                     errorListener?.invoke(e)
                     scheduleReconnect()
                 }

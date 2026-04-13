@@ -19,14 +19,14 @@ object QueueManager {
         // Initialize memory queues
         config.queues.memory.forEach { (name, memoryConfig) ->
             queues[name] = MemoryQueue(name, memoryConfig)
-            LogManager.appendLog("QUEUE", "Registered memory queue: $name (capacity: ${memoryConfig.capacity})")
+            LogManager.log("QUEUE", "Registered memory queue: $name (capacity: ${memoryConfig.capacity})")
         }
 
         // Initialize SQLite queues
         config.queues.sqlite.forEach { (name, sqliteConfig) ->
             val queue = SqliteQueue(ctx, name, sqliteConfig)
             queues[name] = queue
-            LogManager.appendLog("QUEUE", "Registered SQLite queue: $name (path: ${sqliteConfig.path})")
+            LogManager.log("QUEUE", "Registered SQLite queue: $name (path: ${sqliteConfig.path})")
         }
     }
 
@@ -41,7 +41,7 @@ object QueueManager {
             try {
                 queue.start()
             } catch (e: Exception) {
-                LogManager.appendLog("QUEUE", "Failed to start ${queue.name}: ${e.message}")
+                LogManager.log("QUEUE", "Failed to start ${queue.name}: ${e.message}")
             }
         }
     }
@@ -51,7 +51,7 @@ object QueueManager {
             try {
                 queue.stop()
             } catch (e: Exception) {
-                LogManager.appendLog("QUEUE", "Error stopping ${queue.name}: ${e.message}")
+                LogManager.log("QUEUE", "Error stopping ${queue.name}: ${e.message}")
             }
         }
     }

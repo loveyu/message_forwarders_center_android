@@ -21,7 +21,7 @@ class DeadLetterHandler(
 
     init {
         if (config.enabled) {
-            LogManager.appendLog("DLQ", "Dead letter queue enabled (max_retry: ${config.maxRetry})")
+            LogManager.log("DLQ", "Dead letter queue enabled (max_retry: ${config.maxRetry})")
         }
     }
 
@@ -38,7 +38,7 @@ class DeadLetterHandler(
         )
 
         deadLetterQueue.add(deadLetterItem)
-        LogManager.appendLog("DLQ", "Item added to dead letter queue: $error")
+        LogManager.log("DLQ", "Item added to dead letter queue: $error")
 
         // Process dead letter actions
         processDeadLetterActions(deadLetterItem)
@@ -49,7 +49,7 @@ class DeadLetterHandler(
 
     private fun processDeadLetterActions(item: DeadLetterItem) {
         if (config.action.isEmpty()) {
-            LogManager.appendLog("DLQ", "No dead letter actions configured")
+            LogManager.log("DLQ", "No dead letter actions configured")
             return
         }
 
@@ -65,7 +65,7 @@ class DeadLetterHandler(
                         )
                     )
                     output.send(dlqItem, null)
-                    LogManager.appendLog("DLQ", "Dead letter sent to output: $outputName")
+                    LogManager.log("DLQ", "Dead letter sent to output: $outputName")
                 }
             }
         }
@@ -93,9 +93,9 @@ class DeadLetterHandler(
             }
 
             file.writeText(content)
-            LogManager.appendLog("DLQ", "Dead letter saved to: ${file.absolutePath}")
+            LogManager.log("DLQ", "Dead letter saved to: ${file.absolutePath}")
         } catch (e: Exception) {
-            LogManager.appendLog("DLQ", "Failed to save dead letter: ${e.message}")
+            LogManager.log("DLQ", "Failed to save dead letter: ${e.message}")
         }
     }
 
@@ -103,7 +103,7 @@ class DeadLetterHandler(
 
     fun clearDeadLetters() {
         deadLetterQueue.clear()
-        LogManager.appendLog("DLQ", "Dead letters cleared")
+        LogManager.log("DLQ", "Dead letters cleared")
     }
 }
 

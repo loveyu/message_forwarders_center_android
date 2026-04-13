@@ -29,10 +29,10 @@ object MessageForwarder {
                 val responseCode = connection.responseCode
                 connection.disconnect()
 
-                LogManager.appendLog(LogLevel.DEBUG, TAG, "Forwarded to $targetUrl, response: $responseCode")
+                LogManager.log(LogLevel.DEBUG, TAG, "Forwarded to $targetUrl, response: $responseCode")
                 callback?.invoke(responseCode in 200..299)
             } catch (e: Exception) {
-                LogManager.appendLog(LogLevel.ERROR, TAG, "Failed to forward message to $targetUrl", e)
+                LogManager.log(LogLevel.ERROR, TAG, "Failed to forward message to $targetUrl", e)
                 callback?.invoke(false)
             }
         }

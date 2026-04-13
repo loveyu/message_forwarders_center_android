@@ -39,7 +39,7 @@ class MemoryQueue(
                         queue.offer(item)
                     }
                     OverflowStrategy.dropNew -> {
-                        LogManager.appendLog("QUEUE", "Memory queue $name dropped item (overflow)")
+                        LogManager.log("QUEUE", "Memory queue $name dropped item (overflow)")
                         return false
                     }
                     OverflowStrategy.block -> {
@@ -94,7 +94,7 @@ class MemoryQueue(
                                 enqueue(item.copy(retryCount = item.retryCount + 1))
                             }
                         } catch (e: Exception) {
-                            LogManager.appendLog("QUEUE", "Worker $workerId error: ${e.message}")
+                            LogManager.log("QUEUE", "Worker $workerId error: ${e.message}")
                             enqueue(item.copy(retryCount = item.retryCount + 1))
                         }
                     } else {
@@ -105,13 +105,13 @@ class MemoryQueue(
             }
             workers.add(worker)
         }
-        LogManager.appendLog("QUEUE", "Memory queue $name started with ${config.workers} workers")
+        LogManager.log("QUEUE", "Memory queue $name started with ${config.workers} workers")
     }
 
     override fun stop() {
         workers.forEach { it.cancel() }
         workers.clear()
-        LogManager.appendLog("QUEUE", "Memory queue $name stopped")
+        LogManager.log("QUEUE", "Memory queue $name stopped")
     }
 
     fun setConsumer(consumer: QueueConsumer) {

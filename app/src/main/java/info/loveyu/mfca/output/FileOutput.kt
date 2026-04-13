@@ -45,7 +45,7 @@ class FileOutput(
 
             val dir = File(basePath)
             if (!dir.exists() && !dir.mkdirs()) {
-                LogManager.appendLog("INTERNAL", "FileOutput [$name]: failed to create directory: ${dir.absolutePath}")
+                LogManager.log("INTERNAL", "FileOutput [$name]: failed to create directory: ${dir.absolutePath}")
                 callback?.invoke(false)
                 return
             }
@@ -66,7 +66,7 @@ class FileOutput(
 
             val writeMode = when {
                 overwrite && append -> {
-                    LogManager.appendLog("INTERNAL", "FileOutput [$name]: append and overwrite conflict, using overwrite")
+                    LogManager.log("INTERNAL", "FileOutput [$name]: append and overwrite conflict, using overwrite")
                     WriteMode.OVERWRITE
                 }
                 append -> WriteMode.APPEND
@@ -75,7 +75,7 @@ class FileOutput(
             }
 
             if (writeMode == WriteMode.CREATE && file.exists()) {
-                LogManager.appendLog("INTERNAL", "FileOutput [$name]: file already exists, neither append nor overwrite set: ${file.absolutePath}")
+                LogManager.log("INTERNAL", "FileOutput [$name]: file already exists, neither append nor overwrite set: ${file.absolutePath}")
                 callback?.invoke(false)
                 return
             }
@@ -86,10 +86,10 @@ class FileOutput(
                 else -> file.writeBytes(dataToWrite)
             }
 
-            LogManager.appendLog("INTERNAL", "Written to file: ${file.absolutePath} (${writeMode.name.lowercase()}, ${dataToWrite.size} bytes)")
+            LogManager.log("INTERNAL", "Written to file: ${file.absolutePath} (${writeMode.name.lowercase()}, ${dataToWrite.size} bytes)")
             callback?.invoke(true)
         } catch (e: Exception) {
-            LogManager.appendLog("INTERNAL", "File write failed: ${e.message}")
+            LogManager.log("INTERNAL", "File write failed: ${e.message}")
             callback?.invoke(false)
         }
     }

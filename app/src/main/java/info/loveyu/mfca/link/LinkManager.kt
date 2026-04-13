@@ -73,7 +73,7 @@ object LinkManager {
             val type = LinkType.fromDsn(linkConfig.dsn)
             if (type == LinkType.http) {
                 configs[linkConfig.id] = linkConfig
-                LogManager.appendLog("LINK", "Skipped HTTP link: ${linkConfig.id} (managed by SharedHttpInput)")
+                LogManager.log("LINK", "Skipped HTTP link: ${linkConfig.id} (managed by SharedHttpInput)")
                 return@forEach
             }
             configs[linkConfig.id] = linkConfig
@@ -84,12 +84,12 @@ object LinkManager {
                 if (cfg != null && NetworkChecker.shouldEnable(ctx, cfg.whenCondition, cfg.deny)) {
                     link.connect()
                 } else {
-                    LogManager.appendLog("LINK", "Skipping reconnect for ${link.id}: network conditions not met")
+                    LogManager.log("LINK", "Skipping reconnect for ${link.id}: network conditions not met")
                     false
                 }
             }
             links[linkConfig.id] = link
-            LogManager.appendLog("LINK", "Registered link: ${linkConfig.id} (${LinkType.fromDsn(linkConfig.dsn)})")
+            LogManager.log("LINK", "Registered link: ${linkConfig.id} (${LinkType.fromDsn(linkConfig.dsn)})")
         }
 
         // Start network monitoring (updateNetworkType won't trigger connections until initialized=true)
@@ -108,7 +108,7 @@ object LinkManager {
 
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                LogManager.appendLog("LINK", "Network available")
+                LogManager.log("LINK", "Network available")
                 isNetworkAvailable = true
                 updateNetworkType()
                 // Network available, try reconnecting links
@@ -116,7 +116,7 @@ object LinkManager {
             }
 
             override fun onLost(network: Network) {
-                LogManager.appendLog("LINK", "Network lost")
+                LogManager.log("LINK", "Network lost")
                 isNetworkAvailable = false
                 updateNetworkType()
             }
@@ -140,7 +140,7 @@ object LinkManager {
             isNetworkAvailable = activeNetwork != null
             updateNetworkType()
         } catch (e: Exception) {
-            LogManager.appendLog("LINK", "Failed to register network callback: ${e.message}")
+            LogManager.log("LINK", "Failed to register network callback: ${e.message}")
         }
     }
 
@@ -165,8 +165,8 @@ object LinkManager {
             currentNetworkType = NetworkType.UNKNOWN
         }
 
-        LogManager.appendLog("LINK", "Network type: $currentNetworkType")
-        LogManager.appendLog("NETWORK", NetworkChecker.getDetailedNetworkInfo(ctx))
+        LogManager.log("LINK", "Network type: $currentNetworkType")
+        LogManager.log("NETWORK", NetworkChecker.getDetailedNetworkInfo(ctx))
 
         // Notify UI to refresh component states
         _networkStateVersion.value++
@@ -231,7 +231,7 @@ object LinkManager {
             // Check network conditions (when/deny)
             if (!info.loveyu.mfca.util.NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
                 if (link.isConnected()) {
-                    LogManager.appendLog("LINK", "Disconnecting ${link.id}: network conditions not met")
+                    LogManager.log("LINK", "Disconnecting ${link.id}: network conditions not met")
                     link.disconnect()
                 }
                 return@forEach
@@ -243,11 +243,11 @@ object LinkManager {
                 if (link is MqttLink) {
                     link.resetFailureCount()
                 }
-                LogManager.appendLog("LINK", "Reconnecting ${link.id}...")
+                LogManager.log("LINK", "Reconnecting ${link.id}...")
                 try {
                     link.connect()
                 } catch (e: Exception) {
-                    LogManager.appendLog("LINK", "Reconnect failed for ${link.id}: ${e.message}")
+                    LogManager.log("LINK", "Reconnect failed for ${link.id}: ${e.message}")
                 }
             }
         }
@@ -276,7 +276,7 @@ object LinkManager {
 
             // Check if link should be enabled based on when/deny conditions
             if (!info.loveyu.mfca.util.NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
-                LogManager.appendLog("LINK", "Skipping ${link.id}: network conditions not met")
+                LogManager.log("LINK", "Skipping ${link.id}: network conditions not met")
                 return@forEach
             }
 
@@ -285,7 +285,7 @@ object LinkManager {
                     link.connect()
                 }
             } catch (e: Exception) {
-                LogManager.appendLog("LINK", "Failed to connect ${link.id}: ${e.message}")
+                LogManager.log("LINK", "Failed to connect ${link.id}: ${e.message}")
             }
         }
     }
@@ -296,7 +296,7 @@ object LinkManager {
     fun reconnectAll() {
         val ctx = applicationContext ?: return
         if (!isNetworkAvailable) {
-            LogManager.appendLog("LINK", "Network unavailable, skipping reconnect")
+            LogManager.log("LINK", "Network unavailable, skipping reconnect")
             return
         }
 
@@ -305,18 +305,18 @@ object LinkManager {
 
             // Check network conditions (when/deny)
             if (!info.loveyu.mfca.util.NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
-                LogManager.appendLog("LINK", "Skipping ${link.id}: network conditions not met")
+                LogManager.log("LINK", "Skipping ${link.id}: network conditions not met")
                 return@forEach
             }
 
             try {
                 if (!link.isConnected()) {
                     if (link.connect()) {
-                        LogManager.appendLog("LINK", "Reconnected ${link.id}")
+                        LogManager.log("LINK", "Reconnected ${link.id}")
                     }
                 }
             } catch (e: Exception) {
-                LogManager.appendLog("LINK", "Failed to reconnect ${link.id}: ${e.message}")
+                LogManager.log("LINK", "Failed to reconnect ${link.id}: ${e.message}")
             }
         }
     }
@@ -326,7 +326,7 @@ object LinkManager {
             try {
                 link.disconnect()
             } catch (e: Exception) {
-                LogManager.appendLog("LINK", "Error disconnecting ${link.id}: ${e.message}")
+                LogManager.log("LINK", "Error disconnecting ${link.id}: ${e.message}")
             }
         }
     }
@@ -347,7 +347,7 @@ object LinkManager {
                 val connectivityManager = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
                 connectivityManager.unregisterNetworkCallback(callback)
             } catch (e: Exception) {
-                LogManager.appendLog("LINK", "Failed to unregister network callback: ${e.message}")
+                LogManager.log("LINK", "Failed to unregister network callback: ${e.message}")
             }
             networkCallback = null
         }

@@ -3,7 +3,6 @@ package info.loveyu.mfca.input
 import android.content.Context
 import info.loveyu.mfca.config.AppConfig
 import info.loveyu.mfca.config.HttpInputConfig
-import info.loveyu.mfca.config.LinkInputConfig
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.NetworkChecker
@@ -82,16 +81,16 @@ object InputManager {
                 )
             ))
             input.setOnMessageListener { msg -> messageHandler(msg) }
-            LogManager.appendLog("INPUT", "Registered HTTP input: ${httpConfig.name} dsn=${httpConfig.dsn}")
+            LogManager.log("INPUT", "Registered HTTP input: ${httpConfig.name} dsn=${httpConfig.dsn}")
         }
 
         // Shared HTTP inputs (with link_id → SharedHttpInput + HttpVirtualInputs)
         sharedGroups.forEach { (linkId, httpConfigs) ->
             val linkConfig = config.links.find { it.id == linkId }
             if (linkConfig == null) {
-                LogManager.appendLog("INPUT", "Shared HTTP group skipped: link_id '$linkId' not found in links")
+                LogManager.log("INPUT", "Shared HTTP group skipped: link_id '$linkId' not found in links")
                 httpConfigs.forEach { httpConfig ->
-                    LogManager.appendLog("INPUT", "  → skipping HTTP input: ${httpConfig.name}")
+                    LogManager.log("INPUT", "  → skipping HTTP input: ${httpConfig.name}")
                 }
                 return@forEach
             }
@@ -113,7 +112,7 @@ object InputManager {
                     )
                 ))
                 virtualInput.setOnMessageListener { msg -> messageHandler(msg) }
-                LogManager.appendLog("INPUT", "Registered shared HTTP input: ${httpConfig.name} (link: $linkId)")
+                LogManager.log("INPUT", "Registered shared HTTP input: ${httpConfig.name} (link: $linkId)")
             }
 
             // Register SharedHttpInput as a special entry for lifecycle management
@@ -128,7 +127,7 @@ object InputManager {
                     deny = linkConfig.deny
                 )
             ))
-            LogManager.appendLog("INPUT", "Registered shared HTTP server for link: $linkId with ${httpConfigs.size} virtual inputs")
+            LogManager.log("INPUT", "Registered shared HTTP server for link: $linkId with ${httpConfigs.size} virtual inputs")
         }
 
         // Link-based inputs (MQTT, WebSocket, TCP)
@@ -149,7 +148,7 @@ object InputManager {
                     )
                 ))
                 input.setOnMessageListener { msg -> messageHandler(msg) }
-                LogManager.appendLog("INPUT", "Registered ${linkConfig.role} input: ${linkConfig.name} (link: $linkId)")
+                LogManager.log("INPUT", "Registered ${linkConfig.role} input: ${linkConfig.name} (link: $linkId)")
             }
         }
 
@@ -202,15 +201,15 @@ object InputManager {
                     // Check network conditions from link's when/deny
                     if (!NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
                         if (input.isRunning()) {
-                            LogManager.appendLog("INPUT", "Stopping shared HTTP server ${config.name}: network conditions not met")
+                            LogManager.log("INPUT", "Stopping shared HTTP server ${config.name}: network conditions not met")
                             input.stop()
                         }
                     } else if (!input.isRunning() && input.getError() == null) {
-                        LogManager.appendLog("INPUT", "Restarting shared HTTP server: ${config.name}")
+                        LogManager.log("INPUT", "Restarting shared HTTP server: ${config.name}")
                         try {
                             input.start()
                         } catch (e: Exception) {
-                            LogManager.appendLog("INPUT", "Restart failed for shared HTTP server: ${e.message}")
+                            LogManager.log("INPUT", "Restart failed for shared HTTP server: ${e.message}")
                         }
                     }
                 }
@@ -220,7 +219,7 @@ object InputManager {
             // Check network conditions (when/deny)
             if (!NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
                 if (input.isRunning()) {
-                    LogManager.appendLog("INPUT", "Stopping ${config.name}: network conditions not met")
+                    LogManager.log("INPUT", "Stopping ${config.name}: network conditions not met")
                     input.stop()
                 }
                 return@forEach
@@ -231,7 +230,7 @@ object InputManager {
                 val link = LinkManager.getLink(config.linkId)
                 if (link == null || !link.isConnected()) {
                     if (input.isRunning()) {
-                        LogManager.appendLog("INPUT", "Stopping ${config.name}: link ${config.linkId} not connected")
+                        LogManager.log("INPUT", "Stopping ${config.name}: link ${config.linkId} not connected")
                         input.stop()
                     }
                     return@forEach
@@ -244,11 +243,11 @@ object InputManager {
                 if (input.getError() != null) {
                     return@forEach
                 }
-                LogManager.appendLog("INPUT", "Restarting ${config.name} (link: ${config.linkId})...")
+                LogManager.log("INPUT", "Restarting ${config.name} (link: ${config.linkId})...")
                 try {
                     input.start()
                 } catch (e: Exception) {
-                    LogManager.appendLog("INPUT", "Restart failed for ${config.name}: ${e.message}")
+                    LogManager.log("INPUT", "Restart failed for ${config.name}: ${e.message}")
                 }
             }
         }
@@ -261,7 +260,7 @@ object InputManager {
                     entry.input.start()
                 }
             } catch (e: Exception) {
-                LogManager.appendLog("INPUT", "Failed to start ${entry.config.name}: ${e.message}")
+                LogManager.log("INPUT", "Failed to start ${entry.config.name}: ${e.message}")
             }
         }
     }
@@ -271,7 +270,7 @@ object InputManager {
             try {
                 entry.input.stop()
             } catch (e: Exception) {
-                LogManager.appendLog("INPUT", "Error stopping ${entry.config.name}: ${e.message}")
+                LogManager.log("INPUT", "Error stopping ${entry.config.name}: ${e.message}")
             }
         }
     }

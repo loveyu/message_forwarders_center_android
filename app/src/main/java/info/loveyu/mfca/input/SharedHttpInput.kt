@@ -32,19 +32,19 @@ class SharedHttpInput(
 
     override fun start() {
         if (error != null) {
-            LogManager.appendLog("HTTP", "Shared HTTP server skipped: ${error}")
+            LogManager.log("HTTP", "Shared HTTP server skipped: ${error}")
             return
         }
         try {
             start(SOCKET_READ_TIMEOUT, false)
             running = true
-            LogManager.appendLog("HTTP", "Shared HTTP server started with ${virtualInputs.size} virtual inputs")
+            LogManager.log("HTTP", "Shared HTTP server started with ${virtualInputs.size} virtual inputs")
         } catch (e: BindException) {
             error = "端口 ${listeningPort} 已被占用"
-            LogManager.appendLog("HTTP", "Shared HTTP server port conflict: ${listeningPort} - ${e.message}")
+            LogManager.log("HTTP", "Shared HTTP server port conflict: ${listeningPort} - ${e.message}")
         } catch (e: Exception) {
             error = "启动失败: ${e.message}"
-            LogManager.appendLog("HTTP", "Failed to start shared HTTP server: ${e.message}")
+            LogManager.log("HTTP", "Failed to start shared HTTP server: ${e.message}")
         }
     }
 
@@ -52,9 +52,9 @@ class SharedHttpInput(
         running = false
         try {
             super.stop()
-            LogManager.appendLog("HTTP", "Shared HTTP server stopped")
+            LogManager.log("HTTP", "Shared HTTP server stopped")
         } catch (e: Exception) {
-            LogManager.appendLog("HTTP", "Error stopping shared HTTP server: ${e.message}")
+            LogManager.log("HTTP", "Error stopping shared HTTP server: ${e.message}")
         }
     }
 

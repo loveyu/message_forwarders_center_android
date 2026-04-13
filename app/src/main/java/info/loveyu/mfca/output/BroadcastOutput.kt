@@ -3,7 +3,6 @@ package info.loveyu.mfca.output
 import android.content.Context
 import android.content.Intent
 import info.loveyu.mfca.config.InternalOutputConfig
-import info.loveyu.mfca.output.OutputType
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.util.LogManager
 
@@ -51,10 +50,10 @@ class BroadcastOutput(
             // Also send as system broadcast for other apps
             context.sendBroadcast(intent)
 
-            LogManager.appendLog("INTERNAL", "Broadcast sent on channel: $channel")
+            LogManager.log("INTERNAL", "Broadcast sent on channel: $channel")
             callback?.invoke(true)
         } catch (e: Exception) {
-            LogManager.appendLog("INTERNAL", "Broadcast failed: ${e.message}")
+            LogManager.log("INTERNAL", "Broadcast failed: ${e.message}")
             callback?.invoke(false)
         }
     }

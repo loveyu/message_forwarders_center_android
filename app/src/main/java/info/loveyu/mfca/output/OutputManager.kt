@@ -21,21 +21,21 @@ object OutputManager {
         // HTTP outputs
         config.outputs.http.forEach { httpConfig ->
             outputs[httpConfig.name] = HttpOutput(httpConfig.name, httpConfig)
-            LogManager.appendLog("OUTPUT", "Registered HTTP output: ${httpConfig.name} -> ${httpConfig.url}")
+            LogManager.log("OUTPUT", "Registered HTTP output: ${httpConfig.name} -> ${httpConfig.url}")
         }
 
         // Link-based outputs (MQTT, WebSocket, TCP)
         config.outputs.link.forEach { linkConfig ->
             val output = createLinkOutput(linkConfig)
             outputs[linkConfig.name] = output
-            LogManager.appendLog("OUTPUT", "Registered ${linkConfig.role} output: ${linkConfig.name}")
+            LogManager.log("OUTPUT", "Registered ${linkConfig.role} output: ${linkConfig.name}")
         }
 
         // Internal outputs
         config.outputs.internal.forEach { internalConfig ->
             val output = createInternalOutput(ctx, internalConfig)
             outputs[internalConfig.name] = output
-            LogManager.appendLog("OUTPUT", "Registered internal output: ${internalConfig.name} (${internalConfig.type})")
+            LogManager.log("OUTPUT", "Registered internal output: ${internalConfig.name} (${internalConfig.type})")
         }
     }
 

@@ -126,7 +126,7 @@ class ForwardService : Service() {
                 serviceInstance?.applyConfig(config)
                 true
             } catch (e: Exception) {
-                LogManager.appendLog("CONFIG", "Failed to load config: ${e.message}")
+                LogManager.log("CONFIG", "Failed to load config: ${e.message}")
                 false
             }
         }
@@ -220,7 +220,7 @@ class ForwardService : Service() {
         } else if (intent?.action == null && wasRunningBeforeRestart) {
             // Service restarted by system (START_STICKY) after being killed
             // Auto-restore previously running service
-            LogManager.appendLog("SERVICE", "Auto-restoring service after system restart")
+            LogManager.log("SERVICE", "Auto-restoring service after system restart")
             wasRunningBeforeRestart = false
             start()
         }
@@ -233,7 +233,7 @@ class ForwardService : Service() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         // Keep service running when user swipes app from recents
         if (isRunning) {
-            LogManager.appendLog("SERVICE", "Task removed, restarting service to keep running")
+            LogManager.log("SERVICE", "Task removed, restarting service to keep running")
             val restartIntent = Intent(this, ForwardService::class.java).apply {
                 action = ACTION_START
             }
@@ -261,13 +261,13 @@ class ForwardService : Service() {
                 applyConfig(config)
                 return
             } catch (e: Exception) {
-                LogManager.appendLog("CONFIG", "Failed to load saved config: ${e.message}")
+                LogManager.log("CONFIG", "Failed to load saved config: ${e.message}")
             }
         }
 
         // No valid config, just mark as not running
         isRunning = false
-        LogManager.appendLog("SERVICE", "No valid config found, service not started")
+        LogManager.log("SERVICE", "No valid config found, service not started")
     }
 
     private fun startLegacyMode() {
@@ -299,7 +299,7 @@ class ForwardService : Service() {
         isRunning = true
         saveStatus()
         acquireLocks()
-        LogManager.appendLog("SERVICE", "Legacy mode started on port $port")
+        LogManager.log("SERVICE", "Legacy mode started on port $port")
     }
 
     private fun stopLegacyMode() {
@@ -312,7 +312,7 @@ class ForwardService : Service() {
 
     private fun applyConfig(config: AppConfig) {
         if (isApplyingConfig) {
-            LogManager.appendLog("CONFIG", "Config application already in progress, skipping duplicate")
+            LogManager.log("CONFIG", "Config application already in progress, skipping duplicate")
             return
         }
         isApplyingConfig = true
@@ -331,7 +331,7 @@ class ForwardService : Service() {
     }
 
     private fun applyConfigInternal(config: AppConfig) {
-        LogManager.appendLog("CONFIG", "Applying new configuration...")
+        LogManager.log("CONFIG", "Applying new configuration...")
 
         // Stop existing components
         stopAll()
@@ -342,23 +342,23 @@ class ForwardService : Service() {
         // Initialize components in order
         try {
             // 1. Initialize Links
-            LogManager.appendLog("CONFIG", "Initializing links...")
+            LogManager.log("CONFIG", "Initializing links...")
             LinkManager.setContext(this)
             LinkManager.initialize(config)
 
             // 2. Initialize Queues
-            LogManager.appendLog("CONFIG", "Initializing queues...")
+            LogManager.log("CONFIG", "Initializing queues...")
             QueueManager.initialize(this, config)
 
             // 3. Initialize Outputs
-            LogManager.appendLog("CONFIG", "Initializing outputs...")
+            LogManager.log("CONFIG", "Initializing outputs...")
             OutputManager.initialize(this, config)
 
             // 4. Initialize Dead Letter Handler
             deadLetterHandler = DeadLetterHandler(this, config.deadLetter)
 
             // 5. Initialize Rule Engine
-            LogManager.appendLog("CONFIG", "Initializing rule engine...")
+            LogManager.log("CONFIG", "Initializing rule engine...")
             ruleEngine = RuleEngine(config) {
                 forwardedCount++
                 onStatsChanged?.invoke()
@@ -366,7 +366,7 @@ class ForwardService : Service() {
             }
 
             // 6. Initialize Inputs with message handler
-            LogManager.appendLog("CONFIG", "Initializing inputs...")
+            LogManager.log("CONFIG", "Initializing inputs...")
             InputManager.setContext(this)
             InputManager.initialize(config) { message ->
                 handleMessage(message)
@@ -381,10 +381,10 @@ class ForwardService : Service() {
             refreshStats()
             saveStatus()
             acquireLocks()
-            LogManager.appendLog("CONFIG", "Configuration applied successfully. Service started.")
+            LogManager.log("CONFIG", "Configuration applied successfully. Service started.")
             updateNotification()
         } catch (e: Exception) {
-            LogManager.appendLog("CONFIG", "Failed to apply config: ${e.message}")
+            LogManager.log("CONFIG", "Failed to apply config: ${e.message}")
             e.printStackTrace()
             isRunning = false
             onStartFailed?.invoke("启动失败: ${e.message}")
@@ -392,10 +392,10 @@ class ForwardService : Service() {
     }
 
     private fun handleMessage(message: InputMessage) {
-        LogManager.appendLog(LogLevel.DEBUG, "FS", "NATIVE handleMessage: source=${message.source}, data=${String(message.data).take(30)}")
-        LogManager.appendLog(LogLevel.DEBUG, "TRACE:FS", "handleMessage called: source=${message.source}")
+        LogManager.log(LogLevel.DEBUG, "FS", "NATIVE handleMessage: source=${message.source}, data=${String(message.data).take(30)}")
+        LogManager.log(LogLevel.DEBUG, "TRACE:FS", "handleMessage called: source=${message.source}")
         if (!isReceivingEnabled) {
-            LogManager.appendLog("TRACE:FS", "Receiving disabled, dropping message")
+            LogManager.log("TRACE:FS", "Receiving disabled, dropping message")
             return
         }
 
@@ -404,14 +404,14 @@ class ForwardService : Service() {
         updateNotification()
 
         // Process through rule engine
-        LogManager.appendLog("TRACE:FS", "Calling ruleEngine.process for ${message.source}")
+        LogManager.log("TRACE:FS", "Calling ruleEngine.process for ${message.source}")
         ruleEngine?.process(message)
 
         // Record headers
         if (message.headers.isNotEmpty()) {
-            LogManager.appendLog("MESSAGE", "Headers: ${message.headers}")
+            LogManager.log("MESSAGE", "Headers: ${message.headers}")
         }
-        LogManager.appendLog("MESSAGE", "Processed: ${message.source} -> ${String(message.data).take(1000)}")
+        LogManager.log("MESSAGE", "Processed: ${message.source} -> ${String(message.data).take(1000)}")
     }
 
     private fun reloadConfig() {
@@ -420,12 +420,12 @@ class ForwardService : Service() {
             try {
                 val config = ConfigLoader.loadConfig(savedConfig)
                 applyConfig(config)
-                LogManager.appendLog("CONFIG", "Config reloaded successfully")
+                LogManager.log("CONFIG", "Config reloaded successfully")
             } catch (e: Exception) {
-                LogManager.appendLog("CONFIG", "Failed to reload config: ${e.message}")
+                LogManager.log("CONFIG", "Failed to reload config: ${e.message}")
             }
         } else {
-            LogManager.appendLog("CONFIG", "No saved config to reload")
+            LogManager.log("CONFIG", "No saved config to reload")
         }
     }
 
@@ -440,7 +440,7 @@ class ForwardService : Service() {
         forwardedCount = 0
         ruleEngine = null
         deadLetterHandler = null
-        LogManager.appendLog("SERVICE", "All components stopped")
+        LogManager.log("SERVICE", "All components stopped")
     }
 
     private fun saveStatus() {
@@ -455,7 +455,7 @@ class ForwardService : Service() {
             )
             AppStatusManager.saveStatus(this, status)
         } catch (e: Exception) {
-            LogManager.appendLog("APP_STATUS", "Failed to save status: ${e.message}")
+            LogManager.log("APP_STATUS", "Failed to save status: ${e.message}")
         }
     }
 
@@ -472,9 +472,9 @@ class ForwardService : Service() {
             preferences.forwardingEnabled = status.isForwardingEnabled
             preferences.autoStart = status.autoStart
             wasRunningBeforeRestart = status.isRunning
-            LogManager.appendLog("APP_STATUS", "Status loaded: running=${status.isRunning}, receive=${status.isReceivingEnabled}, forward=${status.isForwardingEnabled}")
+            LogManager.log("APP_STATUS", "Status loaded: running=${status.isRunning}, receive=${status.isReceivingEnabled}, forward=${status.isForwardingEnabled}")
         } catch (e: Exception) {
-            LogManager.appendLog("APP_STATUS", "Failed to load status: ${e.message}")
+            LogManager.log("APP_STATUS", "Failed to load status: ${e.message}")
         }
     }
 
@@ -584,7 +584,7 @@ class ForwardService : Service() {
             ).apply {
                 acquire()
             }
-            LogManager.appendLog("SERVICE", "WakeLock acquired")
+            LogManager.log("SERVICE", "WakeLock acquired")
         }
         // Acquire WiFi lock to keep WiFi connection alive when screen is off
         if (wifiLock == null) {
@@ -598,7 +598,7 @@ class ForwardService : Service() {
             wifiLock = wifiManager.createWifiLock(wifiMode, "mfca::forward_service").apply {
                 acquire()
             }
-            LogManager.appendLog("SERVICE", "WifiLock acquired")
+            LogManager.log("SERVICE", "WifiLock acquired")
         }
     }
 
@@ -606,14 +606,14 @@ class ForwardService : Service() {
         wakeLock?.let {
             if (it.isHeld) {
                 it.release()
-                LogManager.appendLog("SERVICE", "WakeLock released")
+                LogManager.log("SERVICE", "WakeLock released")
             }
         }
         wakeLock = null
         wifiLock?.let {
             if (it.isHeld) {
                 it.release()
-                LogManager.appendLog("SERVICE", "WifiLock released")
+                LogManager.log("SERVICE", "WifiLock released")
             }
         }
         wifiLock = null

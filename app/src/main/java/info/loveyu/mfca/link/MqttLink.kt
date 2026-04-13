@@ -66,7 +66,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
 
         // Backoff: too many consecutive failures
         if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-            LogManager.appendLog("MQTT", "Skipping connect for $id: too many failures ($consecutiveFailures), waiting for next health check")
+            LogManager.log("MQTT", "Skipping connect for $id: too many failures ($consecutiveFailures), waiting for next health check")
             return false
         }
 
@@ -96,7 +96,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                 else -> rawBroker
             }
 
-            LogManager.appendLog("MQTT", "Connecting to $parsedBroker as $resolvedClientId")
+            LogManager.log("MQTT", "Connecting to $parsedBroker as $resolvedClientId")
 
             val persistence = MemoryPersistence()
             client = MqttAsyncClient(parsedBroker, resolvedClientId, persistence)
@@ -130,7 +130,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
             client?.setCallback(object : MqttCallback {
                 override fun connectionLost(cause: Throwable?) {
                     connected = false
-                    LogManager.appendLog("MQTT", "Connection lost: ${cause?.message}")
+                    LogManager.log("MQTT", "Connection lost: ${cause?.message}")
                     cause?.let { errorListener?.invoke(it as? Exception ?: Exception(it.message)) }
                 }
 
@@ -138,13 +138,13 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                     topic?.let { t ->
                         message?.let { msg ->
                             messageListener?.invoke(t, msg)
-                            LogManager.appendLog("MQTT", "Message received on $t: ${String(msg.payload).take(100)}")
+                            LogManager.log("MQTT", "Message received on $t: ${String(msg.payload).take(100)}")
                         }
                     }
                 }
 
                 override fun deliveryComplete(token: IMqttDeliveryToken?) {
-                    LogManager.appendLog("MQTT", "Delivery complete")
+                    LogManager.log("MQTT", "Delivery complete")
                 }
             })
 
@@ -161,7 +161,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                         resolvedIp = InetAddress.getByName(h).hostAddress
                     }
                 } catch (_: Exception) {}
-                LogManager.appendLog("MQTT", "Connected successfully")
+                LogManager.log("MQTT", "Connected successfully")
 
                 // Re-subscribe to topics
                 topics.forEach { (topic, qos) ->
@@ -170,13 +170,13 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                 return true
             } else {
                 consecutiveFailures++
-                LogManager.appendLog("MQTT", "Connection failed ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): ${result?.exception?.message}")
+                LogManager.log("MQTT", "Connection failed ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): ${result?.exception?.message}")
                 cleanupClient()
                 return false
             }
         } catch (e: Exception) {
             consecutiveFailures++
-            LogManager.appendLog("MQTT", "Connection error ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): ${e.message}")
+            LogManager.log("MQTT", "Connection error ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): ${e.message}")
             errorListener?.invoke(e)
             cleanupClient()
             return false
@@ -190,7 +190,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         connecting = false
         consecutiveFailures = 0
         cleanupClient()
-        LogManager.appendLog("MQTT", "Disconnected: $id")
+        LogManager.log("MQTT", "Disconnected: $id")
     }
 
     private fun cleanupClient() {
@@ -217,7 +217,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
 
     override fun send(data: ByteArray): Boolean {
         if (!connected) {
-            LogManager.appendLog("MQTT", "Cannot send: not connected")
+            LogManager.log("MQTT", "Cannot send: not connected")
             return false
         }
         return false // Need topic to send - use sendToTopic
@@ -225,7 +225,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
 
     fun sendToTopic(topic: String, data: ByteArray, qos: Int = 1): Boolean {
         if (!connected || client == null) {
-            LogManager.appendLog("MQTT", "Cannot send: not connected")
+            LogManager.log("MQTT", "Cannot send: not connected")
             return false
         }
 
@@ -234,10 +234,10 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
             message.qos = qos
             val token = client?.publish(topic, message)
             token?.waitForCompletion(5000)
-            LogManager.appendLog("MQTT", "Published to $topic: ${data.size} bytes")
+            LogManager.log("MQTT", "Published to $topic: ${data.size} bytes")
             true
         } catch (e: Exception) {
-            LogManager.appendLog("MQTT", "Publish error: ${e.message}")
+            LogManager.log("MQTT", "Publish error: ${e.message}")
             errorListener?.invoke(e)
             false
         }
@@ -252,10 +252,10 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         return try {
             client?.subscribe(topic, qos)
             topics[topic] = qos
-            LogManager.appendLog("MQTT", "Subscribed to $topic (QoS $qos)")
+            LogManager.log("MQTT", "Subscribed to $topic (QoS $qos)")
             true
         } catch (e: Exception) {
-            LogManager.appendLog("MQTT", "Subscribe error: ${e.message}")
+            LogManager.log("MQTT", "Subscribe error: ${e.message}")
             errorListener?.invoke(e)
             false
         }
@@ -389,9 +389,9 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                 if (caFile.exists()) {
                     val caCert = certFactory.generateCertificate(caFile.inputStream()) as X509Certificate
                     keyStore.setCertificateEntry("ca", caCert)
-                    LogManager.appendLog("MQTT", "Loaded CA cert from: $caPath")
+                    LogManager.log("MQTT", "Loaded CA cert from: $caPath")
                 } else {
-                    LogManager.appendLog("MQTT", "CA cert file not found: $caPath")
+                    LogManager.log("MQTT", "CA cert file not found: $caPath")
                 }
             }
 
@@ -418,7 +418,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
 
             return sslContext.socketFactory
         } catch (e: Exception) {
-            LogManager.appendLog("MQTT", "SSL setup error: ${e.message}")
+            LogManager.log("MQTT", "SSL setup error: ${e.message}")
             throw e
         }
     }

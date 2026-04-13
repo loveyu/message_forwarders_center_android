@@ -23,7 +23,7 @@ class TcpInput(
     override fun start() {
         val link = tcpLink
         if (link == null) {
-            LogManager.appendLog("TCP", "TCP link not found: ${config.linkId}")
+            LogManager.log("TCP", "TCP link not found: ${config.linkId}")
             return
         }
 
@@ -41,12 +41,12 @@ class TcpInput(
         }
 
         running = true
-        LogManager.appendLog("TCP", "TCP input started: $inputName")
+        LogManager.log("TCP", "TCP input started: $inputName")
     }
 
     override fun stop() {
         running = false
-        LogManager.appendLog("TCP", "TCP input stopped: $inputName")
+        LogManager.log("TCP", "TCP input stopped: $inputName")
     }
 
     override fun isRunning(): Boolean = running
