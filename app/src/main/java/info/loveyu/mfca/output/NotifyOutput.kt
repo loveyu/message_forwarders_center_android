@@ -249,19 +249,23 @@ class NotifyOutput(
         item.metadata["notify_id"]?.let { options.id = it }
 
         // 尝试解析 data 中的 JSON 对象 (次优先级)
+        // 内容字段 (title/message/icon/fixedIcon) 直接从 data 读取
+        // 控制字段 (tag/group/id/popup/persistent) 使用 notify 前缀避免与消息业务数据冲突
         try {
             val dataStr = item.text
             if (dataStr.startsWith("{")) {
                 val json = JSONObject(dataStr)
+                // 内容字段：直接读取
                 if (json.has("title") && options.title == null) options.title = json.getString("title")
                 if (json.has("message") && options.message == null) options.message = json.getString("message")
                 if (json.has("icon") && options.icon == null) options.icon = json.getString("icon")
                 if (json.has("fixedIcon") && options.fixedIcon == null) options.fixedIcon = json.getString("fixedIcon")
-                if (json.has("popup") && options.popup == null) options.popup = json.getBoolean("popup")
-                if (json.has("persistent") && options.persistent == null) options.persistent = json.getBoolean("persistent")
-                if (json.has("tag") && options.tag == null) options.tag = json.getString("tag")
-                if (json.has("group") && options.group == null) options.group = json.getString("group")
-                if (json.has("id") && options.id == null) options.id = json.getString("id")
+                // 控制字段：使用 notify 前缀 (notifyTag/notifyGroup/notifyId/notifyPopup/notifyPersistent)
+                if (json.has("notifyTag") && options.tag == null) options.tag = json.getString("notifyTag")
+                if (json.has("notifyGroup") && options.group == null) options.group = json.getString("notifyGroup")
+                if (json.has("notifyId") && options.id == null) options.id = json.getString("notifyId")
+                if (json.has("notifyPopup") && options.popup == null) options.popup = json.getBoolean("notifyPopup")
+                if (json.has("notifyPersistent") && options.persistent == null) options.persistent = json.getBoolean("notifyPersistent")
             }
         } catch (e: Exception) {
             // 不是 JSON 格式，忽略

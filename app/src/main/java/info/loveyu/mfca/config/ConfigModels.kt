@@ -252,8 +252,8 @@ enum class InternalOutputType {
  * - id:    通知唯一标识，Int 值。默认为秒级时间戳 * 1000 + 序列号
  *
  * 运行时覆盖:
- * - metadata: notify_tag / notify_group / notify_id (带 notify_ 前缀)
- * - data JSON: tag / group / id (无前缀)
+ * - metadata:  notify_tag / notify_group / notify_id / notify_popup / notify_persistent (带 notify_ 前缀)
+ * - data JSON: 内容字段直接读取 (title/message/icon/fixedIcon)，控制字段使用 notify 前缀 (notifyTag/notifyGroup/notifyId/notifyPopup/notifyPersistent)
  */
 data class NotifyOptions(
     var title: String? = null,
