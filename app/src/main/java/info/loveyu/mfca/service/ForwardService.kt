@@ -55,6 +55,7 @@ class ForwardService : Service() {
         const val ACTION_TOGGLE_FORWARD = "info.loveyu.mfca.action.TOGGLE_FORWARD"
         const val ACTION_RELOAD_CONFIG = "info.loveyu.mfca.action.RELOAD_CONFIG"
         const val ACTION_TOGGLE_WAKELOCK = "info.loveyu.mfca.action.TOGGLE_WAKELOCK"
+        const val ACTION_TOGGLE_WIFILOCK = "info.loveyu.mfca.action.TOGGLE_WIFILOCK"
 
         @Volatile
         var isRunning = false
@@ -82,6 +83,10 @@ class ForwardService : Service() {
 
         @Volatile
         var isWakeLockEnabled = false
+            private set
+
+        @Volatile
+        var isWifiLockEnabled = false
             private set
 
         // 简写首字母统计
@@ -249,6 +254,20 @@ class ForwardService : Service() {
                 updateNotification()
                 onStatsChanged?.invoke()
                 LogManager.logInfo("SERVICE", if (isWakeLockEnabled) "已启用 WakeLock" else "已关闭 WakeLock")
+                return START_STICKY
+            }
+            ACTION_TOGGLE_WIFILOCK -> {
+                isWifiLockEnabled = !isWifiLockEnabled
+                if (isWifiLockEnabled) {
+                    acquireWifiLock()
+                } else {
+                    releaseWifiLock()
+                }
+                saveStatus()
+                lastNotificationStats = null
+                updateNotification()
+                onStatsChanged?.invoke()
+                LogManager.logInfo("SERVICE", if (isWifiLockEnabled) "已启用 WifiLock" else "已关闭 WifiLock")
                 return START_STICKY
             }
             ACTION_RELOAD_CONFIG -> {
@@ -511,6 +530,7 @@ class ForwardService : Service() {
                 isReceivingEnabled = isReceivingEnabled,
                 isForwardingEnabled = isForwardingEnabled,
                 isWakeLockEnabled = isWakeLockEnabled,
+                isWifiLockEnabled = isWifiLockEnabled,
                 autoStart = preferences.autoStart,
                 appAutoStartOnBoot = preferences.autoStart
             )
@@ -530,6 +550,7 @@ class ForwardService : Service() {
             isReceivingEnabled = status.isReceivingEnabled
             isForwardingEnabled = status.isForwardingEnabled
             isWakeLockEnabled = status.isWakeLockEnabled
+            isWifiLockEnabled = status.isWifiLockEnabled
             preferences.receivingEnabled = status.isReceivingEnabled
             preferences.forwardingEnabled = status.isForwardingEnabled
             preferences.autoStart = status.autoStart
@@ -576,6 +597,7 @@ class ForwardService : Service() {
                 if (!isReceivingEnabled) append(" | 暂停接收")
                 if (!isForwardingEnabled) append(" | 暂停转发")
                 if (isWakeLockEnabled) append(" | W锁")
+                if (isWifiLockEnabled) append(" | WiFi锁")
             }
         } else {
             "已停止"
@@ -627,6 +649,7 @@ class ForwardService : Service() {
                 if (!isReceivingEnabled) append(" | 暂停接收")
                 if (!isForwardingEnabled) append(" | 暂停转发")
                 if (isWakeLockEnabled) append(" | W锁")
+                if (isWifiLockEnabled) append(" | WiFi锁")
             }
         } else {
             "已停止"
@@ -642,19 +665,9 @@ class ForwardService : Service() {
         if (isWakeLockEnabled) {
             acquireWakeLock()
         }
-        // Acquire WiFi lock to keep WiFi connection alive when screen is off
-        if (wifiLock == null) {
-            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-            val wifiMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                WifiManager.WIFI_MODE_FULL_LOW_LATENCY
-            } else {
-                @Suppress("DEPRECATION")
-                WifiManager.WIFI_MODE_FULL_HIGH_PERF
-            }
-            wifiLock = wifiManager.createWifiLock(wifiMode, "mfca::forward_service").apply {
-                acquire()
-            }
-            LogManager.log("SERVICE", "WifiLock acquired")
+        // Acquire WiFi lock only when enabled (to avoid WLAN battery drain)
+        if (isWifiLockEnabled) {
+            acquireWifiLock()
         }
     }
 
@@ -671,6 +684,32 @@ class ForwardService : Service() {
         }
     }
 
+    private fun acquireWifiLock() {
+        if (wifiLock == null) {
+            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val wifiMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+            } else {
+                @Suppress("DEPRECATION")
+                WifiManager.WIFI_MODE_FULL_HIGH_PERF
+            }
+            wifiLock = wifiManager.createWifiLock(wifiMode, "mfca::forward_service").apply {
+                acquire()
+            }
+            LogManager.log("SERVICE", "WifiLock acquired")
+        }
+    }
+
+    private fun releaseWifiLock() {
+        wifiLock?.let {
+            if (it.isHeld) {
+                it.release()
+                LogManager.log("SERVICE", "WifiLock released")
+            }
+        }
+        wifiLock = null
+    }
+
     private fun releaseWakeLock() {
         wakeLock?.let {
             if (it.isHeld) {
@@ -683,12 +722,6 @@ class ForwardService : Service() {
 
     private fun releaseLocks() {
         releaseWakeLock()
-        wifiLock?.let {
-            if (it.isHeld) {
-                it.release()
-                LogManager.log("SERVICE", "WifiLock released")
-            }
-        }
-        wifiLock = null
+        releaseWifiLock()
     }
 }

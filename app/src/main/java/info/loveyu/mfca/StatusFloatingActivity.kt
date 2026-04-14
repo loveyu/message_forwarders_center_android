@@ -88,11 +88,13 @@ class StatusFloatingActivity : ComponentActivity() {
             Triple("消息接收", "接收来自输入源的消息") { ForwardService.isReceivingEnabled },
             Triple("消息转发", "将消息发送至输出目标") { ForwardService.isForwardingEnabled },
             Triple("唤醒锁", "保持 CPU 唤醒，增加耗电") { ForwardService.isWakeLockEnabled },
+            Triple("WiFi 锁", "保持 WiFi 连接，防止休眠") { ForwardService.isWifiLockEnabled },
         )
         val actions = listOf(
             ForwardService.ACTION_TOGGLE_RECEIVE,
             ForwardService.ACTION_TOGGLE_FORWARD,
             ForwardService.ACTION_TOGGLE_WAKELOCK,
+            ForwardService.ACTION_TOGGLE_WIFILOCK,
         )
 
         rows.forEachIndexed { index, (label, desc, stateProvider) ->
@@ -137,6 +139,7 @@ class StatusFloatingActivity : ComponentActivity() {
         if (!ForwardService.isReceivingEnabled) parts.add("接收暂停")
         if (!ForwardService.isForwardingEnabled) parts.add("转发暂停")
         if (ForwardService.isWakeLockEnabled) parts.add("唤醒锁开启")
+        if (ForwardService.isWifiLockEnabled) parts.add("WiFi锁开启")
         return if (parts.isEmpty()) "一切正常" else parts.joinToString(" · ")
     }
 

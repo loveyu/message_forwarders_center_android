@@ -6,6 +6,7 @@ data class AppStatusConfig(
     val isReceivingEnabled: Boolean = true,
     val isForwardingEnabled: Boolean = true,
     val isWakeLockEnabled: Boolean = false,
+    val isWifiLockEnabled: Boolean = false,
     val autoStart: Boolean = false,
     val appAutoStartOnBoot: Boolean = false
 )

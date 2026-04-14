@@ -29,6 +29,8 @@ object AppStatusManager {
                 isRunning = data["isRunning"] as? Boolean ?: false,
                 isReceivingEnabled = data["isReceivingEnabled"] as? Boolean ?: true,
                 isForwardingEnabled = data["isForwardingEnabled"] as? Boolean ?: true,
+                isWakeLockEnabled = data["isWakeLockEnabled"] as? Boolean ?: false,
+                isWifiLockEnabled = data["isWifiLockEnabled"] as? Boolean ?: false,
                 autoStart = data["autoStart"] as? Boolean ?: false,
                 appAutoStartOnBoot = data["appAutoStartOnBoot"] as? Boolean ?: false
             )
@@ -47,6 +49,8 @@ object AppStatusManager {
                 "isRunning" to status.isRunning,
                 "isReceivingEnabled" to status.isReceivingEnabled,
                 "isForwardingEnabled" to status.isForwardingEnabled,
+                "isWakeLockEnabled" to status.isWakeLockEnabled,
+                "isWifiLockEnabled" to status.isWifiLockEnabled,
                 "autoStart" to status.autoStart,
                 "appAutoStartOnBoot" to status.appAutoStartOnBoot
             )
