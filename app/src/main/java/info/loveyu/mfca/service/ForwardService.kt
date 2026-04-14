@@ -124,7 +124,7 @@ class ForwardService : Service() {
             // Only count enabled components based on whenCondition/deny
             val config = currentConfig
             if (config != null) {
-                val ctx = serviceInstance!!
+                val ctx = serviceInstance ?: return
                 linkCount = config.links.count { link ->
                     NetworkChecker.shouldEnable(ctx, link.whenCondition, link.deny)
                 }

@@ -17,6 +17,8 @@ import java.net.URI
 import java.net.URLDecoder
 import java.security.MessageDigest
 import java.security.cert.X509Certificate
+import java.util.Timer
+import java.util.TimerTask
 
 /**
  * MQTT 连接实现
@@ -41,6 +43,12 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
     override var recoveredCallback: (() -> Unit)? = null
     @Volatile private var peerCertificates: List<X509Certificate>? = null
     @Volatile private var resolvedIp: String? = null
+
+    // Heartbeat monitoring
+    private var keepAliveSeconds = 60
+    private var connectedAt = 0L
+    @Volatile private var lastOutboundActivity = 0L
+    private var heartbeatTimer: Timer? = null
 
     init {
         // Validate DSN protocol is mqtt or mqtts
@@ -78,6 +86,9 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
 
         // Parse DSN first to extract params
         val (rawBroker, params) = parseBrokerUrl(broker)
+
+        // Store keepAlive for heartbeat monitoring
+        keepAliveSeconds = params["keepAliveInterval"]?.toIntOrNull() ?: 60
 
         // Resolve retry interval: DSN param > config.reconnect > default
         retryIntervalMs = params["reconnectInterval"]?.toLongOrNull()?.let { it * 1000 }
@@ -131,8 +142,14 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
 
             client?.setCallback(object : MqttCallback {
                 override fun connectionLost(cause: Throwable?) {
+                    val uptime = if (connectedAt > 0) (System.currentTimeMillis() - connectedAt) / 1000 else -1
                     connected = false
-                    LogManager.logWarn("MQTT", "Connection lost: ${cause?.message}")
+                    stopHeartbeatMonitor()
+                    LogManager.logWarn("MQTT", "Connection lost after ${uptime}s (keepAlive=${keepAliveSeconds}s): ${cause?.javaClass?.simpleName}: ${cause?.message}")
+                    if (cause != null) {
+                        val trace = cause.stackTraceToString().lines().take(5).joinToString(" | ")
+                        LogManager.logDebug("MQTT", "Connection lost trace: $trace")
+                    }
                     cause?.let { errorListener?.invoke(it as? Exception ?: Exception(it.message)) }
                 }
 
@@ -165,7 +182,10 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                         resolvedIp = InetAddress.getByName(h).hostAddress
                     }
                 } catch (_: Exception) {}
-                LogManager.log("MQTT", "Connected successfully")
+                LogManager.log("MQTT", "Connected successfully (keepAlive=${keepAliveSeconds}s)")
+                connectedAt = System.currentTimeMillis()
+                lastOutboundActivity = connectedAt
+                startHeartbeatMonitor()
 
                 if (shouldNotify) {
                     recoveredCallback?.invoke()
@@ -213,6 +233,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
     }
 
     private fun cleanupClient() {
+        stopHeartbeatMonitor()
         try {
             client?.disconnect(0)
         } catch (e: Exception) {
@@ -225,6 +246,33 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         }
         client = null
         connected = false
+    }
+
+    /**
+     * Start periodic heartbeat monitoring.
+     * Logs connection state at half the keepAlive interval to verify Paho's PINGREQ is working.
+     */
+    private fun startHeartbeatMonitor() {
+        stopHeartbeatMonitor()
+        val logIntervalMs = (keepAliveSeconds * 500L).coerceIn(15_000L, 60_000L)
+        LogManager.logDebug("MQTT", "Heartbeat monitor started: logInterval=${logIntervalMs / 1000}s, keepAlive=${keepAliveSeconds}s")
+        heartbeatTimer = Timer("mqtt-hb-$id", true).apply {
+            scheduleAtFixedRate(object : TimerTask() {
+                override fun run() {
+                    if (connected) {
+                        val now = System.currentTimeMillis()
+                        val uptimeSec = (now - connectedAt) / 1000
+                        val idleSec = (now - lastOutboundActivity) / 1000
+                        LogManager.logDebug("MQTT", "Heartbeat: uptime=${uptimeSec}s, idle=${idleSec}s, keepAlive=${keepAliveSeconds}s, pingExpected=${idleSec >= keepAliveSeconds}")
+                    }
+                }
+            }, logIntervalMs, logIntervalMs)
+        }
+    }
+
+    private fun stopHeartbeatMonitor() {
+        heartbeatTimer?.cancel()
+        heartbeatTimer = null
     }
 
     override fun isConnected(): Boolean = connected
@@ -255,6 +303,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         return try {
             val message = MqttMessage(data)
             message.qos = qos
+            lastOutboundActivity = System.currentTimeMillis()
             val token = client?.publish(topic, message)
             token?.waitForCompletion(5000)
             LogManager.logDebug("MQTT", "Published to $topic: ${data.size} bytes")
@@ -276,6 +325,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         return try {
             client?.subscribe(topic, qos)
             topics[topic] = qos
+            lastOutboundActivity = System.currentTimeMillis()
             LogManager.logDebug("MQTT", "Subscribed to $topic (QoS $qos)")
             true
         } catch (e: Exception) {
