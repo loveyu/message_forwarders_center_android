@@ -57,7 +57,9 @@ object LogManager {
         if (isPaused) return
         if (level.androidPriority < currentLogLevel.androidPriority) return
 
-        val timestamp = dateFormat.format(Date())
+        val now = Date()
+        val timestamp = dateFormat.format(now)
+        val fileTimestamp = fileDateFormat.format(now)
         val contextJson = context?.let {
             try {
                 JSONObject().put("context", it)
@@ -71,13 +73,9 @@ object LogManager {
             "[$timestamp] [${level.tag}:$tag] $message"
         }
 
-        // Write to logcat: WARN+ always, DEBUG/INFO based on isAllLogcatEnabled
-        when {
-            isAllLogcatEnabled -> Log.d(tag, message)
-            level == LogLevel.ERROR -> Log.e(tag, message)
-            level == LogLevel.WARN -> Log.w(tag, message)
-            level == LogLevel.INFO -> Log.i(tag, message)
-            level == LogLevel.DEBUG -> Log.d(tag, message)
+        if (isAllLogcatEnabled || level.androidPriority >= Log.WARN) {
+            val logcatMsg = if (contextJson != null) "$message $contextJson" else message
+            Log.println(level.androidPriority, tag, logcatMsg)
         }
 
         // Write to UI log
@@ -85,7 +83,12 @@ object LogManager {
 
         // Write to file if enabled
         if (isFileLoggingEnabled) {
-            writeToFile(logLine)
+            val fileLine = if (contextJson != null) {
+                "[$fileTimestamp] [${level.tag}:$tag] $message $contextJson"
+            } else {
+                "[$fileTimestamp] [${level.tag}:$tag] $message"
+            }
+            writeToFile(fileLine)
         }
     }
 
