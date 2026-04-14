@@ -6,8 +6,9 @@ Android 消息转发中心 - Service 常驻架构
 
 ### 核心架构
 - **Android Foreground Service** - START_STICKY 保证服务存活
+- **统一 Ticker 调度** - 单一调度器驱动所有定时检查，支持事件触发
 - **网络状态实时监听** - ConnectivityManager.NetworkCallback
-- **健康检查自动恢复** - 30秒间隔自动重连断开的链路和输入源
+- **事件驱动** - 网络变更、屏幕点亮、用户解锁、充放电变化、APP 前后台切换
 
 ### 链接层 (LinkManager)
 | 类型 | 库 | 特性 |
@@ -53,7 +54,7 @@ protocol://[username:password@]host:port[?param1=value1&param2=value2...]
 | `reconnectMaxInterval` | long | 60 | 重连最大间隔(秒, 预留) |
 
 所有 Link 类型采用统一的重连模型：
-- 无内部定时器重连，由 LinkManager 30秒健康检查驱动
+- 无内部定时器重连，由统一 Ticker 健康检查驱动（默认 30s，可配置）
 - 连续失败计数器（最大5次），超过后等待下一健康检查周期重置
 - 最小重试间隔防止高频重连
 - 支持 YAML `reconnect` 配置块或 DSN 查询参数两种方式配置
@@ -164,6 +165,24 @@ pipeline:
     to: ["mqtt_output", "http_output"]
 ```
 
+### 调度器配置
+
+所有定时检查由统一 Ticker 驱动，支持配置检查间隔和事件触发：
+```yaml
+scheduler:
+  tickInterval: "30s"              # 定时检查间隔，默认 30s，最小 15s
+  chargingTickInterval: "15s"      # 充电时更短的间隔（可选）
+```
+
+事件触发（受 5 秒最小间隔防抖保护）：
+| 事件 | 说明 |
+|------|------|
+| 网络变更 | WiFi/移动网络切换、网络恢复/丢失 |
+| 屏幕点亮 | `ACTION_SCREEN_ON` |
+| 用户解锁 | `ACTION_USER_PRESENT` |
+| 接入/断开电源 | 自动切换到充电/普通间隔 |
+| APP 前台 | 任意 Activity 从后台回到前台 |
+
 ### 网络条件控制
 ```yaml
 links:
@@ -210,10 +229,11 @@ links:
 | [`09_outputs.yaml`](app/src/main/assets/samples/09_outputs.yaml) | 输出模块 |
 | [`10_rules.yaml`](app/src/main/assets/samples/10_rules.yaml) | 规则引擎 |
 | [`11_full_demo.yaml`](app/src/main/assets/samples/11_full_demo.yaml) | 完整演示 |
+| [`15_scheduler.yaml`](app/src/main/assets/samples/15_scheduler.yaml) | 调度器配置 |
 
 ## 状态栏显示
 
-服务运行时通知栏显示（5秒刷新）：
+服务运行时通知栏显示（由统一 Ticker 驱动，默认 30s 刷新）：
 ```
 L链路数 I输入数 O输出数 · R接收数 S发送数
 ```

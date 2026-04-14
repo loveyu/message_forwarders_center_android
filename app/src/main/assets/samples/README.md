@@ -20,6 +20,7 @@
 | `12_clipboard_forward.yaml` | 剪贴板转发 - MQTT 到本地剪贴板 |
 | `13_http_shared_input.yaml` | HTTP 共享端口 - 多输入共用端口 |
 | `14_quick_settings.yaml` | **快捷设置** - 通知栏按钮开关 |
+| `15_scheduler.yaml` | **调度器** - 定时检查间隔、充电间隔、事件驱动 |
 
 ## 链接配置说明
 
@@ -213,3 +214,25 @@ inputs:
 2. 点击复制按钮获取配置内容
 3. 修改地址、端口、凭证等为实际值
 4. 通过 UI 加载配置或使用文件路径
+
+## 调度器配置
+
+所有定时检查（链路健康、输入源恢复、统计刷新、队列处理）由统一 Ticker 驱动。
+
+```yaml
+scheduler:
+  tickInterval: "30s"              # 定时检查间隔，默认 30s，最小 15s
+  chargingTickInterval: "15s"      # 充电时更短的间隔（可选）
+```
+
+### 事件驱动
+
+除定期 tick 外，以下系统事件会立即触发检查（受 5 秒最小间隔保护）：
+
+| 事件 | 说明 |
+|------|------|
+| 网络变更 | WiFi/移动网络切换、网络恢复/丢失 |
+| 屏幕点亮 | `ACTION_SCREEN_ON` |
+| 用户解锁 | `ACTION_USER_PRESENT` |
+| 接入/断开电源 | 自动切换到充电/普通间隔 |
+| APP 前台 | 任意 Activity 从后台回到前台 |

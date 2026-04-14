@@ -18,27 +18,31 @@ Message Forwarders Center Android - Android 消息转发中心，基于 Android 
 ## 架构概览
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                   ForwardService                         │
-│              (Android Foreground Service)                │
-├─────────────────────────────────────────────────────────┤
-│  LinkManager  │  InputManager  │  OutputManager  │  QueueManager  │
-├─────────────────────────────────────────────────────────┤
-│                    RuleEngine (Pipeline)                  │
-├─────────────────────────────────────────────────────────┤
-│                        UI Layer (Jetpack Compose)         │
-└─────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│                      ForwardService                            │
+│               (Android Foreground Service)                     │
+│  ┌─────────── 统一 Ticker (appScheduler) ──────────────┐      │
+│  │  周期 tick (30s) + 事件触发 (网络/屏幕/充放电/前后台)   │      │
+│  └──────────────────────────────────────────────────────┘      │
+├───────────────────────────────────────────────────────────────┤
+│  LinkManager  │  InputManager  │  OutputManager  │  QueueManager │
+│   (onTick)    │   (onTick)     │                 │   (onTick)    │
+├───────────────────────────────────────────────────────────────┤
+│                    RuleEngine (Pipeline)                        │
+├───────────────────────────────────────────────────────────────┤
+│                     UI Layer (Jetpack Compose)                  │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 ## 核心模块
 
 | 模块 | 路径 | 说明 |
 |------|------|------|
-| 服务入口 | `service/ForwardService.kt` | Foreground Service，START_STICKY |
+| 服务入口 | `service/ForwardService.kt` | Foreground Service，统一 Ticker 调度 |
 | 链接层 | `link/` | MQTT (Paho)、WebSocket (OkHttp)、TCP (Socket) |
 | 输入层 | `input/` | HTTP Server (NanoHTTPD)、Link 订阅 |
 | 输出层 | `output/` | HTTP、Link 发布、Internal (Clipboard/File) |
-| 队列层 | `queue/` | MemoryQueue、SqliteQueue |
+| 队列层 | `queue/` | MemoryQueue (Channel 驱动)、SqliteQueue (tick 驱动) |
 | 规则引擎 | `pipeline/` | GJSON 提取、表达式过滤、类型检测 |
 | 配置 | `config/` | YAML 配置加载器 |
 | HTTP 服务器 | `server/` | NanoHTTPD 实现 |
