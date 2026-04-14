@@ -126,6 +126,10 @@ fun SettingsScreenContent(
     var isClearingIconCache by remember { mutableStateOf(false) }
     var showClearIconCacheDialog by remember { mutableStateOf(false) }
 
+    // Log settings state (lifted from LazyColumn item for reliable recomposition)
+    var selectedLogLevel by remember { mutableStateOf(LogManager.getLogLevel()) }
+    var expandedLogLevel by remember { mutableStateOf(false) }
+
     // Load backup count and status
     LaunchedEffect(Unit) {
         backupCount = ConfigBackupManager.listBackups(context).size
@@ -392,9 +396,6 @@ fun SettingsScreenContent(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         // 日志等级
-                        var selectedLogLevel by remember { mutableStateOf(LogManager.getLogLevel()) }
-                        var expandedLogLevel by remember { mutableStateOf(false) }
-
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
