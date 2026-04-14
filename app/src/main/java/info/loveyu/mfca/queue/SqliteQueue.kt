@@ -13,7 +13,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -35,6 +34,7 @@ class SqliteQueue(
     private val counter = AtomicInteger(0)
     private var consumer: QueueConsumer? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var lastProcessTime = 0L
 
     init {
         val dbPath = resolvePath(config.path)
@@ -166,19 +166,28 @@ class SqliteQueue(
     }
 
     override fun start() {
-        scope.launch {
-            while (isActive) {
-                processBatch()
-                cleanupExpired()
-                delay(config.retryInterval.millis)
-            }
-        }
-        LogManager.log("QUEUE", "SQLite queue $name started")
+        lastProcessTime = System.currentTimeMillis()
+        LogManager.log("QUEUE", "SQLite queue $name started (tick-driven, interval=${config.retryInterval.value})")
     }
 
     override fun stop() {
         scope.cancel()
         LogManager.log("QUEUE", "SQLite queue $name stopped")
+    }
+
+    /**
+     * 由统一 Ticker 调用。
+     * 仅当距上次处理超过 retryInterval 时才执行批处理。
+     */
+    fun onTick() {
+        val now = System.currentTimeMillis()
+        if (now - lastProcessTime < config.retryInterval.millis) return
+        lastProcessTime = now
+
+        scope.launch {
+            processBatch()
+            cleanupExpired()
+        }
     }
 
     fun setConsumer(consumer: QueueConsumer) {

@@ -14,6 +14,7 @@ data class QuickSettingsConfig(
  */
 data class AppConfig(
     val version: String = "",
+    val scheduler: SchedulerConfig = SchedulerConfig(),
     val links: List<LinkConfig> = emptyList(),
     val inputs: InputsConfig = InputsConfig(),
     val queues: QueuesConfig = QueuesConfig(),
@@ -22,6 +23,17 @@ data class AppConfig(
     val deadLetter: DeadLetterConfig = DeadLetterConfig(),
     val quickSettings: QuickSettingsConfig = QuickSettingsConfig()
 )
+
+/**
+ * 统一调度器配置
+ */
+data class SchedulerConfig(
+    val tickInterval: Duration = Duration("30s")
+) {
+    /** 保证最小 15 秒 */
+    val effectiveTickInterval: Duration
+        get() = if (tickInterval.millis >= 15_000) tickInterval else Duration("15s")
+}
 
 /**
  * 链接配置 (连接池)

@@ -7,7 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 内存队列实现
+ * 使用 Channel 事件驱动，空闲时零唤醒
  */
 class MemoryQueue(
     override val name: String,
@@ -26,6 +27,9 @@ class MemoryQueue(
     private val queue = ConcurrentLinkedQueue<QueueItem>()
     private val counter = AtomicInteger(0)
     private val workers = mutableListOf<Job>()
+
+    // 事件通道：有新元素入队时发送信号，worker 阻塞等待
+    private var wakeSignal = Channel<Unit>(Channel.CONFLATED)
 
     private var consumer: QueueConsumer? = null
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -43,10 +47,9 @@ class MemoryQueue(
                         return false
                     }
                     OverflowStrategy.block -> {
-                        // For blocking, we just add anyway - consumer should handle backpressure
                         queue.offer(item)
                         counter.incrementAndGet()
-                        notifyWorkers()
+                        wakeSignal.trySend(Unit)
                         return true
                     }
                 }
@@ -54,8 +57,7 @@ class MemoryQueue(
                 queue.offer(item)
                 counter.incrementAndGet()
             }
-
-            notifyWorkers()
+            wakeSignal.trySend(Unit)
             return true
         }
     }
@@ -90,7 +92,6 @@ class MemoryQueue(
                         try {
                             val success = consumer?.invoke(item) ?: false
                             if (!success) {
-                                // Re-enqueue on failure
                                 enqueue(item.copy(retryCount = item.retryCount + 1))
                             }
                         } catch (e: Exception) {
@@ -98,8 +99,12 @@ class MemoryQueue(
                             enqueue(item.copy(retryCount = item.retryCount + 1))
                         }
                     } else {
-                        // Wait for new items
-                        delay(100)
+                        // 队列为空 → 阻塞等待信号，不再轮询
+                        try {
+                            wakeSignal.receive()
+                        } catch (_: Exception) {
+                            // Channel 关闭或协程取消
+                        }
                     }
                 }
             }
@@ -111,14 +116,13 @@ class MemoryQueue(
     override fun stop() {
         workers.forEach { it.cancel() }
         workers.clear()
+        wakeSignal.close()
+        // 重建 Channel 以支持后续可能的 start() 调用
+        wakeSignal = Channel(Channel.CONFLATED)
         LogManager.log("QUEUE", "Memory queue $name stopped")
     }
 
     fun setConsumer(consumer: QueueConsumer) {
         this.consumer = consumer
-    }
-
-    private fun notifyWorkers() {
-        // Workers will automatically pick up new items
     }
 }

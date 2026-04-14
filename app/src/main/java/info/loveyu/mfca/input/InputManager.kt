@@ -6,10 +6,6 @@ import info.loveyu.mfca.config.HttpInputConfig
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.NetworkChecker
-import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.TimeUnit
 
 /**
  * 输入源管理器 - Service 常驻架构
@@ -30,10 +26,6 @@ object InputManager {
     private val entries = mutableListOf<InputEntry>()
     private var globalMessageListener: ((InputMessage) -> Unit)? = null
     private var applicationContext: Context? = null
-
-    // Service-resident executor
-    private val inputScheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
-    private var healthCheckFuture: ScheduledFuture<*>? = null
 
     /**
      * 输入源配置信息
@@ -153,35 +145,15 @@ object InputManager {
             }
         }
 
-        // Start health check
-        startHealthCheck()
         LogManager.log("INPUT", "InputManager initialized: ${entries.size} inputs registered")
     }
 
     /**
-     * 启动输入源健康检查 (每30秒)
+     * 统一 Ticker 调用：执行输入源健康检查
      */
-    fun startHealthCheck() {
-        healthCheckFuture?.cancel(false)
-        healthCheckFuture = inputScheduler.scheduleAtFixedRate({
-            checkInputHealth()
-        }, 30, 30, TimeUnit.SECONDS)
-    }
-
-    /**
-     * 停止输入源健康检查
-     */
-    fun stopHealthCheck() {
-        healthCheckFuture?.cancel(false)
-        healthCheckFuture = null
-    }
-
-    /**
-     * 检查输入源健康状态，自动重启断开的输入源
-     */
-    private fun checkInputHealth() {
+    fun onTick() {
+        val ctx = applicationContext ?: return
         if (!LinkManager.isNetworkAvailable()) return
-
         checkAllInputConditions()
     }
 
@@ -301,7 +273,6 @@ object InputManager {
     }
 
     fun clear() {
-        stopHealthCheck()
         stopAll()
         entries.clear()
         globalMessageListener = null

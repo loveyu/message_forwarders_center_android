@@ -57,6 +57,9 @@ class ForwardService : Service() {
         const val ACTION_TOGGLE_WAKELOCK = "info.loveyu.mfca.action.TOGGLE_WAKELOCK"
         const val ACTION_TOGGLE_WIFILOCK = "info.loveyu.mfca.action.TOGGLE_WIFILOCK"
 
+        /** 失败计数重置间隔：每 20 个 tick（tick=30s 时约 10 分钟） */
+        private const val FAILURE_RESET_TICK_INTERVAL = 20
+
         @Volatile
         var isRunning = false
             private set
@@ -188,12 +191,16 @@ class ForwardService : Service() {
     private var ruleEngine: RuleEngine? = null
     private var deadLetterHandler: DeadLetterHandler? = null
 
-    // Stats refresh scheduler (5s)
-    private val statsScheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
-    private var statsFuture: ScheduledFuture<*>? = null
+    // 统一调度器：替代原来分散的 statsScheduler + configExecutor
+    // 同时处理周期性 tick 和一次性 config 加载任务
+    private val appScheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
+    private var tickFuture: ScheduledFuture<*>? = null
+    private var tickCount = 0
 
-    // Config application executor (off main thread)
-    private val configExecutor: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
+    // tick 间隔，从 config.scheduler 读取，默认 30s
+    @Volatile
+    private var tickIntervalMs: Long = 30_000L
+
     @Volatile
     private var isApplyingConfig = false
 
@@ -202,13 +209,42 @@ class ForwardService : Service() {
         serviceInstance = this
         preferences = Preferences(this)
         createNotificationChannel()
+        startTick()
+    }
 
-        // Start periodic stats refresh (5s)
-        statsFuture = statsScheduler.scheduleAtFixedRate({
-            if (isRunning) {
-                refreshStats()
-            }
-        }, 5, 5, TimeUnit.SECONDS)
+    /**
+     * 启动统一 Ticker
+     */
+    private fun startTick() {
+        tickFuture?.cancel(false)
+        tickFuture = appScheduler.scheduleAtFixedRate({
+            onTick()
+        }, tickIntervalMs, tickIntervalMs, TimeUnit.MILLISECONDS)
+    }
+
+    /**
+     * 统一 Ticker 回调：所有定时检查集中执行
+     */
+    private fun onTick() {
+        if (!isRunning) return
+        tickCount++
+
+        // 1. 刷新统计 & 通知栏
+        refreshStats()
+
+        // 2. Link 健康检查 + MQTT 心跳日志
+        LinkManager.onTick()
+
+        // 3. Input 健康检查
+        InputManager.onTick()
+
+        // 4. SqliteQueue 处理（根据各自的 retryInterval 判断是否到期）
+        QueueManager.onTick()
+
+        // 5. 每 N 个 tick 执行失败重置（≈10 分钟）
+        if (tickCount % FAILURE_RESET_TICK_INTERVAL == 0) {
+            LinkManager.onFailureResetTick()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -323,9 +359,8 @@ class ForwardService : Service() {
 
     override fun onDestroy() {
         stopForeground(STOP_FOREGROUND_REMOVE)
-        statsFuture?.cancel(false)
-        statsScheduler.shutdown()
-        configExecutor.shutdown()
+        tickFuture?.cancel(false)
+        appScheduler.shutdown()
         serviceInstance = null
         stopAll()
         super.onDestroy()
@@ -398,7 +433,7 @@ class ForwardService : Service() {
         isStarting = true
         onStatsChanged?.invoke()
 
-        configExecutor.execute {
+        appScheduler.execute {
             try {
                 applyConfigInternal(config)
             } finally {
@@ -456,7 +491,16 @@ class ForwardService : Service() {
             QueueManager.startAll()
             InputManager.startAll()
 
+            // 8. Update tick interval from config
+            val newInterval = config.scheduler.effectiveTickInterval.millis
+            if (newInterval != tickIntervalMs) {
+                tickIntervalMs = newInterval
+                startTick()
+                LogManager.log("CONFIG", "Tick interval updated to ${newInterval}ms")
+            }
+
             isRunning = true
+            tickCount = 0
             refreshStats()
             saveStatus()
             acquireLocks()
@@ -517,6 +561,7 @@ class ForwardService : Service() {
         isRunning = false
         receivedCount = 0
         forwardedCount = 0
+        ruleEngine?.shutdown()
         ruleEngine = null
         deadLetterHandler = null
         LogManager.log("SERVICE", "All components stopped")

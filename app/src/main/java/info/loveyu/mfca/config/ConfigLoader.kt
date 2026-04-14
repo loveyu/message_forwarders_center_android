@@ -17,6 +17,7 @@ object ConfigLoader {
 
             AppConfig(
                 version = data["version"] as? String ?: "",
+                scheduler = parseScheduler(data["scheduler"]),
                 links = parseLinks(data["links"]),
                 inputs = parseInputs(data["inputs"]),
                 queues = parseQueues(data["queues"]),
@@ -36,6 +37,16 @@ object ConfigLoader {
             throw ConfigLoadException("Config file not found: $path")
         }
         return loadConfig(file.readText())
+    }
+
+    // ==================== Scheduler Parsing ====================
+
+    private fun parseScheduler(scheduler: Any?): SchedulerConfig {
+        if (scheduler == null) return SchedulerConfig()
+        val map = scheduler as Map<String, Any>
+        return SchedulerConfig(
+            tickInterval = Duration(map["tickInterval"] as? String ?: "30s")
+        )
     }
 
     // ==================== Link Parsing ====================

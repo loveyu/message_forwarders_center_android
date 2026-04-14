@@ -63,6 +63,22 @@ object QueueManager {
         queues.clear()
     }
 
+    /**
+     * 统一 Ticker 调用：驱动 SqliteQueue 检查处理。
+     * MemoryQueue 已是 Channel 事件驱动，无需 tick。
+     */
+    fun onTick() {
+        queues.values.forEach { queue ->
+            if (queue is SqliteQueue) {
+                try {
+                    queue.onTick()
+                } catch (e: Exception) {
+                    LogManager.log("QUEUE", "Error in onTick for ${queue.name}: ${e.message}")
+                }
+            }
+        }
+    }
+
     fun getAllQueues(): Map<String, Queue> = queues.toMap()
 
     fun getQueueStats(): Map<String, QueueStats> {

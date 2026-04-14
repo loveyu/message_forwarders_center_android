@@ -20,10 +20,6 @@ import info.loveyu.mfca.util.NetworkChecker
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.TimeUnit
 
 /**
  * 链接池管理器 - Android Service 常驻架构
@@ -39,10 +35,6 @@ object LinkManager {
     private val configs = mutableMapOf<String, LinkConfig>()
     private var applicationContext: Context? = null
 
-    // Service-resident executors
-    private val linkScheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
-    private var healthCheckFuture: ScheduledFuture<*>? = null
-    private var failureResetFuture: ScheduledFuture<*>? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     // Network state
@@ -99,8 +91,6 @@ object LinkManager {
 
         // Start network monitoring (updateNetworkType won't trigger connections until initialized=true)
         startNetworkMonitoring()
-        // Start health check for reconnection
-        startHealthCheck()
         initialized = true
         LogManager.log("LINK", "LinkManager initialized: ${links.size} active links")
     }
@@ -185,48 +175,41 @@ object LinkManager {
 
         // Disconnect all links when network is lost
         if (network == null) {
-            linkScheduler.execute {
-                disconnectAll()
-                InputManager.checkAllInputConditions()
-            }
+            disconnectAll()
+            InputManager.checkAllInputConditions()
             return
         }
 
-        // Check all links conditions on background thread to avoid blocking main thread
-        linkScheduler.execute {
-            checkAllLinkConditions()
-            InputManager.checkAllInputConditions()
+        // Check all links conditions
+        checkAllLinkConditions()
+        InputManager.checkAllInputConditions()
+    }
+
+    /**
+     * 统一 Ticker 调用：执行链路健康检查 + MQTT 心跳日志
+     */
+    fun onTick() {
+        val ctx = applicationContext ?: return
+        if (!isNetworkAvailable) return
+
+        checkAllLinkConditions()
+
+        // MQTT 心跳日志（替代每个 MqttLink 的独立 Timer）
+        links.values.forEach { link ->
+            if (link is MqttLink && link.isConnected()) {
+                link.logHeartbeatStatus()
+            }
         }
     }
 
     /**
-     * 启动链路健康检查 (每30秒) 和失败计数定时重置 (每10分钟)
+     * 统一 Ticker 调用：每 ~10min 重置失败计数
      */
-    fun startHealthCheck() {
-        healthCheckFuture?.cancel(false)
-        healthCheckFuture = linkScheduler.scheduleAtFixedRate({
-            checkLinkHealth()
-        }, 30, 30, TimeUnit.SECONDS)
-
-        // 定时重置所有链接的失败计数，防止因服务异常导致链接永久无法恢复
-        failureResetFuture?.cancel(false)
-        failureResetFuture = linkScheduler.scheduleAtFixedRate({
-            if (isNetworkAvailable) {
-                LogManager.logDebug("LINK", "Periodic failure count reset (10min)")
-                resetAllFailureCounts()
-                checkAllLinkConditions()
-            }
-        }, 10, 10, TimeUnit.MINUTES)
-    }
-
-    /**
-     * 停止链路健康检查和失败计数定时重置
-     */
-    fun stopHealthCheck() {
-        healthCheckFuture?.cancel(false)
-        healthCheckFuture = null
-        failureResetFuture?.cancel(false)
-        failureResetFuture = null
+    fun onFailureResetTick() {
+        if (!isNetworkAvailable) return
+        LogManager.logDebug("LINK", "Periodic failure count reset")
+        resetAllFailureCounts()
+        checkAllLinkConditions()
     }
 
     /**
@@ -277,15 +260,13 @@ object LinkManager {
      * 异步重连所有链路（带防抖）
      */
     private fun reconnectAllAsync() {
-        linkScheduler.execute {
-            val now = System.currentTimeMillis()
-            if (now - lastReconnectTime < 5_000L) {
-                LogManager.logDebug("LINK", "Reconnect debounced, skipping (interval < 5s)")
-                return@execute
-            }
-            lastReconnectTime = now
-            reconnectAll()
+        val now = System.currentTimeMillis()
+        if (now - lastReconnectTime < 5_000L) {
+            LogManager.logDebug("LINK", "Reconnect debounced, skipping (interval < 5s)")
+            return
         }
+        lastReconnectTime = now
+        reconnectAll()
     }
 
     fun getLink(id: String): Link? = links[id]
@@ -380,7 +361,6 @@ object LinkManager {
 
     fun clear() {
         initialized = false
-        stopHealthCheck()
         unregisterNetworkCallback()
         disconnectAll()
         cancelAllLinkErrorNotifications()
