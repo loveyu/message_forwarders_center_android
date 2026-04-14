@@ -215,16 +215,20 @@ class ForwardService : Service() {
                 isReceivingEnabled = !isReceivingEnabled
                 preferences.receivingEnabled = isReceivingEnabled
                 saveStatus()
+                lastNotificationStats = null
                 updateNotification()
                 onStatsChanged?.invoke()
+                LogManager.logInfo("SERVICE", if (isReceivingEnabled) "已恢复接收" else "已暂停接收")
                 return START_STICKY
             }
             ACTION_TOGGLE_FORWARD -> {
                 isForwardingEnabled = !isForwardingEnabled
                 preferences.forwardingEnabled = isForwardingEnabled
                 saveStatus()
+                lastNotificationStats = null
                 updateNotification()
                 onStatsChanged?.invoke()
+                LogManager.logInfo("SERVICE", if (isForwardingEnabled) "已恢复转发" else "已暂停转发")
                 return START_STICKY
             }
             ACTION_RELOAD_CONFIG -> {
@@ -431,7 +435,7 @@ class ForwardService : Service() {
         LogManager.log(LogLevel.DEBUG, "FS", "NATIVE handleMessage: source=${message.source}, data=${String(message.data).take(30)}")
         LogManager.log(LogLevel.DEBUG, "TRACE:FS", "handleMessage called: source=${message.source}")
         if (!isReceivingEnabled) {
-            LogManager.log("TRACE:FS", "Receiving disabled, dropping message")
+            LogManager.logInfo("FS", "接收已暂停, 忽略消息: source=${message.source}, data=${String(message.data).take(200)}")
             return
         }
 
@@ -545,7 +549,11 @@ class ForwardService : Service() {
 
         // 状态栏显示: L链路数 I输入数 O输出数 R接收 S发送
         val statsText = if (isRunning) {
-            "L${linkCount} I${inputCount} O${outputCount} · R${receivedCount} S${forwardedCount}"
+            buildString {
+                append("L${linkCount} I${inputCount} O${outputCount} · R${receivedCount} S${forwardedCount}")
+                if (!isReceivingEnabled) append(" | 暂停接收")
+                if (!isForwardingEnabled) append(" | 暂停转发")
+            }
         } else {
             "已停止"
         }
@@ -612,7 +620,11 @@ class ForwardService : Service() {
 
     private fun updateNotification() {
         val statsText = if (isRunning) {
-            "L${linkCount} I${inputCount} O${outputCount} · R${receivedCount} S${forwardedCount}"
+            buildString {
+                append("L${linkCount} I${inputCount} O${outputCount} · R${receivedCount} S${forwardedCount}")
+                if (!isReceivingEnabled) append(" | 暂停接收")
+                if (!isForwardingEnabled) append(" | 暂停转发")
+            }
         } else {
             "已停止"
         }

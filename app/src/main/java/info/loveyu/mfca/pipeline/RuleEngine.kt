@@ -5,7 +5,9 @@ import info.loveyu.mfca.config.AppConfig
 import info.loveyu.mfca.config.RuleConfig
 import info.loveyu.mfca.input.InputMessage
 import info.loveyu.mfca.output.OutputManager
+import info.loveyu.mfca.output.OutputType
 import info.loveyu.mfca.queue.QueueItem
+import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.LogManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -173,6 +175,11 @@ class RuleEngine(
             step.to.forEach { outputName ->
                 val output = OutputManager.getOutput(outputName)
                 if (output != null) {
+                    // Skip non-internal outputs when forwarding is disabled
+                    if (!ForwardService.isForwardingEnabled && output.type != OutputType.internal) {
+                        LogManager.logInfo("RULE", "转发已暂停, 跳过输出: $outputName")
+                        return@forEach
+                    }
                     val item = QueueItem(
                         data = currentData,
                         metadata = mapOf("rule" to rule.name)
@@ -251,6 +258,11 @@ class RuleEngine(
             step.to.forEach { outputName ->
                 val output = OutputManager.getOutput(outputName)
                 if (output != null) {
+                    // Skip non-internal outputs when forwarding is disabled
+                    if (!ForwardService.isForwardingEnabled && output.type != OutputType.internal) {
+                        LogManager.logInfo("RULE", "转发已暂停, 跳过输出: $outputName")
+                        return@forEach
+                    }
                     val item = QueueItem(
                         data = currentData,
                         metadata = mapOf("rule" to rule.name)
