@@ -19,6 +19,9 @@
     <string name="notification_action_resume_receive">恢复接收</string>
     <string name="notification_action_stop_forward">停止转发</string>
     <string name="notification_action_resume_forward">恢复转发</string>
+    <string name="notification_action_enable_wake">开启唤醒</string>
+    <string name="notification_action_disable_wake">关闭唤醒</string>
+    <string name="notification_action_status">状态</string>
     <string name="notification_receive_on">接收: 开</string>
     <string name="notification_receive_off">接收: 关</string>
     <string name="notification_forward_on">转发: 开</string>

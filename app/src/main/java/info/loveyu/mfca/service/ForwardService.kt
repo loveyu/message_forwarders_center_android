@@ -15,6 +15,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import info.loveyu.mfca.InputMethodFloatingActivity
+import info.loveyu.mfca.StatusFloatingActivity
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
 import info.loveyu.mfca.config.AppConfig
@@ -53,6 +54,7 @@ class ForwardService : Service() {
         const val ACTION_TOGGLE_RECEIVE = "info.loveyu.mfca.action.TOGGLE_RECEIVE"
         const val ACTION_TOGGLE_FORWARD = "info.loveyu.mfca.action.TOGGLE_FORWARD"
         const val ACTION_RELOAD_CONFIG = "info.loveyu.mfca.action.RELOAD_CONFIG"
+        const val ACTION_TOGGLE_WAKELOCK = "info.loveyu.mfca.action.TOGGLE_WAKELOCK"
 
         @Volatile
         var isRunning = false
@@ -76,6 +78,10 @@ class ForwardService : Service() {
 
         @Volatile
         var isForwardingEnabled = true
+            private set
+
+        @Volatile
+        var isWakeLockEnabled = false
             private set
 
         // 简写首字母统计
@@ -229,6 +235,20 @@ class ForwardService : Service() {
                 updateNotification()
                 onStatsChanged?.invoke()
                 LogManager.logInfo("SERVICE", if (isForwardingEnabled) "已恢复转发" else "已暂停转发")
+                return START_STICKY
+            }
+            ACTION_TOGGLE_WAKELOCK -> {
+                isWakeLockEnabled = !isWakeLockEnabled
+                if (isWakeLockEnabled) {
+                    acquireWakeLock()
+                } else {
+                    releaseWakeLock()
+                }
+                saveStatus()
+                lastNotificationStats = null
+                updateNotification()
+                onStatsChanged?.invoke()
+                LogManager.logInfo("SERVICE", if (isWakeLockEnabled) "已启用 WakeLock" else "已关闭 WakeLock")
                 return START_STICKY
             }
             ACTION_RELOAD_CONFIG -> {
@@ -490,6 +510,7 @@ class ForwardService : Service() {
                 isRunning = isRunning,
                 isReceivingEnabled = isReceivingEnabled,
                 isForwardingEnabled = isForwardingEnabled,
+                isWakeLockEnabled = isWakeLockEnabled,
                 autoStart = preferences.autoStart,
                 appAutoStartOnBoot = preferences.autoStart
             )
@@ -508,11 +529,12 @@ class ForwardService : Service() {
             currentConfigUrl = status.configUrl
             isReceivingEnabled = status.isReceivingEnabled
             isForwardingEnabled = status.isForwardingEnabled
+            isWakeLockEnabled = status.isWakeLockEnabled
             preferences.receivingEnabled = status.isReceivingEnabled
             preferences.forwardingEnabled = status.isForwardingEnabled
             preferences.autoStart = status.autoStart
             wasRunningBeforeRestart = status.isRunning
-            LogManager.log("APP_STATUS", "Status loaded: running=${status.isRunning}, receive=${status.isReceivingEnabled}, forward=${status.isForwardingEnabled}")
+            LogManager.log("APP_STATUS", "Status loaded: running=${status.isRunning}, receive=${status.isReceivingEnabled}, forward=${status.isForwardingEnabled}, wakeLock=${status.isWakeLockEnabled}")
         } catch (e: Exception) {
             LogManager.log("APP_STATUS", "Failed to load status: ${e.message}")
         }
@@ -553,6 +575,7 @@ class ForwardService : Service() {
                 append("L${linkCount} I${inputCount} O${outputCount} · R${receivedCount} S${forwardedCount}")
                 if (!isReceivingEnabled) append(" | 暂停接收")
                 if (!isForwardingEnabled) append(" | 暂停转发")
+                if (isWakeLockEnabled) append(" | W锁")
             }
         } else {
             "已停止"
@@ -567,37 +590,16 @@ class ForwardService : Service() {
 
         // Only show action buttons when service is running
         if (isRunning) {
-            // Toggle receive action
-            val receiveIntent = Intent(this, ForwardService::class.java).apply {
-                action = ACTION_TOGGLE_RECEIVE
-            }
-            val receivePendingIntent = PendingIntent.getService(
-                this, 1, receiveIntent,
+            // Status toggle action - opens floating panel
+            val statusIntent = Intent(this, StatusFloatingActivity::class.java)
+            val statusPendingIntent = PendingIntent.getActivity(
+                this, 1, statusIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            val receiveTitle = if (isReceivingEnabled) getString(R.string.notification_action_stop_receive)
-            else getString(R.string.notification_action_resume_receive)
-
-            // Toggle forward action
-            val forwardIntent = Intent(this, ForwardService::class.java).apply {
-                action = ACTION_TOGGLE_FORWARD
-            }
-            val forwardPendingIntent = PendingIntent.getService(
-                this, 2, forwardIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            val forwardTitle = if (isForwardingEnabled) getString(R.string.notification_action_stop_forward)
-            else getString(R.string.notification_action_resume_forward)
-
             builder.addAction(Notification.Action.Builder(
                 Icon.createWithResource(this, R.drawable.ic_notification_receive),
-                receiveTitle,
-                receivePendingIntent
-            ).build())
-            builder.addAction(Notification.Action.Builder(
-                Icon.createWithResource(this, R.drawable.ic_notification_forward),
-                forwardTitle,
-                forwardPendingIntent
+                getString(R.string.notification_action_status),
+                statusPendingIntent
             ).build())
         }
 
@@ -624,6 +626,7 @@ class ForwardService : Service() {
                 append("L${linkCount} I${inputCount} O${outputCount} · R${receivedCount} S${forwardedCount}")
                 if (!isReceivingEnabled) append(" | 暂停接收")
                 if (!isForwardingEnabled) append(" | 暂停转发")
+                if (isWakeLockEnabled) append(" | W锁")
             }
         } else {
             "已停止"
@@ -635,16 +638,9 @@ class ForwardService : Service() {
     }
 
     private fun acquireLocks() {
-        // Acquire partial wake lock to keep CPU alive when screen is off
-        if (wakeLock == null) {
-            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-            wakeLock = powerManager.newWakeLock(
-                PowerManager.PARTIAL_WAKE_LOCK,
-                "mfca::forward_service"
-            ).apply {
-                acquire()
-            }
-            LogManager.log("SERVICE", "WakeLock acquired")
+        // Acquire partial wake lock only when enabled (to avoid battery drain)
+        if (isWakeLockEnabled) {
+            acquireWakeLock()
         }
         // Acquire WiFi lock to keep WiFi connection alive when screen is off
         if (wifiLock == null) {
@@ -662,7 +658,20 @@ class ForwardService : Service() {
         }
     }
 
-    private fun releaseLocks() {
+    private fun acquireWakeLock() {
+        if (wakeLock == null) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "mfca::forward_service"
+            ).apply {
+                acquire()
+            }
+            LogManager.log("SERVICE", "WakeLock acquired")
+        }
+    }
+
+    private fun releaseWakeLock() {
         wakeLock?.let {
             if (it.isHeld) {
                 it.release()
@@ -670,6 +679,10 @@ class ForwardService : Service() {
             }
         }
         wakeLock = null
+    }
+
+    private fun releaseLocks() {
+        releaseWakeLock()
         wifiLock?.let {
             if (it.isHeld) {
                 it.release()
