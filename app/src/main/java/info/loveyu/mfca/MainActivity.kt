@@ -235,8 +235,6 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         ensureServiceRunning()
-        // 从后台回到前台时触发一次 tick，立即刷新状态
-        ForwardService.triggerTick()
     }
 
     private fun ensureServiceRunning() {

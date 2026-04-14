@@ -313,6 +313,10 @@ class ForwardService : Service() {
                         LogManager.logDebug("SERVICE", "Screen on, triggering tick")
                         doTriggerTick()
                     }
+                    Intent.ACTION_USER_PRESENT -> {
+                        LogManager.logDebug("SERVICE", "User present (unlocked), triggering tick")
+                        doTriggerTick()
+                    }
                     Intent.ACTION_POWER_CONNECTED -> {
                         LogManager.logDebug("SERVICE", "Power connected, switching to charging interval")
                         updateChargingState(true)
@@ -326,6 +330,7 @@ class ForwardService : Service() {
         }
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_USER_PRESENT)
             addAction(Intent.ACTION_POWER_CONNECTED)
             addAction(Intent.ACTION_POWER_DISCONNECTED)
         }
