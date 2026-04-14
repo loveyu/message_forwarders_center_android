@@ -269,6 +269,7 @@ class ForwardService : Service() {
         if (!isRunning) return
         lastTickTime = System.currentTimeMillis()
         tickCount++
+        LogManager.logDebug("SERVICE", "Tick #$tickCount start")
 
         // 1. Link 健康检查 + MQTT 心跳日志
         LinkManager.onTick()
@@ -285,6 +286,7 @@ class ForwardService : Service() {
         }
 
         // 5. 批量 flush 日志文件缓冲
+        LogManager.logDebug("SERVICE", "Tick #$tickCount end, flushing logs")
         LogManager.flush()
     }
 
