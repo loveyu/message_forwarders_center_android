@@ -1,9 +1,11 @@
 package info.loveyu.mfca.link
 
+import android.content.Context
 import info.loveyu.mfca.config.LinkConfig
 import info.loveyu.mfca.config.LinkType
 import info.loveyu.mfca.link.tcp.TcpFrameProtocol
 import info.loveyu.mfca.link.tcp.TcpProtocolFactory
+import info.loveyu.mfca.util.CertResolver
 import info.loveyu.mfca.util.LogManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,10 +48,11 @@ import java.util.concurrent.atomic.AtomicBoolean
  *   - 连续失败计数器 (MAX=5)，超过后等待健康检查 resetFailureCount
  *   - 最小重试间隔防止高频重连
  */
-class TcpLink(override val config: LinkConfig) : Link {
+class TcpLink(override val config: LinkConfig, private val context: Context) : Link {
 
     override val id: String = config.id
 
+    private val isSsl = config.dsn?.startsWith("ssl://") == true
     private var socket: Socket? = null
     private var connected = AtomicBoolean(false)
     private var messageListener: ((ByteArray) -> Unit)? = null
@@ -143,13 +146,22 @@ class TcpLink(override val config: LinkConfig) : Link {
             val keepAlive = params["keepAlive"]?.toBoolean() ?: true
             val noDelay = params["noDelay"]?.toBoolean() ?: true
 
-            LogManager.log("TCP", "Connecting to $host:$port (protocol=${frameProtocol.name})")
+            LogManager.log("TCP", "Connecting to $host:$port (protocol=${frameProtocol.name}, ssl=$isSsl)")
 
-            socket = Socket().apply {
+            val rawSocket = Socket().apply {
                 connect(java.net.InetSocketAddress(host, port), connectTimeout * 1000)
                 this.soTimeout = readTimeoutMs.toInt()
                 this.keepAlive = keepAlive
                 this.tcpNoDelay = noDelay
+            }
+
+            socket = if (isSsl) {
+                val sslConfig = CertResolver.createSslConfig(config.tls, context, "TCP")
+                val factory = sslConfig?.socketFactory
+                    ?: (javax.net.ssl.SSLSocketFactory.getDefault() as javax.net.ssl.SSLSocketFactory)
+                factory.createSocket(rawSocket, host, port, true) as Socket
+            } else {
+                rawSocket
             }
 
             connected.set(true)

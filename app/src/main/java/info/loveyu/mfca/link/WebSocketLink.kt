@@ -3,7 +3,6 @@ package info.loveyu.mfca.link
 import android.content.Context
 import info.loveyu.mfca.config.LinkConfig
 import info.loveyu.mfca.config.LinkType
-import info.loveyu.mfca.config.TlsConfig
 import info.loveyu.mfca.util.CertResolver
 import info.loveyu.mfca.util.LogManager
 import okhttp3.Handshake
@@ -13,19 +12,13 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
-import java.io.File
 import java.net.InetAddress
 import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
-import java.security.KeyStore as JksKeyStore
 import java.security.MessageDigest
-import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManagerFactory
-import javax.net.ssl.X509TrustManager
 
 /**
  * WebSocket 连接实现
@@ -232,13 +225,11 @@ class WebSocketLink(override val config: LinkConfig) : Link {
         if (isWss || config.tls != null) {
             val ctx = context
             if (ctx != null) {
-                try {
-                    val sslConfig = createSslConfig(config.tls, ctx)
-                    if (sslConfig != null) {
-                        builder.sslSocketFactory(sslConfig.socketFactory, sslConfig.trustManager)
-                    }
-                } catch (e: Exception) {
-                    LogManager.logError("WS", "SSL setup error: ${e.message}")
+                val sslConfig = CertResolver.createSslConfig(config.tls, ctx, "WS") { certs ->
+                    peerCertificates = certs
+                }
+                if (sslConfig != null) {
+                    builder.sslSocketFactory(sslConfig.socketFactory, sslConfig.trustManager)
                 }
             } else {
                 LogManager.logWarn("WS", "No context available for TLS configuration, using system defaults")
@@ -247,73 +238,6 @@ class WebSocketLink(override val config: LinkConfig) : Link {
 
         return builder.build()
     }
-
-    /**
-     * Create SSL configuration with custom CA certificates.
-     * Returns null to use system defaults.
-     */
-    private fun createSslConfig(tls: TlsConfig?, context: Context): SslConfig? {
-        try {
-            val resolvedTls = CertResolver.resolveTlsConfig(tls, context)
-            val certFactory = CertificateFactory.getInstance("X.509")
-            val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
-            val keyStore = JksKeyStore.getInstance(JksKeyStore.getDefaultType())
-            keyStore.load(null, null)
-
-            // Load CA certificate if provided
-            var caLoaded = false
-            resolvedTls?.ca?.let { caPath ->
-                val caFile = File(caPath)
-                if (caFile.exists()) {
-                    val caCert = certFactory.generateCertificate(caFile.inputStream()) as X509Certificate
-                    keyStore.setCertificateEntry("ca", caCert)
-                    caLoaded = true
-                    LogManager.logDebug("WS", "Loaded CA cert from: $caPath")
-                } else {
-                    LogManager.logWarn("WS", "CA cert file not found: $caPath")
-                }
-            }
-
-            // No custom CA loaded; use system default trust store
-            if (!caLoaded) {
-                return null
-            }
-
-            trustManagerFactory.init(keyStore)
-
-            // Wrap TrustManagers to capture peer certificates
-            val wrappedTms = trustManagerFactory.trustManagers.map { tm ->
-                if (tm is X509TrustManager) {
-                    object : X509TrustManager {
-                        override fun checkClientTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {
-                            tm.checkClientTrusted(chain, authType)
-                        }
-                        override fun checkServerTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {
-                            chain?.let { peerCertificates = it.toList() }
-                            tm.checkServerTrusted(chain, authType)
-                        }
-                        override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = tm.acceptedIssuers
-                    }
-                } else tm
-            }.toTypedArray()
-
-            val x509Tm = wrappedTms.firstOrNull { it is X509TrustManager } as? X509TrustManager
-                ?: return null
-
-            val sslContext = SSLContext.getInstance("TLSv1.2")
-            sslContext.init(null, wrappedTms, null)
-
-            return SslConfig(sslContext.socketFactory, x509Tm)
-        } catch (e: Exception) {
-            LogManager.logError("WS", "SSL config error: ${e.message}")
-            return null
-        }
-    }
-
-    private data class SslConfig(
-        val socketFactory: javax.net.ssl.SSLSocketFactory,
-        val trustManager: X509TrustManager
-    )
 
     override fun disconnect() {
         connecting = false

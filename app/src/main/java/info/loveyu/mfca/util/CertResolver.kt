@@ -7,7 +7,13 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.KeyStore
 import java.security.MessageDigest
+import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.X509TrustManager
 
 /**
  * TLS 证书解析器
@@ -192,7 +198,86 @@ object CertResolver {
     }
 
     /**
-     * 清除所有缓存的证书下载路径
+     * 创建自定义 SSL 配置（含自定义 CA 证书）
+     *
+     * 当配置了自定义 CA 时，创建基于该 CA 的 SSLContext；
+     * 未配置自定义 CA 时返回 null，表示应使用系统默认信任库。
+     *
+     * @param tls TLS 配置，可为 null
+     * @param context Android Context
+     * @param tag 日志标签
+     * @param onPeerCerts 服务端证书链回调，用于 TLS 信息采集
+     * @return SslResult 或 null（无自定义 CA，使用系统默认）
+     */
+    fun createSslConfig(
+        tls: TlsConfig?,
+        context: Context,
+        tag: String,
+        onPeerCerts: ((List<X509Certificate>) -> Unit)? = null
+    ): SslResult? {
+        try {
+            val resolvedTls = resolveTlsConfig(tls, context)
+
+            val certFactory = CertificateFactory.getInstance("X.509")
+            val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+            val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
+            keyStore.load(null, null)
+
+            var caLoaded = false
+            resolvedTls?.ca?.let { caPath ->
+                val caFile = File(caPath)
+                if (caFile.exists()) {
+                    val caCert = certFactory.generateCertificate(caFile.inputStream()) as X509Certificate
+                    keyStore.setCertificateEntry("ca", caCert)
+                    caLoaded = true
+                    LogManager.logDebug(tag, "Loaded CA cert from: $caPath")
+                } else {
+                    LogManager.logWarn(tag, "CA cert file not found: $caPath")
+                }
+            }
+
+            if (!caLoaded) {
+                return null
+            }
+
+            trustManagerFactory.init(keyStore)
+
+            val wrappedTms = trustManagerFactory.trustManagers.map { tm ->
+                if (tm is X509TrustManager) {
+                    object : X509TrustManager {
+                        override fun checkClientTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {
+                            tm.checkClientTrusted(chain, authType)
+                        }
+                        override fun checkServerTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {
+                            chain?.let { certs ->
+                                onPeerCerts?.invoke(certs.toList())
+                            }
+                            tm.checkServerTrusted(chain, authType)
+                        }
+                        override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = tm.acceptedIssuers
+                    }
+                } else tm
+            }.toTypedArray()
+
+            val x509Tm = wrappedTms.firstOrNull { it is X509TrustManager } as? X509TrustManager
+                ?: return null
+
+            val sslContext = SSLContext.getInstance("TLSv1.2")
+            sslContext.init(null, wrappedTms, null)
+
+            return SslResult(sslContext.socketFactory, x509Tm)
+        } catch (e: Exception) {
+            LogManager.logError(tag, "SSL config error: ${e.message}")
+            return null
+        }
+    }
+
+    data class SslResult(
+        val socketFactory: javax.net.ssl.SSLSocketFactory,
+        val trustManager: X509TrustManager
+    )
+
+    /**
      */
     fun clearCache() {
         downloadedCerts.clear()

@@ -4,7 +4,6 @@ import android.content.Context
 import android.os.Build
 import info.loveyu.mfca.config.LinkConfig
 import info.loveyu.mfca.config.LinkType
-import info.loveyu.mfca.config.TlsConfig
 import info.loveyu.mfca.util.CertResolver
 import info.loveyu.mfca.util.LogManager
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
@@ -13,17 +12,11 @@ import org.eclipse.paho.client.mqttv3.MqttCallback
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions
 import org.eclipse.paho.client.mqttv3.MqttMessage
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
-import java.io.File
 import java.net.InetAddress
 import java.net.URI
 import java.net.URLDecoder
-import java.security.KeyStore as CertKeyStore
 import java.security.MessageDigest
-import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManagerFactory
-import javax.net.ssl.X509TrustManager
 
 /**
  * MQTT 连接实现
@@ -128,7 +121,9 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                 // TLS: mqtts:// scheme or explicit tls config
                 val isMqtts = rawBroker.startsWith("mqtts://")
                 if (isMqtts || config.tls != null) {
-                    createSslSocketFactory(config.tls)?.let { socketFactory = it }
+                    CertResolver.createSslConfig(config.tls, context, "MQTT") { certs ->
+                        peerCertificates = certs
+                    }?.let { socketFactory = it.socketFactory }
                 }
             }
 
@@ -382,65 +377,6 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         }
 
         return Pair(urlWithoutQuery, params)
-    }
-
-    private fun createSslSocketFactory(tls: TlsConfig?): javax.net.SocketFactory? {
-        try {
-            // 解析 TLS 证书路径（支持 file://, sdcard://, https://, http://）
-            val resolvedTls = CertResolver.resolveTlsConfig(tls, context)
-
-            val certFactory = CertificateFactory.getInstance("X.509")
-
-            val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
-
-            val keyStore = CertKeyStore.getInstance(CertKeyStore.getDefaultType())
-            keyStore.load(null, null)
-
-            // Load CA certificate if provided
-            var caLoaded = false
-            resolvedTls?.ca?.let { caPath ->
-                val caFile = File(caPath)
-                if (caFile.exists()) {
-                    val caCert = certFactory.generateCertificate(caFile.inputStream()) as X509Certificate
-                    keyStore.setCertificateEntry("ca", caCert)
-                    caLoaded = true
-                    LogManager.logDebug("MQTT", "Loaded CA cert from: $caPath")
-                } else {
-                    LogManager.logWarn("MQTT", "CA cert file not found: $caPath")
-                }
-            }
-
-            // No custom CA loaded; use system default trust store
-            if (!caLoaded) {
-                return null
-            }
-
-            trustManagerFactory.init(keyStore)
-
-            // Wrap TrustManagers to capture peer certificates
-            val wrappedTms = trustManagerFactory.trustManagers.map { tm ->
-                if (tm is X509TrustManager) {
-                    object : X509TrustManager {
-                        override fun checkClientTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {
-                            tm.checkClientTrusted(chain, authType)
-                        }
-                        override fun checkServerTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {
-                            chain?.let { peerCertificates = it.toList() }
-                            tm.checkServerTrusted(chain, authType)
-                        }
-                        override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = tm.acceptedIssuers
-                    }
-                } else tm
-            }.toTypedArray()
-
-            val sslContext = SSLContext.getInstance("TLSv1.2")
-            sslContext.init(null, wrappedTms, null)
-
-            return sslContext.socketFactory
-        } catch (e: Exception) {
-            LogManager.logError("MQTT", "SSL setup error: ${e.message}")
-            throw e
-        }
     }
 
     /**

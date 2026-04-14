@@ -398,7 +398,7 @@ object LinkManager {
         return when (type) {
             LinkType.mqtt -> MqttLink(config, ctx)
             LinkType.websocket -> WebSocketLink(config).also { it.setContext(ctx) }
-            LinkType.tcp -> TcpLink(config)
+            LinkType.tcp -> TcpLink(config, ctx)
             LinkType.http -> throw IllegalArgumentException("HTTP links are not managed by LinkManager, use SharedHttpInput instead")
         }
     }
