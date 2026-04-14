@@ -2,6 +2,7 @@ package info.loveyu.mfca.service
 
 import android.app.Notification
 import android.app.NotificationChannel
+import android.app.NotificationChannelGroup
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
@@ -44,6 +45,7 @@ class ForwardService : Service() {
         private const val TAG = "ForwardService"
         const val CHANNEL_ID = "forward_service_channel"
         const val LINK_ERROR_CHANNEL_ID = "link_error_channel"
+        const val LINK_ERROR_GROUP_ID = "link_error_group"
         const val NOTIFICATION_ID = 1
         const val ACTION_INIT = "info.loveyu.mfca.action.INIT"
         const val ACTION_START = "info.loveyu.mfca.action.START"
@@ -526,6 +528,10 @@ class ForwardService : Service() {
             LINK_ERROR_CHANNEL_ID,
             getString(R.string.link_error_channel_name),
             NotificationManager.IMPORTANCE_LOW
+        )
+        linkErrorChannel.group = LINK_ERROR_GROUP_ID
+        manager.createNotificationChannelGroup(
+            NotificationChannelGroup(LINK_ERROR_GROUP_ID, getString(R.string.link_error_channel_name))
         )
         manager.createNotificationChannel(linkErrorChannel)
     }
