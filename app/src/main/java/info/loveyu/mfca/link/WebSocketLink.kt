@@ -51,7 +51,6 @@ class WebSocketLink(override val config: LinkConfig) : Link {
     @Volatile private var connecting = false
     private var messageListener: ((ByteArray) -> Unit)? = null
     private var errorListener: ((Exception) -> Unit)? = null
-    override var reconnectCallback: (() -> Boolean)? = null
     override var maxFailureCallback: (() -> Unit)? = null
     override var recoveredCallback: (() -> Unit)? = null
     private var lastHandshake: Handshake? = null

@@ -57,7 +57,6 @@ class TcpLink(override val config: LinkConfig, private val context: Context) : L
     private var connected = AtomicBoolean(false)
     private var messageListener: ((ByteArray) -> Unit)? = null
     private var errorListener: ((Exception) -> Unit)? = null
-    override var reconnectCallback: (() -> Boolean)? = null
     override var maxFailureCallback: (() -> Unit)? = null
     override var recoveredCallback: (() -> Unit)? = null
     @Volatile private var resolvedIp: String? = null

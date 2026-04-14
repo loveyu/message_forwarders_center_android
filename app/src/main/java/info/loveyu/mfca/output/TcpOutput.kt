@@ -28,6 +28,11 @@ class TcpOutput(
 
         // Ensure connected
         if (!link.isConnected()) {
+            if (!LinkManager.shouldEnableLink(config.linkId)) {
+                LogManager.logDebug("TCP", "Skipping send via $name: link network conditions not met")
+                callback?.invoke(false)
+                return
+            }
             link.connect()
         }
 

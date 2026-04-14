@@ -37,7 +37,6 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
     private var hadMaxFailure = false
     private var lastConnectAttempt = 0L
     private var retryIntervalMs = DEFAULT_RETRY_INTERVAL_MS
-    override var reconnectCallback: (() -> Boolean)? = null
     override var maxFailureCallback: (() -> Unit)? = null
     override var recoveredCallback: (() -> Unit)? = null
     @Volatile private var peerCertificates: List<X509Certificate>? = null

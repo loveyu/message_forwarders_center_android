@@ -10,12 +10,6 @@ interface Link {
     val config: LinkConfig
 
     /**
-     * 条件感知重连回调，由 LinkManager 设置。
-     * 回调内部会检查 when/deny 网络条件。
-     */
-    var reconnectCallback: (() -> Boolean)?
-
-    /**
      * 连续失败达到上限时的回调，由 LinkManager 设置。
      */
     var maxFailureCallback: (() -> Unit)?

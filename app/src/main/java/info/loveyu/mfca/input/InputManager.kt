@@ -229,6 +229,14 @@ object InputManager {
 
             // For link-based inputs, check if the associated link is connected
             if (config.isLinkBased && config.linkId != null) {
+                // Check link's network conditions (when/deny)
+                if (!LinkManager.shouldEnableLink(config.linkId)) {
+                    if (input.isRunning()) {
+                        LogManager.logDebug("INPUT", "Stopping ${config.name}: link ${config.linkId} network conditions not met")
+                        input.stop()
+                    }
+                    return@forEach
+                }
                 val link = LinkManager.getLink(config.linkId)
                 if (link == null || !link.isConnected()) {
                     if (input.isRunning()) {
@@ -256,9 +264,23 @@ object InputManager {
     }
 
     fun startAll() {
+        val ctx = applicationContext
         LogManager.log("INPUT", "Starting all inputs (${entries.size} entries)")
         entries.forEach { entry ->
             try {
+                // Check input's own network conditions (when/deny)
+                if (ctx != null && !NetworkChecker.shouldEnable(ctx, entry.config.whenCondition, entry.config.deny)) {
+                    LogManager.logDebug("INPUT", "Skipping ${entry.config.name}: network conditions not met")
+                    return@forEach
+                }
+                // For link-based inputs, also check the link's conditions
+                if (ctx != null && entry.config.isLinkBased && entry.config.linkId != null) {
+                    val linkConfig = LinkManager.getLinkConfig(entry.config.linkId)
+                    if (linkConfig != null && !NetworkChecker.shouldEnable(ctx, linkConfig.whenCondition, linkConfig.deny)) {
+                        LogManager.logDebug("INPUT", "Skipping ${entry.config.name}: link ${entry.config.linkId} network conditions not met")
+                        return@forEach
+                    }
+                }
                 if (!entry.input.isRunning()) {
                     entry.input.start()
                 }

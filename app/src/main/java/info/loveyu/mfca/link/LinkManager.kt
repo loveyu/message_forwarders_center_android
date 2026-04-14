@@ -91,16 +91,6 @@ object LinkManager {
             }
             configs[linkConfig.id] = linkConfig
             val link = createLink(linkConfig)
-            // Set reconnect callback that checks when/deny conditions before reconnecting
-            link.reconnectCallback = {
-                val cfg = configs[link.id]
-                if (cfg != null && NetworkChecker.shouldEnable(ctx, cfg.whenCondition, cfg.deny)) {
-                    link.connect()
-                } else {
-                    LogManager.logDebug("LINK", "Skipping reconnect for ${link.id}: network conditions not met")
-                    false
-                }
-            }
             link.maxFailureCallback = { showLinkErrorNotification(link.id) }
             link.recoveredCallback = { showLinkRecoveredNotification(link.id) }
             links[linkConfig.id] = link
@@ -301,6 +291,15 @@ object LinkManager {
     fun getLink(id: String): Link? = links[id]
 
     fun getLinkConfig(id: String): LinkConfig? = configs[id]
+
+    /**
+     * 检查指定链接的网络条件（whenCondition/deny）是否满足
+     */
+    fun shouldEnableLink(linkId: String): Boolean {
+        val ctx = applicationContext ?: return false
+        val config = configs[linkId] ?: return false
+        return NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)
+    }
 
     fun connectAll() {
         val ctx = applicationContext ?: return
