@@ -36,7 +36,7 @@ class RuleEngine(
     private val expressionEngine = ExpressionEngine()
 
     // Worker 线程池
-    private val workerPool = Executors.newFixedThreadPool(4).asCoroutineDispatcher()
+    private val workerPool = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
     private val scope = CoroutineScope(workerPool + SupervisorJob())
 
     // Enrichers

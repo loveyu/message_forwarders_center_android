@@ -3,9 +3,14 @@ package info.loveyu.mfca.output
 import info.loveyu.mfca.config.HttpOutputConfig
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.util.LogManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.net.HttpURLConnection
 import java.net.URL
-import kotlin.concurrent.thread
 
 /**
  * HTTP 输出
@@ -20,8 +25,10 @@ class HttpOutput(
     @Volatile
     private var available = true
 
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
     override fun send(item: QueueItem, callback: ((Boolean) -> Unit)?) {
-        thread {
+        scope.launch {
             var attempt = 0
             val maxAttempts = config.retry?.maxAttempts ?: 1
 
@@ -35,7 +42,7 @@ class HttpOutput(
                     if (result is OutputResult.Success) {
                         LogManager.log("HTTP", "HTTP output $name succeeded (${result.responseCode})")
                         callback?.invoke(true)
-                        return@thread
+                        return@launch
                     } else {
                         LogManager.logWarn("HTTP", "HTTP output $name failed: ${(result as? OutputResult.Failure)?.error}")
                     }
@@ -49,7 +56,7 @@ class HttpOutput(
                     if (LogManager.isDebugEnabled()) {
                         LogManager.logDebug("HTTP", "Retry $attempt/$maxAttempts after ${interval}ms")
                     }
-                    Thread.sleep(interval)
+                    delay(interval)
                 }
             }
 
@@ -89,4 +96,8 @@ class HttpOutput(
     }
 
     override fun isAvailable(): Boolean = available
+
+    fun shutdown() {
+        scope.cancel()
+    }
 }

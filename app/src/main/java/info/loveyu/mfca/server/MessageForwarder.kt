@@ -3,15 +3,20 @@ package info.loveyu.mfca.server
 import info.loveyu.mfca.constants.ApiConstants
 import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import java.net.HttpURLConnection
 import java.net.URL
-import kotlin.concurrent.thread
 
 object MessageForwarder {
     private const val TAG = "MessageForwarder"
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     fun forward(targetUrl: String, payload: String, callback: ((Boolean) -> Unit)? = null) {
-        thread {
+        scope.launch {
             try {
                 val url = URL(targetUrl)
                 val connection = url.openConnection() as HttpURLConnection
@@ -36,5 +41,9 @@ object MessageForwarder {
                 callback?.invoke(false)
             }
         }
+    }
+
+    fun shutdown() {
+        scope.cancel()
     }
 }

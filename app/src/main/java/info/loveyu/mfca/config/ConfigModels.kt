@@ -172,7 +172,7 @@ data class QueuesConfig(
 
 data class MemoryQueueConfig(
     val capacity: Int = 1000,
-    val workers: Int = 2,
+    val workers: Int = 1,
     val overflow: OverflowStrategy = OverflowStrategy.dropOldest
 )
 

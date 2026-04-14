@@ -1,14 +1,9 @@
 package info.loveyu.mfca.pipeline
 
 import info.loveyu.mfca.util.LogManager
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.cancel
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
 
 /**
  * 表达式引擎
@@ -29,10 +24,6 @@ class ExpressionEngine {
 
     // 预编译表达式缓存
     private val compiledFilters = ConcurrentHashMap<String, CompiledFilter>()
-
-    // Worker 线程池
-    private val workerPool = Executors.newFixedThreadPool(4).asCoroutineDispatcher()
-    private val scope = CoroutineScope(workerPool + SupervisorJob())
 
     // 内置函数
     private val builtinFunctions = ConcurrentHashMap<String, BuiltinFunction>()
@@ -807,8 +798,6 @@ class ExpressionEngine {
      * 关闭引擎，释放资源
      */
     fun shutdown() {
-        scope.cancel()
-        workerPool.close()
         compiledFilters.clear()
     }
 
