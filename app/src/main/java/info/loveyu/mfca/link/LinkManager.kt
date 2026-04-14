@@ -260,8 +260,6 @@ object LinkManager {
 
             // Try to reconnect if disconnected
             if (!link.isConnected()) {
-                // Reset failure count so the link can try again this cycle
-                link.resetFailureCount()
                 LogManager.log("LINK", "Reconnecting ${link.id}...")
                 try {
                     link.connect()
@@ -336,7 +334,6 @@ object LinkManager {
 
             try {
                 if (!link.isConnected()) {
-                    link.resetFailureCount()
                     if (link.connect()) {
                         LogManager.log("LINK", "Reconnected ${link.id}")
                     }
