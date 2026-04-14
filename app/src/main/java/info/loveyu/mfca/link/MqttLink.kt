@@ -128,7 +128,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                 // TLS: mqtts:// scheme or explicit tls config
                 val isMqtts = rawBroker.startsWith("mqtts://")
                 if (isMqtts || config.tls != null) {
-                    socketFactory = createSslSocketFactory(config.tls)
+                    createSslSocketFactory(config.tls)?.let { socketFactory = it }
                 }
             }
 
@@ -384,7 +384,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         return Pair(urlWithoutQuery, params)
     }
 
-    private fun createSslSocketFactory(tls: TlsConfig?): javax.net.SocketFactory {
+    private fun createSslSocketFactory(tls: TlsConfig?): javax.net.SocketFactory? {
         try {
             // 解析 TLS 证书路径（支持 file://, sdcard://, https://, http://）
             val resolvedTls = CertResolver.resolveTlsConfig(tls, context)
@@ -397,15 +397,22 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
             keyStore.load(null, null)
 
             // Load CA certificate if provided
+            var caLoaded = false
             resolvedTls?.ca?.let { caPath ->
                 val caFile = File(caPath)
                 if (caFile.exists()) {
                     val caCert = certFactory.generateCertificate(caFile.inputStream()) as X509Certificate
                     keyStore.setCertificateEntry("ca", caCert)
+                    caLoaded = true
                     LogManager.logDebug("MQTT", "Loaded CA cert from: $caPath")
                 } else {
                     LogManager.logWarn("MQTT", "CA cert file not found: $caPath")
                 }
+            }
+
+            // No custom CA loaded; use system default trust store
+            if (!caLoaded) {
+                return null
             }
 
             trustManagerFactory.init(keyStore)

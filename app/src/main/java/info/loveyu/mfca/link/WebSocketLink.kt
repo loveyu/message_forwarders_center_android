@@ -261,15 +261,22 @@ class WebSocketLink(override val config: LinkConfig) : Link {
             keyStore.load(null, null)
 
             // Load CA certificate if provided
+            var caLoaded = false
             resolvedTls?.ca?.let { caPath ->
                 val caFile = File(caPath)
                 if (caFile.exists()) {
                     val caCert = certFactory.generateCertificate(caFile.inputStream()) as X509Certificate
                     keyStore.setCertificateEntry("ca", caCert)
+                    caLoaded = true
                     LogManager.logDebug("WS", "Loaded CA cert from: $caPath")
                 } else {
                     LogManager.logWarn("WS", "CA cert file not found: $caPath")
                 }
+            }
+
+            // No custom CA loaded; use system default trust store
+            if (!caLoaded) {
+                return null
             }
 
             trustManagerFactory.init(keyStore)
