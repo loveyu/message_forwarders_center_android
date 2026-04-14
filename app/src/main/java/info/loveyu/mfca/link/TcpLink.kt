@@ -58,6 +58,8 @@ class TcpLink(override val config: LinkConfig, private val context: Context) : L
     private var messageListener: ((ByteArray) -> Unit)? = null
     private var errorListener: ((Exception) -> Unit)? = null
     override var reconnectCallback: (() -> Boolean)? = null
+    override var maxFailureCallback: (() -> Unit)? = null
+    override var recoveredCallback: (() -> Unit)? = null
     @Volatile private var resolvedIp: String? = null
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -70,6 +72,7 @@ class TcpLink(override val config: LinkConfig, private val context: Context) : L
 
     // Reconnection state (MQTT-consistent model)
     private var consecutiveFailures = 0
+    private var hadMaxFailure = false
     private var lastConnectAttempt = 0L
 
     private var maxLength: Int = 1048576
@@ -165,14 +168,24 @@ class TcpLink(override val config: LinkConfig, private val context: Context) : L
             }
 
             connected.set(true)
+            val shouldNotify = hadMaxFailure && consecutiveFailures > 0
             consecutiveFailures = 0
+            hadMaxFailure = false
             resolvedIp = (socket?.remoteSocketAddress as? java.net.InetSocketAddress)?.address?.hostAddress
             LogManager.log("TCP", "Connected: $id (${frameProtocol.name})")
+
+            if (shouldNotify) {
+                recoveredCallback?.invoke()
+            }
 
             startReading()
             return true
         } catch (e: Exception) {
             consecutiveFailures++
+            if (consecutiveFailures == MAX_CONSECUTIVE_FAILURES) {
+                hadMaxFailure = true
+                maxFailureCallback?.invoke()
+            }
             LogManager.logError("TCP", "Connection error ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): ${e.message}")
             errorListener?.invoke(e)
             connected.set(false)

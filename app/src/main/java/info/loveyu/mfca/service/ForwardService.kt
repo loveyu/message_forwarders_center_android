@@ -43,6 +43,7 @@ class ForwardService : Service() {
     companion object {
         private const val TAG = "ForwardService"
         const val CHANNEL_ID = "forward_service_channel"
+        const val LINK_ERROR_CHANNEL_ID = "link_error_channel"
         const val NOTIFICATION_ID = 1
         const val ACTION_INIT = "info.loveyu.mfca.action.INIT"
         const val ACTION_START = "info.loveyu.mfca.action.START"
@@ -512,13 +513,21 @@ class ForwardService : Service() {
     }
 
     private fun createNotificationChannel() {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
         val channel = NotificationChannel(
             CHANNEL_ID,
             getString(R.string.service_notification_channel),
             NotificationManager.IMPORTANCE_LOW
         )
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(channel)
+
+        val linkErrorChannel = NotificationChannel(
+            LINK_ERROR_CHANNEL_ID,
+            getString(R.string.link_error_channel_name),
+            NotificationManager.IMPORTANCE_LOW
+        )
+        manager.createNotificationChannel(linkErrorChannel)
     }
 
     private fun createNotification(): Notification {

@@ -34,9 +34,12 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
     private val topics = mutableMapOf<String, Int>() // topic -> qos
 
     private var consecutiveFailures = 0
+    private var hadMaxFailure = false
     private var lastConnectAttempt = 0L
     private var retryIntervalMs = DEFAULT_RETRY_INTERVAL_MS
     override var reconnectCallback: (() -> Boolean)? = null
+    override var maxFailureCallback: (() -> Unit)? = null
+    override var recoveredCallback: (() -> Unit)? = null
     @Volatile private var peerCertificates: List<X509Certificate>? = null
     @Volatile private var resolvedIp: String? = null
 
@@ -153,7 +156,9 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
 
             if (client?.isConnected == true) {
                 connected = true
+                val shouldNotify = hadMaxFailure && consecutiveFailures > 0
                 consecutiveFailures = 0
+                hadMaxFailure = false
                 // Cache resolved IP
                 try {
                     val uri = URI(parsedBroker)
@@ -162,6 +167,10 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                     }
                 } catch (_: Exception) {}
                 LogManager.log("MQTT", "Connected successfully")
+
+                if (shouldNotify) {
+                    recoveredCallback?.invoke()
+                }
 
                 // Re-subscribe to topics
                 if (topics.isNotEmpty()) {
@@ -173,13 +182,21 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                 return true
             } else {
                 consecutiveFailures++
+                if (consecutiveFailures == MAX_CONSECUTIVE_FAILURES) hadMaxFailure = true
                 LogManager.logWarn("MQTT", "Connection failed ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): ${result?.exception?.message}")
+                if (consecutiveFailures == MAX_CONSECUTIVE_FAILURES) {
+                    maxFailureCallback?.invoke()
+                }
                 cleanupClient()
                 return false
             }
         } catch (e: Exception) {
             consecutiveFailures++
+            if (consecutiveFailures == MAX_CONSECUTIVE_FAILURES) hadMaxFailure = true
             LogManager.logError("MQTT", "Connection error ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): ${e.message}")
+            if (consecutiveFailures == MAX_CONSECUTIVE_FAILURES) {
+                maxFailureCallback?.invoke()
+            }
             errorListener?.invoke(e)
             cleanupClient()
             return false

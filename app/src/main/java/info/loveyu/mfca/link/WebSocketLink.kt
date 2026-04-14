@@ -52,6 +52,8 @@ class WebSocketLink(override val config: LinkConfig) : Link {
     private var messageListener: ((ByteArray) -> Unit)? = null
     private var errorListener: ((Exception) -> Unit)? = null
     override var reconnectCallback: (() -> Boolean)? = null
+    override var maxFailureCallback: (() -> Unit)? = null
+    override var recoveredCallback: (() -> Unit)? = null
     private var lastHandshake: Handshake? = null
     @Volatile private var resolvedIp: String? = null
     private val connectionLock = Any()
@@ -63,6 +65,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
 
     // Reconnection state (MQTT-consistent model)
     private var consecutiveFailures = 0
+    private var hadMaxFailure = false
     private var lastConnectAttempt = 0L
     @Volatile private var peerCertificates: List<X509Certificate>? = null
 
@@ -162,12 +165,18 @@ class WebSocketLink(override val config: LinkConfig) : Link {
             val request = requestBuilder.build()
             val ws = client.newWebSocket(request, object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
+                    val shouldNotifyRecovered: Boolean
                     synchronized(connectionLock) {
                         connected = true
                         connecting = false
+                        shouldNotifyRecovered = hadMaxFailure && consecutiveFailures > 0
                         consecutiveFailures = 0
+                        hadMaxFailure = false
                     }
                     lastHandshake = response.handshake
+                    if (shouldNotifyRecovered) {
+                        recoveredCallback?.invoke()
+                    }
                     LogManager.log("WS", "Connected: $id")
                 }
 
@@ -195,12 +204,18 @@ class WebSocketLink(override val config: LinkConfig) : Link {
                 }
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                    val shouldNotify: Boolean
                     synchronized(connectionLock) {
                         connected = false
                         connecting = false
                         consecutiveFailures++
+                        shouldNotify = consecutiveFailures == MAX_CONSECUTIVE_FAILURES
+                        if (shouldNotify) hadMaxFailure = true
                     }
                     LogManager.logError("WS", "Error ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): ${t.message}")
+                    if (shouldNotify) {
+                        maxFailureCallback?.invoke()
+                    }
                     errorListener?.invoke(t as? Exception ?: Exception(t.message))
                 }
             })

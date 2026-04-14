@@ -1,6 +1,9 @@
 package info.loveyu.mfca
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -622,6 +625,11 @@ fun MainScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 2.dp)
+                                    .clickable {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("log", log))
+                                        Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+                                    }
                             )
                         }
                     }

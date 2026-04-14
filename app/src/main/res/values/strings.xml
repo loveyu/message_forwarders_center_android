@@ -75,4 +75,7 @@
     <string name="github">GitHub</string>
     <string name="tile_input_method_switcher">切换输入法</string>
     <string name="notification_action_input_method">输入</string>
+    <string name="link_error_channel_name">连接错误</string>
+    <string name="link_error_title">链接连接失败</string>
+    <string name="link_recovered_title">链接已恢复</string>
 </resources>

@@ -1,14 +1,20 @@
 package info.loveyu.mfca.link
 
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import info.loveyu.mfca.MainActivity
+import info.loveyu.mfca.R
 import info.loveyu.mfca.config.AppConfig
 import info.loveyu.mfca.config.LinkConfig
 import info.loveyu.mfca.config.LinkType
 import info.loveyu.mfca.input.InputManager
+import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.NetworkChecker
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,6 +59,11 @@ object LinkManager {
     @Volatile
     private var initialized = false
 
+    // Notification state for link errors
+    private val notifiedErrorLinks = mutableSetOf<String>()
+
+    private const val LINK_ERROR_NOTIFICATION_BASE = 2000
+
     // Network state version for UI refresh
     private val _networkStateVersion = MutableStateFlow(0)
     val networkStateVersion: StateFlow<Int> = _networkStateVersion.asStateFlow()
@@ -90,6 +101,8 @@ object LinkManager {
                     false
                 }
             }
+            link.maxFailureCallback = { showLinkErrorNotification(link.id) }
+            link.recoveredCallback = { showLinkRecoveredNotification(link.id) }
             links[linkConfig.id] = link
             LogManager.log("LINK", "Registered link: ${linkConfig.id} (${LinkType.fromDsn(linkConfig.dsn)})")
         }
@@ -371,6 +384,7 @@ object LinkManager {
         stopHealthCheck()
         unregisterNetworkCallback()
         disconnectAll()
+        cancelAllLinkErrorNotifications()
         links.clear()
         configs.clear()
     }
@@ -385,6 +399,73 @@ object LinkManager {
                 LogManager.logWarn("LINK", "Failed to unregister network callback: ${e.message}")
             }
             networkCallback = null
+        }
+    }
+
+    // ---- Link error notification helpers ----
+
+    private fun showLinkErrorNotification(linkId: String) {
+        val ctx = applicationContext ?: return
+        synchronized(notifiedErrorLinks) {
+            if (linkId in notifiedErrorLinks) return
+            notifiedErrorLinks.add(linkId)
+        }
+
+        val notificationId = LINK_ERROR_NOTIFICATION_BASE + Math.abs(linkId.hashCode() % 1000)
+        val contentIntent = PendingIntent.getActivity(
+            ctx, 0, Intent(ctx, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = android.app.Notification.Builder(ctx, ForwardService.LINK_ERROR_CHANNEL_ID)
+            .setContentTitle(ctx.getString(R.string.link_error_title))
+            .setContentText(linkId)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentIntent(contentIntent)
+            .setOngoing(true)
+            .build()
+
+        val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify("link_error_$linkId", notificationId, notification)
+        LogManager.log("LINK", "Posted error notification for $linkId")
+    }
+
+    private fun showLinkRecoveredNotification(linkId: String) {
+        val ctx = applicationContext ?: return
+        synchronized(notifiedErrorLinks) {
+            if (linkId !in notifiedErrorLinks) return
+            notifiedErrorLinks.remove(linkId)
+        }
+
+        val notificationId = LINK_ERROR_NOTIFICATION_BASE + Math.abs(linkId.hashCode() % 1000)
+        val contentIntent = PendingIntent.getActivity(
+            ctx, 0, Intent(ctx, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = android.app.Notification.Builder(ctx, ForwardService.LINK_ERROR_CHANNEL_ID)
+            .setContentTitle(ctx.getString(R.string.link_recovered_title))
+            .setContentText(linkId)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentIntent(contentIntent)
+            .setOngoing(false)
+            .setTimeoutAfter(5_000L)
+            .build()
+
+        val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify("link_error_$linkId", notificationId, notification)
+        LogManager.log("LINK", "Posted recovered notification for $linkId")
+    }
+
+    private fun cancelAllLinkErrorNotifications() {
+        val ctx = applicationContext ?: return
+        val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        synchronized(notifiedErrorLinks) {
+            notifiedErrorLinks.forEach { linkId ->
+                val notificationId = LINK_ERROR_NOTIFICATION_BASE + Math.abs(linkId.hashCode() % 1000)
+                nm.cancel("link_error_$linkId", notificationId)
+            }
+            notifiedErrorLinks.clear()
         }
     }
 

@@ -15,6 +15,16 @@ interface Link {
      */
     var reconnectCallback: (() -> Boolean)?
 
+    /**
+     * 连续失败达到上限时的回调，由 LinkManager 设置。
+     */
+    var maxFailureCallback: (() -> Unit)?
+
+    /**
+     * 从失败状态恢复（连接成功且之前有失败记录）时的回调，由 LinkManager 设置。
+     */
+    var recoveredCallback: (() -> Unit)?
+
     fun connect(): Boolean
     fun disconnect()
     fun isConnected(): Boolean
