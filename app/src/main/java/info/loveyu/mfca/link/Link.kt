@@ -11,7 +11,6 @@ interface Link {
 
     /**
      * 条件感知重连回调，由 LinkManager 设置。
-     * 内部 scheduleReconnect() 应调用此回调而非直接 connect()，
      * 回调内部会检查 when/deny 网络条件。
      */
     var reconnectCallback: (() -> Boolean)?
@@ -35,6 +34,19 @@ interface Link {
      * 返回 TLS 连接信息，非 TLS 连接返回 null
      */
     fun getTlsInfo(): TlsConnectionInfo? = null
+
+    /**
+     * 是否允许自动重连，由 LinkManager 健康检查调用。
+     * 返回 false 时 LinkManager 不会尝试重连此链接。
+     * 默认 true。
+     */
+    fun shouldAutoReconnect(): Boolean = true
+
+    /**
+     * 重置连续失败计数，由 LinkManager 在每个健康检查周期调用。
+     * 使链接在达到最大失败次数后仍可在下一个周期重试。
+     */
+    fun resetFailureCount() {}
 }
 
 /**

@@ -36,6 +36,7 @@ object LinkManager {
     // Service-resident executors
     private val linkScheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
     private var healthCheckFuture: ScheduledFuture<*>? = null
+    private var failureResetFuture: ScheduledFuture<*>? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     // Network state
@@ -112,6 +113,7 @@ object LinkManager {
             override fun onAvailable(network: Network) {
                 LogManager.log("LINK", "Network available")
                 isNetworkAvailable = true
+                resetAllFailureCounts()
                 updateNetworkType()
                 // Network available, try reconnecting links
                 reconnectAllAsync()
@@ -120,6 +122,7 @@ object LinkManager {
             override fun onLost(network: Network) {
                 LogManager.logWarn("LINK", "Network lost")
                 isNetworkAvailable = false
+                resetAllFailureCounts()
                 updateNetworkType()
             }
 
@@ -127,6 +130,7 @@ object LinkManager {
                 network: Network,
                 networkCapabilities: NetworkCapabilities
             ) {
+                resetAllFailureCounts()
                 updateNetworkType()
             }
         }
@@ -193,21 +197,33 @@ object LinkManager {
     }
 
     /**
-     * 启动链路健康检查 (每30秒)
+     * 启动链路健康检查 (每30秒) 和失败计数定时重置 (每10分钟)
      */
     fun startHealthCheck() {
         healthCheckFuture?.cancel(false)
         healthCheckFuture = linkScheduler.scheduleAtFixedRate({
             checkLinkHealth()
         }, 30, 30, TimeUnit.SECONDS)
+
+        // 定时重置所有链接的失败计数，防止因服务异常导致链接永久无法恢复
+        failureResetFuture?.cancel(false)
+        failureResetFuture = linkScheduler.scheduleAtFixedRate({
+            if (isNetworkAvailable) {
+                LogManager.logDebug("LINK", "Periodic failure count reset (10min)")
+                resetAllFailureCounts()
+                checkAllLinkConditions()
+            }
+        }, 10, 10, TimeUnit.MINUTES)
     }
 
     /**
-     * 停止链路健康检查
+     * 停止链路健康检查和失败计数定时重置
      */
     fun stopHealthCheck() {
         healthCheckFuture?.cancel(false)
         healthCheckFuture = null
+        failureResetFuture?.cancel(false)
+        failureResetFuture = null
     }
 
     /**
@@ -239,12 +255,13 @@ object LinkManager {
                 return@forEach
             }
 
+            // Skip if auto-reconnect is disabled
+            if (!link.shouldAutoReconnect()) return@forEach
+
             // Try to reconnect if disconnected
             if (!link.isConnected()) {
                 // Reset failure count so the link can try again this cycle
-                if (link is MqttLink) {
-                    link.resetFailureCount()
-                }
+                link.resetFailureCount()
                 LogManager.log("LINK", "Reconnecting ${link.id}...")
                 try {
                     link.connect()
@@ -308,6 +325,9 @@ object LinkManager {
         links.values.forEach { link ->
             val config = configs[link.id] ?: return@forEach
 
+            // Skip if auto-reconnect is disabled
+            if (!link.shouldAutoReconnect()) return@forEach
+
             // Check network conditions (when/deny)
             if (!info.loveyu.mfca.util.NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
                 LogManager.logDebug("LINK", "Skipping ${link.id}: network conditions not met")
@@ -316,6 +336,7 @@ object LinkManager {
 
             try {
                 if (!link.isConnected()) {
+                    link.resetFailureCount()
                     if (link.connect()) {
                         LogManager.log("LINK", "Reconnected ${link.id}")
                     }
@@ -334,6 +355,18 @@ object LinkManager {
                 LogManager.logError("LINK", "Error disconnecting ${link.id}: ${e.message}")
             }
         }
+    }
+
+    /**
+     * 重置所有链接的连续失败计数。
+     * 网络变更时调用，确保网络恢复后链接能立即重试连接，
+     * 不会因之前的失败计数而跳过重连。
+     */
+    private fun resetAllFailureCounts() {
+        links.values.forEach { link ->
+            link.resetFailureCount()
+        }
+        LogManager.logDebug("LINK", "Reset all link failure counts on network change")
     }
 
     fun clear() {
@@ -364,7 +397,7 @@ object LinkManager {
         val type = LinkType.fromDsn(config.dsn)
         return when (type) {
             LinkType.mqtt -> MqttLink(config, ctx)
-            LinkType.websocket -> WebSocketLink(config)
+            LinkType.websocket -> WebSocketLink(config).also { it.setContext(ctx) }
             LinkType.tcp -> TcpLink(config)
             LinkType.http -> throw IllegalArgumentException("HTTP links are not managed by LinkManager, use SharedHttpInput instead")
         }

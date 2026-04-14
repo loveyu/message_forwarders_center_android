@@ -1,9 +1,11 @@
 package info.loveyu.mfca.link
 
+import android.content.Context
 import info.loveyu.mfca.config.LinkConfig
 import info.loveyu.mfca.config.LinkType
+import info.loveyu.mfca.config.TlsConfig
+import info.loveyu.mfca.util.CertResolver
 import info.loveyu.mfca.util.LogManager
-import kotlinx.coroutines.launch
 import okhttp3.Handshake
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -11,63 +13,110 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
+import java.io.File
 import java.net.InetAddress
 import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
+import java.security.KeyStore as JksKeyStore
 import java.security.MessageDigest
+import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.X509TrustManager
 
 /**
  * WebSocket 连接实现
+ *
+ * DSN 格式: ws[s]://[username:password@]host:port/path[?param1=value1...]
+ *
  * URL 参数支持：
  *   readTimeout, writeTimeout, pingInterval (秒)
- *   automaticReconnect, reconnectInterval, reconnectMaxInterval (秒)
+ *   automaticReconnect (bool)
+ *   reconnectInterval (秒, 默认10)
+ *   reconnectMaxInterval (秒, 默认60, 预留)
  *   username, password (Basic 认证)
  *   token (Gotify token 认证)
  *   protocol=gotify (启用 Gotify WebSocket 协议，自动添加 /stream 路径)
+ *
+ * 重连模型：与 MQTT/TCP 一致
+ *   - 无内部 scheduleReconnect，由 LinkManager 健康检查驱动重连
+ *   - 连续失败计数器 (MAX=5)，超过后等待健康检查 resetFailureCount
+ *   - 最小重试间隔防止高频重连
  */
 class WebSocketLink(override val config: LinkConfig) : Link {
 
     private var isGotifyProtocol = false
+    private var context: Context? = null
 
     override val id: String = config.id
 
     private var webSocket: WebSocket? = null
-    private var connected = false
+    @Volatile private var connected = false
+    @Volatile private var connecting = false
     private var messageListener: ((ByteArray) -> Unit)? = null
     private var errorListener: ((Exception) -> Unit)? = null
     override var reconnectCallback: (() -> Boolean)? = null
     private var lastHandshake: Handshake? = null
     @Volatile private var resolvedIp: String? = null
     private val connectionLock = Any()
-    @Volatile private var connecting = false
 
     private var params: Map<String, String> = emptyMap()
     private var autoReconnect = true
-    private var reconnectDelay = 5L
-    private var maxReconnectDelay = 30L
-    private var reconnectJob: kotlinx.coroutines.Job? = null
-    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+    private var retryIntervalMs = DEFAULT_RETRY_INTERVAL_MS
+    private var maxReconnectDelay = 60L
+
+    // Reconnection state (MQTT-consistent model)
+    private var consecutiveFailures = 0
+    private var lastConnectAttempt = 0L
+    @Volatile private var peerCertificates: List<X509Certificate>? = null
+
+    companion object {
+        private const val MAX_CONSECUTIVE_FAILURES = 5
+        private const val DEFAULT_RETRY_INTERVAL_MS = 10_000L // 10 seconds
+    }
 
     init {
-        // Validate DSN protocol is ws or wss
         val type = LinkType.fromDsn(config.dsn)
         if (type != LinkType.websocket) {
             throw IllegalArgumentException("WebSocketLink requires ws:// or wss:// DSN")
         }
     }
 
+    fun setContext(ctx: Context) {
+        context = ctx.applicationContext
+    }
+
     override fun connect(): Boolean {
         if (connected) return true
-        if (connecting) return true
+        if (connecting) return false
+
+        // Backoff: too many consecutive failures
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+            LogManager.logWarn("WS", "Skipping connect for $id: too many failures ($consecutiveFailures), waiting for next health check")
+            return false
+        }
+
+        // Backoff: don't retry too fast
+        val now = System.currentTimeMillis()
+        if (now - lastConnectAttempt < retryIntervalMs) {
+            return false
+        }
+        lastConnectAttempt = now
 
         synchronized(connectionLock) {
-            // Double-check after acquiring lock
-            if (connected || connecting || webSocket != null) return true
+            if (connected || connecting) return connected
+
+            // Cleanup previous WebSocket
+            try {
+                webSocket?.close(1000, null)
+            } catch (_: Exception) {}
+            webSocket = null
             connecting = true
 
-            val urlStr = config.dsn ?: return false
+            val urlStr = config.dsn ?: return false.also { connecting = false }
 
             // Parse URL params
             val (cleanUrl, parsedParams) = parseUrlParams(urlStr)
@@ -76,13 +125,13 @@ class WebSocketLink(override val config: LinkConfig) : Link {
             // Check for Gotify protocol
             isGotifyProtocol = params["protocol"] == "gotify"
 
-            // Reconnect settings
+            // Resolve reconnect settings: DSN param > config.reconnect > default
             autoReconnect = params["automaticReconnect"]?.toBoolean()
                 ?: (config.reconnect?.enabled ?: true)
-            reconnectDelay = params["reconnectInterval"]?.toLongOrNull()
-                ?: config.reconnect?.interval?.timeUnit?.toSeconds(config.reconnect?.interval?.millis ?: 3000) ?: 5L
+            retryIntervalMs = params["reconnectInterval"]?.toLongOrNull()?.let { it * 1000 }
+                ?: (config.reconnect?.interval?.millis ?: DEFAULT_RETRY_INTERVAL_MS)
             maxReconnectDelay = params["reconnectMaxInterval"]?.toLongOrNull()
-                ?: config.reconnect?.maxInterval?.timeUnit?.toSeconds(config.reconnect?.maxInterval?.millis ?: 30000) ?: 30L
+                ?: (config.reconnect?.maxInterval?.millis?.let { it / 1000 } ?: 60L)
 
             LogManager.log("WS", "Connecting to $cleanUrl (gotify=$isGotifyProtocol)")
 
@@ -120,9 +169,11 @@ class WebSocketLink(override val config: LinkConfig) : Link {
             val request = requestBuilder.build()
             val ws = client.newWebSocket(request, object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
-                    connected = true
-                    connecting = false
-                    reconnectJob?.cancel()
+                    synchronized(connectionLock) {
+                        connected = true
+                        connecting = false
+                        consecutiveFailures = 0
+                    }
                     lastHandshake = response.handshake
                     LogManager.log("WS", "Connected: $id")
                 }
@@ -143,18 +194,21 @@ class WebSocketLink(override val config: LinkConfig) : Link {
                 }
 
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                    connected = false
-                    connecting = false
+                    synchronized(connectionLock) {
+                        connected = false
+                        connecting = false
+                    }
                     LogManager.log("WS", "Closed: $code $reason")
-                    scheduleReconnect()
                 }
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                    connected = false
-                    connecting = false
-                    LogManager.logError("WS", "Error: ${t.message}")
+                    synchronized(connectionLock) {
+                        connected = false
+                        connecting = false
+                        consecutiveFailures++
+                    }
+                    LogManager.logError("WS", "Error ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): ${t.message}")
                     errorListener?.invoke(t as? Exception ?: Exception(t.message))
-                    scheduleReconnect()
                 }
             })
 
@@ -168,35 +222,112 @@ class WebSocketLink(override val config: LinkConfig) : Link {
         val writeTimeout = params["writeTimeout"]?.toLongOrNull() ?: 30L
         val pingInterval = params["pingInterval"]?.toLongOrNull() ?: 30L
 
-        return OkHttpClient.Builder()
+        val builder = OkHttpClient.Builder()
             .readTimeout(readTimeout, TimeUnit.SECONDS)
             .writeTimeout(writeTimeout, TimeUnit.SECONDS)
             .pingInterval(pingInterval, TimeUnit.SECONDS)
-            .build()
+
+        // TLS: wss:// scheme or explicit tls config
+        val isWss = config.dsn?.startsWith("wss://") == true
+        if (isWss || config.tls != null) {
+            val ctx = context
+            if (ctx != null) {
+                try {
+                    val sslConfig = createSslConfig(config.tls, ctx)
+                    if (sslConfig != null) {
+                        builder.sslSocketFactory(sslConfig.socketFactory, sslConfig.trustManager)
+                    }
+                } catch (e: Exception) {
+                    LogManager.logError("WS", "SSL setup error: ${e.message}")
+                }
+            } else {
+                LogManager.logWarn("WS", "No context available for TLS configuration, using system defaults")
+            }
+        }
+
+        return builder.build()
     }
 
-    private fun scheduleReconnect() {
-        if (!autoReconnect) return
+    /**
+     * Create SSL configuration with custom CA certificates.
+     * Returns null to use system defaults.
+     */
+    private fun createSslConfig(tls: TlsConfig?, context: Context): SslConfig? {
+        try {
+            val resolvedTls = CertResolver.resolveTlsConfig(tls, context)
+            val certFactory = CertificateFactory.getInstance("X.509")
+            val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+            val keyStore = JksKeyStore.getInstance(JksKeyStore.getDefaultType())
+            keyStore.load(null, null)
 
-        reconnectJob?.cancel()
-        reconnectJob = scope.launch {
-            kotlinx.coroutines.delay(reconnectDelay * 1000)
-            LogManager.log("WS", "Attempting reconnect: $id")
-            reconnectCallback?.invoke() ?: connect()
+            // Load CA certificate if provided
+            resolvedTls?.ca?.let { caPath ->
+                val caFile = File(caPath)
+                if (caFile.exists()) {
+                    val caCert = certFactory.generateCertificate(caFile.inputStream()) as X509Certificate
+                    keyStore.setCertificateEntry("ca", caCert)
+                    LogManager.logDebug("WS", "Loaded CA cert from: $caPath")
+                } else {
+                    LogManager.logWarn("WS", "CA cert file not found: $caPath")
+                }
+            }
+
+            trustManagerFactory.init(keyStore)
+
+            // Wrap TrustManagers to capture peer certificates
+            val wrappedTms = trustManagerFactory.trustManagers.map { tm ->
+                if (tm is X509TrustManager) {
+                    object : X509TrustManager {
+                        override fun checkClientTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {
+                            tm.checkClientTrusted(chain, authType)
+                        }
+                        override fun checkServerTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {
+                            chain?.let { peerCertificates = it.toList() }
+                            tm.checkServerTrusted(chain, authType)
+                        }
+                        override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = tm.acceptedIssuers
+                    }
+                } else tm
+            }.toTypedArray()
+
+            val x509Tm = wrappedTms.firstOrNull { it is X509TrustManager } as? X509TrustManager
+                ?: return null
+
+            val sslContext = SSLContext.getInstance("TLSv1.2")
+            sslContext.init(null, wrappedTms, null)
+
+            return SslConfig(sslContext.socketFactory, x509Tm)
+        } catch (e: Exception) {
+            LogManager.logError("WS", "SSL config error: ${e.message}")
+            return null
         }
     }
 
+    private data class SslConfig(
+        val socketFactory: javax.net.ssl.SSLSocketFactory,
+        val trustManager: X509TrustManager
+    )
+
     override fun disconnect() {
-        autoReconnect = false
-        reconnectJob?.cancel()
-        webSocket?.close(1000, "Disconnect requested")
-        webSocket = null
-        connected = false
         connecting = false
+        consecutiveFailures = 0
+        synchronized(connectionLock) {
+            try {
+                webSocket?.close(1000, "Disconnect requested")
+            } catch (_: Exception) {}
+            webSocket = null
+            connected = false
+        }
         LogManager.log("WS", "Disconnected: $id")
     }
 
     override fun isConnected(): Boolean = connected
+
+    override fun shouldAutoReconnect(): Boolean = autoReconnect
+
+    override fun resetFailureCount() {
+        consecutiveFailures = 0
+    }
 
     override fun send(data: ByteArray): Boolean {
         if (!connected) {
@@ -241,7 +372,6 @@ class WebSocketLink(override val config: LinkConfig) : Link {
             uri.host?.let { h ->
                 details["host"] = h
                 if (uri.port != -1) details["port"] = uri.port.toString()
-                // Use cached resolved IP, or resolve now
                 val ip = resolvedIp ?: try {
                     InetAddress.getByName(h).hostAddress?.also { resolvedIp = it }
                 } catch (_: Exception) { null }
@@ -252,6 +382,29 @@ class WebSocketLink(override val config: LinkConfig) : Link {
     }
 
     override fun getTlsInfo(): TlsConnectionInfo? {
+        // Prefer peer certificates captured during TLS handshake
+        val certs = peerCertificates
+        if (certs != null && certs.isNotEmpty()) {
+            val certInfos = certs.map { cert ->
+                CertInfo(
+                    subject = cert.subjectX500Principal.name,
+                    issuer = cert.issuerX500Principal.name,
+                    validFrom = cert.notBefore.toString(),
+                    validTo = cert.notAfter.toString(),
+                    serialNumber = cert.serialNumber.toString(16),
+                    fingerprintSha256 = cert.encoded?.let {
+                        val md = MessageDigest.getInstance("SHA-256")
+                        md.digest(it).joinToString(":") { "%02x".format(it) }
+                    }
+                )
+            }
+            return TlsConnectionInfo(
+                protocol = "TLS",
+                peerCertificates = certInfos
+            )
+        }
+
+        // Fallback to OkHttp handshake info
         val handshake = lastHandshake ?: return null
         val peerCerts = handshake.peerCertificates.mapNotNull { cert ->
             if (cert is java.security.cert.X509Certificate) {

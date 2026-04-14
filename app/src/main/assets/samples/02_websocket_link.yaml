@@ -1,16 +1,20 @@
 # WebSocket 连接示例
 # 演示：WebSocket 链接配置，类型通过 DSN 协议自动判断 (ws:// → websocket, wss:// → websocket)
 # 所有参数通过 DSN query 部分传递
-
+#
+# 重连模型：与 MQTT/TCP 一致
+#   - 由 LinkManager 30秒健康检查驱动重连
+#   - 连续失败计数器 (MAX=5)，超过后等待下一周期重置
+#   - 最小重试间隔 reconnectInterval (默认10秒)
 
 links:
   # 标准 WebSocket - 类型从 DSN 自动识别
   - id: ws_server
-    dsn: ws://localhost:8080/ws?readTimeout=30&writeTimeout=30&pingInterval=30&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=30
+    dsn: ws://localhost:8080/ws?readTimeout=30&writeTimeout=30&pingInterval=30
 
-  # WSS (TLS) WebSocket
+  # WSS (TLS) WebSocket - 支持自定义 CA 证书
   - id: wss_server
-    dsn: wss://secure.example.com/ws?readTimeout=60&automaticReconnect=true
+    dsn: wss://secure.example.com/ws?readTimeout=60
     tls:
       ca: /data/certs/ca.pem
 
@@ -22,13 +26,21 @@ links:
   # DSN 格式: ws(s)://host:port?token=xxx&protocol=gotify
   # 自动添加 /stream 路径，token 通过 query 参数传递
   - id: gotify_server
-    dsn: ws://gotify.example.com:80?token=YOUR_CLIENT_TOKEN&protocol=gotify&automaticReconnect=true&reconnectInterval=5
+    dsn: ws://gotify.example.com:80?token=YOUR_CLIENT_TOKEN&protocol=gotify
 
   # Gotify WSS (TLS) - 生产环境推荐
   # - id: gotify_secure
-  #   dsn: wss://gotify.example.com:443?token=YOUR_CLIENT_TOKEN&protocol=gotify&automaticReconnect=true
+  #   dsn: wss://gotify.example.com:443?token=YOUR_CLIENT_TOKEN&protocol=gotify
   #   tls:
   #     ca: /data/certs/ca.pem
+
+  # 使用 YAML 配置块设置重连参数（DSN 查询参数优先）
+  # - id: ws_custom_reconnect
+  #   dsn: ws://localhost:8080/ws
+  #   reconnect:
+  #     enabled: true
+  #     interval: 10s
+  #     maxInterval: 60s
 
 inputs:
   link:

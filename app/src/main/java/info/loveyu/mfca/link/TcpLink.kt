@@ -29,7 +29,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  *   readTimeout    (秒, 默认30) — 单次读取超时, 超时断开
  *   writeTimeout   (秒, 默认10) — 单次写入超时, 超时断开
  *   keepAlive (true/false), noDelay (true/false)
- *   automaticReconnect, reconnectInterval, reconnectMaxInterval (秒)
+ *   automaticReconnect (bool, 默认true)
+ *   reconnectInterval (秒, 默认10)
+ *   reconnectMaxInterval (秒, 默认60, 预留)
  *   protocol (lb/tlv/split, 默认 lb)
  *   maxLength (字节, 默认1048576即1MB, 单条消息最大长度)
  *   split (仅 split 协议, 分隔符, 支持 \n \r \t \0 \\ 转义)
@@ -39,7 +41,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  *   tlv  : | type(2) | length(4, 大端序) | body(N) |
  *   split: 分隔符协议
  *
- * 无效长度、超长数据、读写超时将直接断开连接。
+ * 重连模型：与 MQTT/WebSocket 一致
+ *   - 无内部 scheduleReconnect，由 LinkManager 健康检查驱动重连
+ *   - 连续失败计数器 (MAX=5)，超过后等待健康检查 resetFailureCount
+ *   - 最小重试间隔防止高频重连
  */
 class TcpLink(override val config: LinkConfig) : Link {
 
@@ -54,12 +59,15 @@ class TcpLink(override val config: LinkConfig) : Link {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var readerJob: Job? = null
-    private var reconnectJob: Job? = null
 
     private var params: Map<String, String> = emptyMap()
     private var autoReconnect = true
-    private var reconnectDelay = 5L
+    private var retryIntervalMs = DEFAULT_RETRY_INTERVAL_MS
     private var maxReconnectDelay = 60L
+
+    // Reconnection state (MQTT-consistent model)
+    private var consecutiveFailures = 0
+    private var lastConnectAttempt = 0L
 
     private var maxLength: Int = 1048576
     private var readTimeoutMs: Long = 30_000L   // socket soTimeout
@@ -69,6 +77,11 @@ class TcpLink(override val config: LinkConfig) : Link {
 
     private val host: String
     private val port: Int
+
+    companion object {
+        private const val MAX_CONSECUTIVE_FAILURES = 5
+        private const val DEFAULT_RETRY_INTERVAL_MS = 10_000L // 10 seconds
+    }
 
     init {
         val type = LinkType.fromDsn(config.dsn)
@@ -98,19 +111,32 @@ class TcpLink(override val config: LinkConfig) : Link {
             TcpProtocolFactory.parseDelimiter(splitStr ?: "\n").joinToString("") { "%02x".format(it) }
         } else null
 
-        // Reconnect
+        // Reconnect settings: DSN param > config.reconnect > default
         autoReconnect = params["automaticReconnect"]?.toBoolean()
             ?: (config.reconnect?.enabled ?: true)
-        reconnectDelay = params["reconnectInterval"]?.toLongOrNull()
-            ?: config.reconnect?.interval?.timeUnit?.toSeconds(config.reconnect?.interval?.millis ?: 5000) ?: 5L
+        retryIntervalMs = params["reconnectInterval"]?.toLongOrNull()?.let { it * 1000 }
+            ?: (config.reconnect?.interval?.millis ?: DEFAULT_RETRY_INTERVAL_MS)
         maxReconnectDelay = params["reconnectMaxInterval"]?.toLongOrNull()
-            ?: config.reconnect?.maxInterval?.timeUnit?.toSeconds(config.reconnect?.maxInterval?.millis ?: 60000) ?: 60L
+            ?: (config.reconnect?.maxInterval?.millis?.let { it / 1000 } ?: 60L)
     }
 
     // ---- Connection lifecycle ----
 
     override fun connect(): Boolean {
         if (connected.get()) return true
+
+        // Backoff: too many consecutive failures
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+            LogManager.logWarn("TCP", "Skipping connect for $id: too many failures ($consecutiveFailures), waiting for next health check")
+            return false
+        }
+
+        // Backoff: don't retry too fast
+        val now = System.currentTimeMillis()
+        if (now - lastConnectAttempt < retryIntervalMs) {
+            return false
+        }
+        lastConnectAttempt = now
 
         try {
             val connectTimeout = params["connectTimeout"]?.toIntOrNull() ?: 10
@@ -127,37 +153,26 @@ class TcpLink(override val config: LinkConfig) : Link {
             }
 
             connected.set(true)
-            reconnectJob?.cancel()
+            consecutiveFailures = 0
             resolvedIp = (socket?.remoteSocketAddress as? java.net.InetSocketAddress)?.address?.hostAddress
             LogManager.log("TCP", "Connected: $id (${frameProtocol.name})")
 
             startReading()
             return true
         } catch (e: Exception) {
-            LogManager.logError("TCP", "Connection error: ${e.message}")
+            consecutiveFailures++
+            LogManager.logError("TCP", "Connection error ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): ${e.message}")
             errorListener?.invoke(e)
             connected.set(false)
-            scheduleReconnect()
             return false
         }
     }
 
-    private fun scheduleReconnect() {
-        if (!autoReconnect) return
-        reconnectJob?.cancel()
-        reconnectJob = scope.launch {
-            kotlinx.coroutines.delay(reconnectDelay * 1000)
-            LogManager.log("TCP", "Attempting reconnect: $id")
-            reconnectCallback?.invoke() ?: connect()
-        }
-    }
-
     override fun disconnect() {
-        autoReconnect = false
-        reconnectJob?.cancel()
+        consecutiveFailures = 0
+        readerJob?.cancel()
         try {
             connected.set(false)
-            readerJob?.cancel()
             socket?.close()
             socket = null
             LogManager.log("TCP", "Disconnected: $id")
@@ -167,6 +182,12 @@ class TcpLink(override val config: LinkConfig) : Link {
     }
 
     override fun isConnected(): Boolean = connected.get()
+
+    override fun shouldAutoReconnect(): Boolean = autoReconnect
+
+    override fun resetFailureCount() {
+        consecutiveFailures = 0
+    }
 
     // ---- Send ----
 
@@ -224,7 +245,6 @@ class TcpLink(override val config: LinkConfig) : Link {
                 if (connected.get()) {
                     LogManager.log("TCP", "Server closed connection")
                     connected.set(false)
-                    scheduleReconnect()
                 }
             } catch (e: SocketTimeoutException) {
                 LogManager.logWarn("TCP", "Read timeout (${readTimeoutMs}ms), disconnecting")
@@ -232,18 +252,17 @@ class TcpLink(override val config: LinkConfig) : Link {
             } catch (e: EOFException) {
                 LogManager.log("TCP", "Server closed connection")
                 connected.set(false)
-                scheduleReconnect()
             } catch (e: SocketException) {
                 if (connected.get()) {
                     LogManager.logError("TCP", "Read error: ${e.message}")
                     errorListener?.invoke(e)
-                    scheduleReconnect()
+                    connected.set(false)
                 }
             } catch (e: Exception) {
                 if (connected.get()) {
                     LogManager.logError("TCP", "Read error: ${e.message}")
                     errorListener?.invoke(e)
-                    scheduleReconnect()
+                    connected.set(false)
                 }
             }
         }

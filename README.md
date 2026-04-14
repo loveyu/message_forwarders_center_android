@@ -12,24 +12,53 @@ Android 消息转发中心 - Service 常驻架构
 ### 链接层 (LinkManager)
 | 类型 | 库 | 特性 |
 |------|-----|------|
-| MQTT | Eclipse Paho | TLS支持、自动重连 |
-| WebSocket | OkHttp | WSS支持、自动重连 |
-| TCP | Kotlin Socket | Keep-Alive |
+| MQTT | Eclipse Paho | TLS支持、连续失败退避 |
+| WebSocket | OkHttp | WSS/TLS支持、Basic Auth、Gotify协议 |
+| TCP | Kotlin Socket | Keep-Alive、帧协议(lb/tlv/split) |
 
-#### Link URL 参数
-所有连接参数通过 URL 的 query 部分传递，格式统一为：
+#### Link 配置
+类型通过 DSN 协议自动判断，所有连接参数通过 URL 的 query 部分传递：
+```yaml
+links:
+  - id: mqtt_link
+    dsn: mqtt://admin:123456@10.4.125.53:1883?connectTimeout=3&keepAliveInterval=60
+
+  - id: mqtt_tls
+    dsn: mqtts://broker.example.com:8883
+    tls:
+      ca: /path/to/ca.pem
+
+  - id: ws_link
+    dsn: ws://localhost:8080/ws?readTimeout=30&automaticReconnect=true
+
+  - id: ws_tls
+    dsn: wss://secure.example.com/ws
+    tls:
+      ca: /data/certs/ca.pem
+
+  - id: tcp_link
+    dsn: tcp://192.168.1.100:9000?connectTimeout=5&keepAlive=true
+```
+
+URL 格式统一为：
 ```
 protocol://[username:password@]host:port[?param1=value1&param2=value2...]
 ```
 
-##### 通用参数 (所有 Link 类型支持)
+#### 通用参数 (所有 Link 类型支持)
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `automaticReconnect` | bool | true | 自动重连 |
-| `reconnectInterval` | long | 5 | 重连初始间隔(秒) |
-| `reconnectMaxInterval` | long | 60 | 重连最大间隔(秒) |
+| `automaticReconnect` | bool | true | 自动重连（由 LinkManager 健康检查驱动） |
+| `reconnectInterval` | long | 10 | 重连最小间隔(秒) |
+| `reconnectMaxInterval` | long | 60 | 重连最大间隔(秒, 预留) |
 
-##### MQTT (`broker` 字段)
+所有 Link 类型采用统一的重连模型：
+- 无内部定时器重连，由 LinkManager 30秒健康检查驱动
+- 连续失败计数器（最大5次），超过后等待下一健康检查周期重置
+- 最小重试间隔防止高频重连
+- 支持 YAML `reconnect` 配置块或 DSN 查询参数两种方式配置
+
+#### MQTT (`dsn` 字段)
 ```
 mqtt[s]://[username:password@]host:port[?param1=value1...]
 ```
@@ -40,8 +69,9 @@ mqtt[s]://[username:password@]host:port[?param1=value1...]
 | `cleanSession` | bool | true | 清理会话 |
 | `username` | string | - | 用户名(覆盖URL) |
 | `password` | string | - | 密码(覆盖URL) |
+| `clientId` | string | 设备ID | 客户端标识 |
 
-##### WebSocket (`url` 字段)
+#### WebSocket (`dsn` 字段)
 ```
 ws[s]://[username:password@]host:port/path[?param1=value1...]
 ```
@@ -52,38 +82,59 @@ ws[s]://[username:password@]host:port/path[?param1=value1...]
 | `pingInterval` | long | 30 | Ping间隔(秒) |
 | `username` | string | - | 用户名(用于Basic Auth) |
 | `password` | string | - | 密码(用于Basic Auth) |
+| `token` | string | - | Gotify客户端Token |
+| `protocol` | string | - | 设为 `gotify` 启用Gotify协议(自动添加/stream路径) |
 
-##### TCP (`broker` 字段)
+WSS 支持 TLS 证书配置（与 MQTT 相同的 `tls` 块）。
+
+#### TCP (`dsn` 字段)
 ```
-tcp[s]://host:port[?param1=value1...]
+tcp://host:port[?param1=value1...]
 ```
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `connectTimeout` | int | 10 | 连接超时(秒) |
-| `soTimeout` | int | 30 | Socket超时(秒) |
+| `readTimeout` | int | 30 | Socket读取超时(秒) |
+| `writeTimeout` | int | 10 | 写入超时(秒) |
 | `keepAlive` | bool | true | TCP Keep-Alive |
 | `noDelay` | bool | true | TCP Nagle算法禁用 |
+| `protocol` | string | lb | 帧协议: lb/tlv/split |
+| `maxLength` | int | 1048576 | 单条消息最大长度(字节) |
+| `split` | string | \n | 分隔符(仅split协议) |
 
-**示例：**
+#### TLS 配置
+所有 TLS 链接类型（mqtts://、wss://）支持自定义证书：
 ```yaml
-links:
-  - id: mqtt_link
-    type: mqtt
-    broker: mqtt://admin:123456@10.4.125.53:1883?connectTimeout=3&keepAliveInterval=60
+tls:
+  ca: file:///data/certs/ca.pem       # CA 证书
+  cert: file:///path/to/cert.pem      # 客户端证书(可选)
+  key: file:///path/to/key.pem        # 客户端私钥(可选)
+```
 
-  - id: mqtt_tls
-    type: mqtt
-    broker: mqtts://broker.example.com:8883
-    tls:
-      ca: /path/to/ca.pem
+证书路径支持协议前缀：
+| 协议 | 示例 | 说明 |
+|------|------|------|
+| `file://` | `file:///data/certs/ca.pem` | 文件系统绝对路径 |
+| `sdcard://` | `sdcard://Download/ca.pem` | 外部存储 |
+| `data://` | `data://certs/ca.pem` | 应用私有目录 |
+| `http://` | `http://example.com/ca.pem` | HTTP下载(缓存) |
+| `https://` | `https://example.com/ca.pem` | HTTPS下载(缓存) |
 
-  - id: ws_link
-    type: websocket
-    url: ws://localhost:8080/ws?readTimeout=30&automaticReconnect=true
+#### 重连配置
+支持两种方式配置（DSN 查询参数优先）：
 
-  - id: tcp_link
-    type: tcp
-    broker: tcp://192.168.1.100:9000?connectTimeout=5&keepAlive=true
+```yaml
+# 方式一: DSN 查询参数
+- id: ws_link
+  dsn: ws://host/ws?reconnectInterval=10&automaticReconnect=true
+
+# 方式二: YAML 配置块
+- id: ws_link
+  dsn: ws://host/ws
+  reconnect:
+    enabled: true
+    interval: 10s
+    maxInterval: 60s
 ```
 
 ### 输入层 (InputManager)
@@ -101,7 +152,7 @@ links:
 ### 输出层 (OutputManager)
 - **HTTP**: POST/PUT/GET，配置重试
 - **Link发布**: MQTT/WebSocket/TCP 发布
-- **Internal**: Clipboard、File、Broadcast
+- **Internal**: Clipboard、File、Broadcast、Notify
 
 ### 规则引擎 (RuleEngine)
 ```yaml
@@ -115,27 +166,32 @@ pipeline:
 
 ### 网络条件控制
 ```yaml
-enabledWhen:
-  network:
-    type: wifi        # mobile | wifi | any
-    ipRanges:         # CIDR 支持
-      - "192.168.1.0/24"
-  wifi:
-    ssid: ["MyWiFi", "~Guest-.*"]  # 正则支持
-    bssid: ["AA:BB:CC:DD:EE:FF"]
+links:
+  - id: wifi_only
+    dsn: mqtt://broker:1883
+    when: "network=wifi&ssid=MyWiFi"
+    deny: "network=mobile"
 ```
+
+支持条件：
+| 条件 | 值 | 说明 |
+|------|-----|------|
+| `network` | `wifi`/`mobile`/`ethernet`/`any` | 网络类型，逗号分隔表示OR |
+| `ssid` | 名称或 `~正则` | WiFi SSID匹配 |
+| `bssid` | MAC地址 | WiFi BSSID匹配 |
+| `ipRanges` | CIDR或IP | IP地址范围匹配 |
 
 ## 技术栈
 
 | 组件 | 技术 |
 |------|------|
 | UI | Jetpack Compose + Material 3 |
-| HTTP Server | NanoHTTPD |
-| MQTT | Eclipse Paho |
-| WebSocket | OkHttp |
-| YAML | SnakeYAML |
-| 异步 | Kotlin Coroutines + ScheduledExecutorService |
-| 表达式 | 自定义 ExpressionEngine |
+| HTTP Server | NanoHTTPD 2.3.1 |
+| MQTT | Eclipse Paho 1.2.5 |
+| WebSocket | OkHttp 4.12.0 |
+| YAML | SnakeYAML Engine 2.9 |
+| Min SDK | 33 (Android 13) |
+| Target SDK | 36 |
 
 ## 配置示例
 

@@ -51,7 +51,7 @@ object ConfigLoader {
                     clientId = (map["clientId"] as? String),
                     host = map["host"] as? String,
                     port = (map["port"] as? Number)?.toInt(),
-                    reconnect = null,
+                    reconnect = parseReconnect(map["reconnect"]),
                     tls = parseTls(map["tls"]),
                     whenCondition = map["when"] as? String,
                     deny = map["deny"] as? String
@@ -67,6 +67,16 @@ object ConfigLoader {
             ca = map["ca"] as? String,
             cert = map["cert"] as? String,
             key = map["key"] as? String
+        )
+    }
+
+    private fun parseReconnect(reconnect: Any?): ReconnectConfig? {
+        if (reconnect == null) return null
+        val map = reconnect as Map<String, Any>
+        return ReconnectConfig(
+            enabled = map["enabled"] as? Boolean ?: true,
+            interval = Duration(map["interval"] as? String ?: "10s"),
+            maxInterval = Duration(map["maxInterval"] as? String ?: "60s")
         )
     }
 

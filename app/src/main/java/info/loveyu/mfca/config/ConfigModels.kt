@@ -323,8 +323,11 @@ data class Duration(
 
     private fun parseDuration(d: String): Long {
         return try {
-            val num = d.dropLast(1).toLongOrNull() ?: 0
-            val unit = d.takeLast(1)
+            // "ms" suffix must be checked first to avoid mis-detecting as minutes
+            val isMillis = d.endsWith("ms")
+            val numStr = if (isMillis) d.dropLast(2) else d.dropLast(1)
+            val num = numStr.toLongOrNull() ?: 0
+            val unit = if (isMillis) "ms" else d.takeLast(1)
             when (unit) {
                 "ms" -> num
                 "s" -> num * 1000

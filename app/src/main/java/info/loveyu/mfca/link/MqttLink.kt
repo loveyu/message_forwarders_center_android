@@ -42,6 +42,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
 
     private var consecutiveFailures = 0
     private var lastConnectAttempt = 0L
+    private var retryIntervalMs = DEFAULT_RETRY_INTERVAL_MS
     override var reconnectCallback: (() -> Boolean)? = null
     @Volatile private var peerCertificates: List<X509Certificate>? = null
     @Volatile private var resolvedIp: String? = null
@@ -56,7 +57,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
 
     companion object {
         private const val MAX_CONSECUTIVE_FAILURES = 5
-        private const val MIN_RETRY_INTERVAL_MS = 10_000L // 10 seconds
+        private const val DEFAULT_RETRY_INTERVAL_MS = 10_000L // 10 seconds
     }
 
     @Synchronized
@@ -72,7 +73,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
 
         // Backoff: don't retry too fast
         val now = System.currentTimeMillis()
-        if (now - lastConnectAttempt < MIN_RETRY_INTERVAL_MS) {
+        if (now - lastConnectAttempt < retryIntervalMs) {
             return false
         }
         lastConnectAttempt = now
@@ -82,6 +83,10 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
 
         // Parse DSN first to extract params
         val (rawBroker, params) = parseBrokerUrl(broker)
+
+        // Resolve retry interval: DSN param > config.reconnect > default
+        retryIntervalMs = params["reconnectInterval"]?.toLongOrNull()?.let { it * 1000 }
+            ?: (config.reconnect?.interval?.millis ?: DEFAULT_RETRY_INTERVAL_MS)
 
         // Resolve clientId: query param > config.clientId > device ID
         val resolvedClientId = params["clientId"]
@@ -216,9 +221,11 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
     /**
      * Reset failure count so the next health check cycle can retry.
      */
-    fun resetFailureCount() {
+    override fun resetFailureCount() {
         consecutiveFailures = 0
     }
+
+    override fun shouldAutoReconnect(): Boolean = true
 
     override fun send(data: ByteArray): Boolean {
         if (!connected) {
