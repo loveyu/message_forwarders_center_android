@@ -28,11 +28,19 @@ data class AppConfig(
  * 统一调度器配置
  */
 data class SchedulerConfig(
-    val tickInterval: Duration = Duration("30s")
+    val tickInterval: Duration = Duration("30s"),
+    val chargingTickInterval: Duration? = null
 ) {
     /** 保证最小 15 秒 */
     val effectiveTickInterval: Duration
         get() = if (tickInterval.millis >= 15_000) tickInterval else Duration("15s")
+
+    /** 充电时的 tick 间隔，未配置时与普通间隔一致 */
+    val effectiveChargingTickInterval: Duration
+        get() {
+            val interval = chargingTickInterval ?: tickInterval
+            return if (interval.millis >= 15_000) interval else Duration("15s")
+        }
 }
 
 /**

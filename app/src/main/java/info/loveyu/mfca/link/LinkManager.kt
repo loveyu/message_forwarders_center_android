@@ -108,8 +108,8 @@ object LinkManager {
                 isNetworkAvailable = true
                 resetAllFailureCounts()
                 updateNetworkType()
-                // Network available, try reconnecting links
-                reconnectAllAsync()
+                // 事件触发提前 tick，加速重连
+                ForwardService.triggerTick()
             }
 
             override fun onLost(network: Network) {
@@ -117,6 +117,8 @@ object LinkManager {
                 isNetworkAvailable = false
                 resetAllFailureCounts()
                 updateNetworkType()
+                // 网络丢失也触发 tick，及时更新状态
+                ForwardService.triggerTick()
             }
 
             override fun onCapabilitiesChanged(
@@ -125,6 +127,8 @@ object LinkManager {
             ) {
                 resetAllFailureCounts()
                 updateNetworkType()
+                // 网络能力变更（WiFi↔移动网络等）触发 tick
+                ForwardService.triggerTick()
             }
         }
 

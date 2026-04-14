@@ -6,9 +6,12 @@ import android.app.NotificationChannelGroup
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.os.BatteryManager
 import android.graphics.drawable.Icon
 import android.net.wifi.WifiManager
 import android.os.Build
@@ -59,6 +62,17 @@ class ForwardService : Service() {
 
         /** 失败计数重置间隔：每 20 个 tick（tick=30s 时约 10 分钟） */
         private const val FAILURE_RESET_TICK_INTERVAL = 20
+
+        /** 事件触发 tick 的最小间隔：5 秒，防止事件风暴 */
+        private const val MIN_TICK_INTERVAL_MS = 5_000L
+
+        /**
+         * 由外部事件触发一次提前 tick（网络变更、前后台切换等）。
+         * 仅当距上次 tick 超过最小间隔时才执行，执行后重置周期定时器。
+         */
+        fun triggerTick() {
+            serviceInstance?.doTriggerTick()
+        }
 
         @Volatile
         var isRunning = false
@@ -201,6 +215,23 @@ class ForwardService : Service() {
     @Volatile
     private var tickIntervalMs: Long = 30_000L
 
+    // 上次 tick 执行时间，用于事件触发时的最小间隔判断
+    @Volatile
+    private var lastTickTime: Long = 0L
+
+    // 屏幕亮起广播接收器（动态注册，SCREEN_ON 无法静态注册）
+    private var screenOnReceiver: BroadcastReceiver? = null
+
+    // 充电状态：影响 tick 间隔
+    @Volatile
+    private var isCharging = false
+
+    // 配置的两个间隔值
+    @Volatile
+    private var normalTickIntervalMs: Long = 30_000L
+    @Volatile
+    private var chargingTickIntervalMs: Long = 30_000L
+
     @Volatile
     private var isApplyingConfig = false
 
@@ -210,6 +241,7 @@ class ForwardService : Service() {
         preferences = Preferences(this)
         createNotificationChannel()
         startTick()
+        registerScreenOnReceiver()
     }
 
     /**
@@ -227,6 +259,7 @@ class ForwardService : Service() {
      */
     private fun onTick() {
         if (!isRunning) return
+        lastTickTime = System.currentTimeMillis()
         tickCount++
 
         // 1. 刷新统计 & 通知栏
@@ -244,6 +277,92 @@ class ForwardService : Service() {
         // 5. 每 N 个 tick 执行失败重置（≈10 分钟）
         if (tickCount % FAILURE_RESET_TICK_INTERVAL == 0) {
             LinkManager.onFailureResetTick()
+        }
+    }
+
+    /**
+     * 由外部事件触发一次提前 tick。
+     * 检查最小触发间隔，满足则立即执行并重置周期定时器。
+     */
+    private fun doTriggerTick() {
+        val now = System.currentTimeMillis()
+        val elapsed = now - lastTickTime
+        if (elapsed < MIN_TICK_INTERVAL_MS) {
+            LogManager.logDebug("SERVICE", "TriggerTick debounced: ${elapsed}ms < ${MIN_TICK_INTERVAL_MS}ms")
+            return
+        }
+        LogManager.logDebug("SERVICE", "TriggerTick: event-driven early tick (last was ${elapsed}ms ago)")
+        appScheduler.execute {
+            onTick()
+            // 重置周期定时器：从现在开始重新计时
+            startTick()
+        }
+    }
+
+    /**
+     * 动态注册系统事件广播接收器。
+     * ACTION_SCREEN_ON 是受保护广播，只能动态注册。
+     * 同时监听充放电事件以动态调整 tick 间隔。
+     */
+    private fun registerScreenOnReceiver() {
+        if (screenOnReceiver != null) return
+        screenOnReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                when (intent?.action) {
+                    Intent.ACTION_SCREEN_ON -> {
+                        LogManager.logDebug("SERVICE", "Screen on, triggering tick")
+                        doTriggerTick()
+                    }
+                    Intent.ACTION_POWER_CONNECTED -> {
+                        LogManager.logDebug("SERVICE", "Power connected, switching to charging interval")
+                        updateChargingState(true)
+                    }
+                    Intent.ACTION_POWER_DISCONNECTED -> {
+                        LogManager.logDebug("SERVICE", "Power disconnected, switching to normal interval")
+                        updateChargingState(false)
+                    }
+                }
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_POWER_CONNECTED)
+            addAction(Intent.ACTION_POWER_DISCONNECTED)
+        }
+        registerReceiver(screenOnReceiver, filter)
+        // 检测当前充电状态
+        detectInitialChargingState()
+    }
+
+    private fun detectInitialChargingState() {
+        val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        isCharging = bm.isCharging
+        tickIntervalMs = if (isCharging) chargingTickIntervalMs else normalTickIntervalMs
+        LogManager.logDebug("SERVICE", "Initial charging state: $isCharging, tickInterval=${tickIntervalMs}ms")
+    }
+
+    /**
+     * 更新充电状态并动态调整 tick 间隔，同时触发一次 tick。
+     */
+    private fun updateChargingState(charging: Boolean) {
+        val oldInterval = tickIntervalMs
+        isCharging = charging
+        tickIntervalMs = if (charging) chargingTickIntervalMs else normalTickIntervalMs
+        if (tickIntervalMs != oldInterval) {
+            LogManager.logDebug("SERVICE", "Tick interval changed: ${oldInterval}ms → ${tickIntervalMs}ms (charging=$charging)")
+            // 重启 tick 使用新间隔
+            startTick()
+        }
+        // 充放电状态变化时立即触发一次 tick
+        doTriggerTick()
+    }
+
+    private fun unregisterScreenOnReceiver() {
+        screenOnReceiver?.let {
+            try {
+                unregisterReceiver(it)
+            } catch (_: Exception) {}
+            screenOnReceiver = null
         }
     }
 
@@ -361,6 +480,7 @@ class ForwardService : Service() {
         stopForeground(STOP_FOREGROUND_REMOVE)
         tickFuture?.cancel(false)
         appScheduler.shutdown()
+        unregisterScreenOnReceiver()
         serviceInstance = null
         stopAll()
         super.onDestroy()
@@ -492,11 +612,13 @@ class ForwardService : Service() {
             InputManager.startAll()
 
             // 8. Update tick interval from config
-            val newInterval = config.scheduler.effectiveTickInterval.millis
+            normalTickIntervalMs = config.scheduler.effectiveTickInterval.millis
+            chargingTickIntervalMs = config.scheduler.effectiveChargingTickInterval.millis
+            val newInterval = if (isCharging) chargingTickIntervalMs else normalTickIntervalMs
             if (newInterval != tickIntervalMs) {
                 tickIntervalMs = newInterval
                 startTick()
-                LogManager.log("CONFIG", "Tick interval updated to ${newInterval}ms")
+                LogManager.log("CONFIG", "Tick interval updated to ${newInterval}ms (charging=$isCharging)")
             }
 
             isRunning = true
