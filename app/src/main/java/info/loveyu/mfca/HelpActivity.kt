@@ -591,6 +591,10 @@ private fun loadSampleFiles(context: Context): List<SampleFile> {
             description = "快捷设置 - 通知栏按钮开关"
         ),
         SampleFileInfo(
+            fileName = "14_scheduler.yaml",
+            description = "调度器配置 - 定时检查间隔、锁超时"
+        ),
+        SampleFileInfo(
             fileName = "99_full_demo.yaml",
             description = "完整演示 - 智能家居场景"
         )
