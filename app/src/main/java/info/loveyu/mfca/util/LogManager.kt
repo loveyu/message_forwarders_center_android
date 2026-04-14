@@ -204,7 +204,7 @@ object LogManager {
         }
 
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val file = File(logDir, "log_$timestamp.txt")
+        val file = File(logDir, "log_$timestamp.log")
 
         try {
             file.writeText(_logs.value.joinToString("\n"))

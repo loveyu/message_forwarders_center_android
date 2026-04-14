@@ -25,13 +25,12 @@ object AppStatusManager {
                 ?: return AppStatusConfig()
 
             AppStatusConfig(
-                version = data["version"] as? String ?: "1.0",
-                configUrl = data["config_url"] as? String ?: "",
-                isRunning = data["is_running"] as? Boolean ?: false,
-                isReceivingEnabled = data["is_receiving_enabled"] as? Boolean ?: true,
-                isForwardingEnabled = data["is_forwarding_enabled"] as? Boolean ?: true,
-                autoStart = data["auto_start"] as? Boolean ?: false,
-                appAutoStartOnBoot = data["app_auto_start_on_boot"] as? Boolean ?: false
+                configUrl = data["configUrl"] as? String ?: "",
+                isRunning = data["isRunning"] as? Boolean ?: false,
+                isReceivingEnabled = data["isReceivingEnabled"] as? Boolean ?: true,
+                isForwardingEnabled = data["isForwardingEnabled"] as? Boolean ?: true,
+                autoStart = data["autoStart"] as? Boolean ?: false,
+                appAutoStartOnBoot = data["appAutoStartOnBoot"] as? Boolean ?: false
             )
         } catch (e: Exception) {
             LogManager.log("APP_STATUS", "Failed to load status: ${e.message}")
@@ -44,13 +43,12 @@ object AppStatusManager {
             val saveYaml = Dump(DumpSettings.builder().build())
 
             val data = mapOf(
-                "version" to status.version,
-                "config_url" to status.configUrl,
-                "is_running" to status.isRunning,
-                "is_receiving_enabled" to status.isReceivingEnabled,
-                "is_forwarding_enabled" to status.isForwardingEnabled,
-                "auto_start" to status.autoStart,
-                "app_auto_start_on_boot" to status.appAutoStartOnBoot
+                "configUrl" to status.configUrl,
+                "isRunning" to status.isRunning,
+                "isReceivingEnabled" to status.isReceivingEnabled,
+                "isForwardingEnabled" to status.isForwardingEnabled,
+                "autoStart" to status.autoStart,
+                "appAutoStartOnBoot" to status.appAutoStartOnBoot
             )
 
             val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
