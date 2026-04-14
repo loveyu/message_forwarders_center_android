@@ -2,26 +2,44 @@
 # 演示：MQTT 链接配置，类型通过 DSN 协议自动判断 (mqtt:// → mqtt, mqtts:// → mqtt)
 # 所有连接参数通过 DSN 的 query 部分传递，支持 URL 编码
 
-
 links:
   - id: local_mqtt
     # DSN 格式: mqtt://user:pass@host:port?param=value
     # 协议: mqtt:// (TCP), mqtts:// (TLS)
-    # 参数: connectTimeout, keepAliveInterval, automaticReconnect,
-    #       reconnectInterval, reconnectMaxInterval, username, password, clientId
-    # clientId 默认使用设备 ID
+    # 参数:
+    #   connectTimeout        - 连接超时(秒), 默认 10
+    #   keepAliveInterval     - 心跳间隔(秒), 默认 60
+    #   cleanSession          - 清理会话, 默认 true
+    #   automaticReconnect    - 允许 LinkManager 自动重连, 默认 true
+    #   reconnectInterval     - 首次重连间隔(秒), 默认 10
+    #   reconnectMaxInterval  - 指数退避上限(秒), 默认 60
+    #   username              - 认证用户名(也可通过 URL userinfo)
+    #   password              - 认证密码(也可通过 URL userinfo)
+    #   clientId              - 客户端标识, 默认使用设备 ID
+    #   insecure              - 跳过 TLS 证书校验, 默认 false
+    # 重连策略: 指数退避 reconnectInterval × 2^失败次数, 上限 reconnectMaxInterval
+    #   连续失败 5 次后暂停, 由 LinkManager 每 10 分钟重置
     dsn: mqtt://foo:foo@localhost:1883?connectTimeout=3&keepAliveInterval=60&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60&clientId=client_001
 
   # TLS/SSL 连接示例 (mqtts:// 或带 tls 配置)
-  # - id: mqtts_broker
-  #   dsn: mqtts://localhost:8883?connectTimeout=10&keepAliveInterval=60
+  # 未指定 tls 配置时使用系统证书并要求校验
+  # - id: mqtts_system
+  #   dsn: mqtts://broker.example.com:8883
+
+  # 自定义 CA 证书 + 客户端证书 (mTLS)
+  # - id: mqtts_mtls
+  #   dsn: mqtts://broker.example.com:8883?connectTimeout=10
   #   tls:
-  #     ca: https://example.com/certs/ca.pem      # 支持 https://, http:// 下载
+  #     ca: https://example.com/certs/ca.pem      # CA 证书 (支持 https://, http://, file://, sdcard://, data://)
   #     # ca: sdcard://Download/ca.pem              # 支持 sdcard://
   #     # ca: file:///data/certs/ca.pem             # 支持 file://
   #     # ca: data://certs/ca.pem                   # 支持 data:// 应用私有目录
-  #     cert: file:///path/to/cert.pem  # 客户端证书 (可选)
-  #     key: file:///path/to/key.pem    # 客户端私钥 (可选)
+  #     cert: file:///path/to/cert.pem  # 客户端证书 (mTLS, 可选)
+  #     key: file:///path/to/key.pem    # 客户端私钥 (mTLS, PKCS#8 PEM)
+
+  # 跳过证书校验 (仅开发调试)
+  # - id: mqtts_insecure
+  #   dsn: mqtts://self-signed.example.com:8883?insecure=true
 
 inputs:
   link:

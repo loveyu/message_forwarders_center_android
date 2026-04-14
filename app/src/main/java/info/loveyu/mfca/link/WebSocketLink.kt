@@ -94,9 +94,13 @@ class WebSocketLink(override val config: LinkConfig) : Link {
             return false
         }
 
-        // Backoff: don't retry too fast
+        // Backoff: exponential backoff based on consecutive failures
         val now = System.currentTimeMillis()
-        if (now - lastConnectAttempt < retryIntervalMs) {
+        val currentInterval = minOf(
+            retryIntervalMs * (1L shl minOf(consecutiveFailures, 10)),
+            maxReconnectDelay * 1000
+        )
+        if (now - lastConnectAttempt < currentInterval) {
             return false
         }
         lastConnectAttempt = now
@@ -239,7 +243,8 @@ class WebSocketLink(override val config: LinkConfig) : Link {
         if (isWss || config.tls != null) {
             val ctx = context
             if (ctx != null) {
-                val sslConfig = CertResolver.createSslConfig(config.tls, ctx, "WS") { certs ->
+                val isInsecure = params["insecure"]?.toBoolean() ?: (config.tls?.insecure ?: false)
+                val sslConfig = CertResolver.createSslConfig(config.tls, ctx, "WS", isInsecure) { certs ->
                     peerCertificates = certs
                 }
                 if (sslConfig != null) {

@@ -66,7 +66,8 @@ object ConfigLoader {
         return TlsConfig(
             ca = map["ca"] as? String,
             cert = map["cert"] as? String,
-            key = map["key"] as? String
+            key = map["key"] as? String,
+            insecure = map["insecure"] as? Boolean ?: false
         )
     }
 

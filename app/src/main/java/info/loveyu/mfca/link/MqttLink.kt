@@ -39,6 +39,8 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
     private var hadMaxFailure = false
     private var lastConnectAttempt = 0L
     private var retryIntervalMs = DEFAULT_RETRY_INTERVAL_MS
+    private var autoReconnect = true
+    private var maxReconnectDelay = 60L  // seconds
     override var maxFailureCallback: (() -> Unit)? = null
     override var recoveredCallback: (() -> Unit)? = null
     @Volatile private var peerCertificates: List<X509Certificate>? = null
@@ -74,9 +76,13 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
             return false
         }
 
-        // Backoff: don't retry too fast
+        // Backoff: exponential backoff based on consecutive failures
         val now = System.currentTimeMillis()
-        if (now - lastConnectAttempt < retryIntervalMs) {
+        val currentInterval = minOf(
+            retryIntervalMs * (1L shl minOf(consecutiveFailures, 10)),
+            maxReconnectDelay * 1000
+        )
+        if (now - lastConnectAttempt < currentInterval) {
             return false
         }
         lastConnectAttempt = now
@@ -93,6 +99,14 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         // Resolve retry interval: DSN param > config.reconnect > default
         retryIntervalMs = params["reconnectInterval"]?.toLongOrNull()?.let { it * 1000 }
             ?: (config.reconnect?.interval?.millis ?: DEFAULT_RETRY_INTERVAL_MS)
+
+        // Resolve auto-reconnect: DSN param > config.reconnect.enabled > default true
+        autoReconnect = params["automaticReconnect"]?.toBoolean()
+            ?: (config.reconnect?.enabled ?: true)
+
+        // Resolve max reconnect delay: DSN param > config.reconnect.maxInterval > default 60s
+        maxReconnectDelay = params["reconnectMaxInterval"]?.toLongOrNull()
+            ?: (config.reconnect?.maxInterval?.millis?.let { it / 1000 } ?: 60L)
 
         // Resolve clientId: query param > config.clientId > device ID
         val resolvedClientId = params["clientId"]
@@ -134,7 +148,8 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                 // TLS: mqtts:// scheme or explicit tls config
                 val isMqtts = rawBroker.startsWith("mqtts://")
                 if (isMqtts || config.tls != null) {
-                    CertResolver.createSslConfig(config.tls, context, "MQTT") { certs ->
+                    val isInsecure = params["insecure"]?.toBoolean() ?: (config.tls?.insecure ?: false)
+                    CertResolver.createSslConfig(config.tls, context, "MQTT", isInsecure) { certs ->
                         peerCertificates = certs
                     }?.let { socketFactory = it.socketFactory }
                 }
@@ -284,7 +299,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         consecutiveFailures = 0
     }
 
-    override fun shouldAutoReconnect(): Boolean = true
+    override fun shouldAutoReconnect(): Boolean = autoReconnect
 
     override fun send(data: ByteArray): Boolean {
         if (!connected) {

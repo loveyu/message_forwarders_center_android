@@ -2,6 +2,20 @@
 # 演示：TCP Socket 链接配置, 必须使用 DSN 格式
 # 类型通过 DSN 协议自动判断 (tcp:// → tcp, ssl:// → tcp)
 #
+# DSN 查询参数:
+#   connectTimeout         - 连接超时(秒), 默认 10
+#   readTimeout            - 读超时(秒), 默认 30
+#   writeTimeout           - 写超时(秒), 默认 10
+#   keepAlive              - TCP Keep-Alive, 默认 true
+#   noDelay                - TCP No-Delay (禁用 Nagle), 默认 true
+#   maxLength              - 单帧最大长度(字节), 默认 1048576 (1MB)
+#   protocol               - 帧协议: lb(默认), tlv, split
+#   split                  - 分隔符(protocol=split 时使用)
+#   automaticReconnect     - 允许 LinkManager 自动重连, 默认 true
+#   reconnectInterval      - 首次重连间隔(秒), 默认 10
+#   reconnectMaxInterval   - 指数退避上限(秒), 默认 60
+#   insecure               - 跳过 TLS 证书校验, 默认 false
+#
 # 帧协议 (DSN 参数 protocol, 默认 lb):
 #   lb   : | length(4字节, 大端序) | body(N字节) |        (默认)
 #   tlv  : | type(2) | length(4字节, 大端序) | body(N字节) |
@@ -10,6 +24,8 @@
 # DSN query 参数需要 URL-encode, 常用编码:
 #   \n → %5Cn    \r → %5Cr    \t → %5Ct    \0 → %5C0    \\ → %5C%5C
 #
+# 重连策略: 指数退避 reconnectInterval × 2^失败次数, 上限 reconnectMaxInterval
+#   连续失败 5 次后暂停, 由 LinkManager 每 10 分钟重置
 # 无效长度、超长数据、读写超时将直接断开连接。
 
 
@@ -34,11 +50,21 @@ links:
   # - id: tcp_split_null
   #   dsn: tcp://192.168.1.100:9002?protocol=split&split=%5C0&maxLength=65536&readTimeout=30&writeTimeout=10
 
-  # TLS/SSL TCP 示例
-  # - id: tcp_tls
-  #   dsn: ssl://192.168.1.100:9003?protocol=lb&maxLength=1048576&readTimeout=30&writeTimeout=10
+  # TLS/SSL TCP - 未指定 tls 配置时使用系统证书并要求校验
+  # - id: tcp_tls_system
+  #   dsn: ssl://192.168.1.100:9003?protocol=lb&maxLength=1048576
+
+  # 自定义 CA + 客户端证书 (mTLS)
+  # - id: tcp_tls_mtls
+  #   dsn: ssl://192.168.1.100:9003?protocol=lb&maxLength=1048576
   #   tls:
   #     ca: /data/certs/ca.pem
+  #     cert: /data/certs/client.pem   # mTLS 客户端证书
+  #     key: /data/certs/client.key    # mTLS 客户端私钥 (PKCS#8 PEM)
+
+  # 跳过证书校验 (仅开发调试)
+  # - id: tcp_tls_insecure
+  #   dsn: ssl://self-signed.example.com:9003?protocol=lb&insecure=true
 
 inputs:
   link:

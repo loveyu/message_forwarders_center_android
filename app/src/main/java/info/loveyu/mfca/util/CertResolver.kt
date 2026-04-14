@@ -2,15 +2,18 @@ package info.loveyu.mfca.util
 
 import android.content.Context
 import android.os.Environment
+import android.util.Base64
 import info.loveyu.mfca.config.TlsConfig
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.KeyFactory
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
+import java.security.spec.PKCS8EncodedKeySpec
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
@@ -206,16 +209,33 @@ object CertResolver {
      * @param tls TLS 配置，可为 null
      * @param context Android Context
      * @param tag 日志标签
+     * @param insecure 跳过证书校验（仅开发调试）
      * @param onPeerCerts 服务端证书链回调，用于 TLS 信息采集
-     * @return SslResult 或 null（无自定义 CA，使用系统默认）
+     * @return SslResult 或 null（无自定义 CA 且非 insecure，使用系统默认）
      */
     fun createSslConfig(
         tls: TlsConfig?,
         context: Context,
         tag: String,
+        insecure: Boolean = false,
         onPeerCerts: ((List<X509Certificate>) -> Unit)? = null
     ): SslResult? {
         try {
+            // Insecure mode: trust all certificates (development only)
+            if (insecure) {
+                val permissiveTm = object : X509TrustManager {
+                    override fun checkClientTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
+                    override fun checkServerTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {
+                        chain?.let { onPeerCerts?.invoke(it.toList()) }
+                    }
+                    override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
+                }
+                val sslContext = SSLContext.getInstance("TLSv1.2")
+                sslContext.init(null, arrayOf(permissiveTm), null)
+                LogManager.logWarn(tag, "TLS certificate verification DISABLED (insecure mode)")
+                return SslResult(sslContext.socketFactory, permissiveTm as X509TrustManager)
+            }
+
             val resolvedTls = resolveTlsConfig(tls, context)
 
             val certFactory = CertificateFactory.getInstance("X.509")
@@ -262,14 +282,59 @@ object CertResolver {
             val x509Tm = wrappedTms.firstOrNull { it is X509TrustManager } as? X509TrustManager
                 ?: return null
 
+            // Load client certificate and key for mTLS
+            var keyManagers: Array<javax.net.ssl.KeyManager>? = null
+            if (resolvedTls?.cert != null && resolvedTls.key != null) {
+                try {
+                    val certFile = File(resolvedTls.cert!!)
+                    val keyFile = File(resolvedTls.key!!)
+                    if (certFile.exists() && keyFile.exists()) {
+                        val clientCert = certFactory.generateCertificate(certFile.inputStream()) as X509Certificate
+                        val keyBytes = extractPemBody(keyFile.readText(), "-----BEGIN PRIVATE KEY-----", "-----END PRIVATE KEY-----")
+                            ?: extractPemBody(keyFile.readText(), "-----BEGIN RSA PRIVATE KEY-----", "-----END RSA PRIVATE KEY-----")
+                        if (keyBytes != null) {
+                            val keySpec = PKCS8EncodedKeySpec(keyBytes)
+                            val keyFactory = KeyFactory.getInstance(clientCert.publicKey.algorithm)
+                            val privateKey = keyFactory.generatePrivate(keySpec)
+                            val clientKeyStore = KeyStore.getInstance(KeyStore.getDefaultType())
+                            clientKeyStore.load(null, null)
+                            clientKeyStore.setKeyEntry("client", privateKey, charArrayOf(), arrayOf(clientCert))
+                            val kmf = javax.net.ssl.KeyManagerFactory.getInstance(javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm())
+                            kmf.init(clientKeyStore, charArrayOf())
+                            keyManagers = kmf.keyManagers
+                            LogManager.logDebug(tag, "Loaded client cert for mTLS from: ${resolvedTls.cert}")
+                        } else {
+                            LogManager.logWarn(tag, "Private key format not supported (requires PKCS#8 or PKCS#1 RSA PEM)")
+                        }
+                    } else {
+                        if (!certFile.exists()) LogManager.logWarn(tag, "Client cert file not found: ${resolvedTls.cert}")
+                        if (!keyFile.exists()) LogManager.logWarn(tag, "Client key file not found: ${resolvedTls.key}")
+                    }
+                } catch (e: Exception) {
+                    LogManager.logError(tag, "Failed to load client cert/key for mTLS: ${e.message}")
+                }
+            }
+
             val sslContext = SSLContext.getInstance("TLSv1.2")
-            sslContext.init(null, wrappedTms, null)
+            sslContext.init(keyManagers, wrappedTms, null)
 
             return SslResult(sslContext.socketFactory, x509Tm)
         } catch (e: Exception) {
             LogManager.logError(tag, "SSL config error: ${e.message}")
             return null
         }
+    }
+
+    /**
+     * 从 PEM 文件内容提取 Base64 编码的证书/密钥数据块
+     */
+    private fun extractPemBody(pemContent: String, beginMarker: String, endMarker: String): ByteArray? {
+        val start = pemContent.indexOf(beginMarker)
+        val end = pemContent.indexOf(endMarker)
+        if (start == -1 || end == -1) return null
+        val base64 = pemContent.substring(start + beginMarker.length, end)
+            .replace("\\s".toRegex(), "")
+        return Base64.decode(base64, Base64.DEFAULT)
     }
 
     data class SslResult(

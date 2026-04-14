@@ -136,9 +136,13 @@ class TcpLink(override val config: LinkConfig, private val context: Context) : L
             return false
         }
 
-        // Backoff: don't retry too fast
+        // Backoff: exponential backoff based on consecutive failures
         val now = System.currentTimeMillis()
-        if (now - lastConnectAttempt < retryIntervalMs) {
+        val currentInterval = minOf(
+            retryIntervalMs * (1L shl minOf(consecutiveFailures, 10)),
+            maxReconnectDelay * 1000
+        )
+        if (now - lastConnectAttempt < currentInterval) {
             return false
         }
         lastConnectAttempt = now
@@ -158,7 +162,8 @@ class TcpLink(override val config: LinkConfig, private val context: Context) : L
             }
 
             socket = if (isSsl) {
-                val sslConfig = CertResolver.createSslConfig(config.tls, context, "TCP")
+                val isInsecure = params["insecure"]?.toBoolean() ?: (config.tls?.insecure ?: false)
+                val sslConfig = CertResolver.createSslConfig(config.tls, context, "TCP", isInsecure)
                 val factory = sslConfig?.socketFactory
                     ?: (javax.net.ssl.SSLSocketFactory.getDefault() as javax.net.ssl.SSLSocketFactory)
                 factory.createSocket(rawSocket, host, port, true) as Socket

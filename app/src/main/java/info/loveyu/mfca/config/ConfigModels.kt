@@ -61,14 +61,15 @@ enum class LinkType {
 
 data class ReconnectConfig(
     val enabled: Boolean = true,
-    val interval: Duration = Duration("5s"),
+    val interval: Duration = Duration("10s"),
     val maxInterval: Duration = Duration("60s")
 )
 
 data class TlsConfig(
     val ca: String? = null,
     val cert: String? = null,
-    val key: String? = null
+    val key: String? = null,
+    val insecure: Boolean = false
 )
 
 /**

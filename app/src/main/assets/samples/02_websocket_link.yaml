@@ -2,21 +2,40 @@
 # 演示：WebSocket 链接配置，类型通过 DSN 协议自动判断 (ws:// → websocket, wss:// → websocket)
 # 所有参数通过 DSN query 部分传递
 #
-# 重连模型：与 MQTT/TCP 一致
-#   - 由 LinkManager 30秒健康检查驱动重连
-#   - 连续失败计数器 (MAX=5)，超过后等待下一周期重置
-#   - 最小重试间隔 reconnectInterval (默认10秒)
+# DSN 查询参数:
+#   readTimeout           - 读超时(秒), 默认 30
+#   writeTimeout          - 写超时(秒), 默认 30
+#   pingInterval          - 心跳间隔(秒), 默认 30
+#   username              - Basic Auth 用户名
+#   password              - Basic Auth 密码
+#   automaticReconnect    - 允许 LinkManager 自动重连, 默认 true
+#   reconnectInterval     - 首次重连间隔(秒), 默认 10
+#   reconnectMaxInterval  - 指数退避上限(秒), 默认 60
+#   insecure              - 跳过 TLS 证书校验, 默认 false
+#
+# 重连策略: 指数退避 reconnectInterval × 2^失败次数, 上限 reconnectMaxInterval
+#   连续失败 5 次后暂停, 由 LinkManager 每 10 分钟重置
 
 links:
   # 标准 WebSocket - 类型从 DSN 自动识别
   - id: ws_server
     dsn: ws://localhost:8080/ws?readTimeout=30&writeTimeout=30&pingInterval=30
 
-  # WSS (TLS) WebSocket - 支持自定义 CA 证书
-  - id: wss_server
-    dsn: wss://secure.example.com/ws?readTimeout=60
-    tls:
-      ca: /data/certs/ca.pem
+  # WSS (TLS) WebSocket - 未指定 tls 配置时使用系统证书并要求校验
+  # - id: wss_system
+  #   dsn: wss://secure.example.com/ws?readTimeout=60
+
+  # 自定义 CA 证书 + 客户端证书 (mTLS)
+  # - id: wss_mtls
+  #   dsn: wss://secure.example.com/ws?readTimeout=60
+  #   tls:
+  #     ca: /data/certs/ca.pem
+  #     cert: /data/certs/client.pem   # mTLS 客户端证书
+  #     key: /data/certs/client.key    # mTLS 客户端私钥 (PKCS#8 PEM)
+
+  # 跳过证书校验 (仅开发调试)
+  # - id: wss_insecure
+  #   dsn: wss://self-signed.example.com/ws?insecure=true
 
   # 带认证的 WebSocket
   # - id: ws_auth
@@ -25,14 +44,8 @@ links:
   # Gotify WebSocket - 使用 protocol=gotify 启用 Gotify 协议
   # DSN 格式: ws(s)://host:port?token=xxx&protocol=gotify
   # 自动添加 /stream 路径，token 通过 query 参数传递
-  - id: gotify_server
-    dsn: ws://gotify.example.com:80?token=YOUR_CLIENT_TOKEN&protocol=gotify
-
-  # Gotify WSS (TLS) - 生产环境推荐
-  # - id: gotify_secure
-  #   dsn: wss://gotify.example.com:443?token=YOUR_CLIENT_TOKEN&protocol=gotify
-  #   tls:
-  #     ca: /data/certs/ca.pem
+  # - id: gotify_server
+  #   dsn: ws://gotify.example.com:80?token=YOUR_CLIENT_TOKEN&protocol=gotify
 
   # 使用 YAML 配置块设置重连参数（DSN 查询参数优先）
   # - id: ws_custom_reconnect
@@ -60,12 +73,10 @@ rules:
     pipeline:
       - to: [ws_output]
 
-  # Gotify 消息转发为通知（带应用图标）
-  # enrich 通过 Gotify REST API 获取应用图标 URL 并注入到消息 JSON 的 icon 字段
-  # 通知输出会自动读取 icon 字段显示应用图标
-  # - name: gotify_notify
-  #   from: ws_input
+  # Gotify 消息转发示例 (需先定义 gotify_server 链接)
+  # - name: gotify_forward
+  #   from: gotify_input
   #   pipeline:
   #     - transform:
-  #         enrich: "gotifyIcon:gotify_server"   # 格式: gotifyIcon:<linkId>
-  #       to: [gotify_notification]
+  #         enrich: "gotifyIcon:gotify_server"
+  #       to: [ws_output]
