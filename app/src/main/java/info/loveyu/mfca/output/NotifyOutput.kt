@@ -12,8 +12,11 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.config.InternalOutputConfig
 import info.loveyu.mfca.config.NotifyOptions
+import info.loveyu.mfca.notification.NotifyHistoryDbHelper
+import info.loveyu.mfca.notification.NotifyRecord
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.IconCacheManager
@@ -42,6 +45,7 @@ class NotifyOutput(
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val iconCacheManager = IconCacheManager(context)
+    private val historyDbHelper = NotifyHistoryDbHelper(context)
 
     // 每个 output name 对应最后通知的内容和时间（用于去重）
     private val lastNotify = mutableMapOf<String, Pair<String, Long>>()
@@ -127,6 +131,15 @@ class NotifyOutput(
                     val iconBitmap = iconCacheManager.getIcon(iconUrl, fixedIconId)
                     showNotification(channelId, tag, group, id, title, content, iconBitmap, popup, persistent)
                     lastNotify[name] = text to now
+                    // 记录通知到历史数据库
+                    saveNotifyHistory(
+                        notifyId = id, title = title, content = content,
+                        rawData = item.text, channelId = channelId,
+                        tag = tag, group = group, iconUrl = iconUrl,
+                        sourceRule = item.metadata["rule"],
+                        sourceInput = item.metadata["source"],
+                        popup = popup, persistent = persistent
+                    )
                     callback?.invoke(true)
                 } catch (e: Exception) {
                     LogManager.logError("INTERNAL", "Notify failed: $name - ${e.message}")
@@ -156,6 +169,46 @@ class NotifyOutput(
         // 避免与前台通知 ID (=1) 冲突
         if (id == 1) id = 1001
         return id
+    }
+
+    /**
+     * 保存通知记录到历史数据库
+     */
+    private fun saveNotifyHistory(
+        notifyId: Int,
+        title: String,
+        content: String,
+        rawData: String,
+        channelId: String,
+        tag: String?,
+        group: String?,
+        iconUrl: String?,
+        sourceRule: String?,
+        sourceInput: String?,
+        popup: Boolean?,
+        persistent: Boolean?
+    ) {
+        try {
+            val record = NotifyRecord(
+                notifyId = notifyId,
+                title = title,
+                content = content,
+                rawData = rawData,
+                outputName = name,
+                channel = channelId,
+                tag = tag,
+                group = group,
+                iconUrl = iconUrl,
+                sourceRule = sourceRule,
+                sourceInput = sourceInput,
+                popup = popup == true,
+                persistent = persistent == true,
+                createdAt = System.currentTimeMillis()
+            )
+            historyDbHelper.insert(record)
+        } catch (e: Exception) {
+            LogManager.logError("INTERNAL", "Failed to save notify history: ${e.message}")
+        }
     }
 
     /**
@@ -309,19 +362,18 @@ class NotifyOutput(
             }
         }
 
-        // 创建点击意图
-        val intent = Intent(context, ForwardService::class.java).apply {
-            action = "OPEN_NOTIFICATION"
-            putExtra("output_name", name)
-            putExtra("notification_tag", tag)
-            putExtra("notification_id", id)
+        // 创建点击意图 - 打开通知历史页面并定位到该通知
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("notify_id", id)
+            putExtra("highlight", true)
         }
         val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         } else {
             PendingIntent.FLAG_UPDATE_CURRENT
         }
-        val pendingIntent = PendingIntent.getService(context, id, intent, pendingIntentFlags)
+        val pendingIntent = PendingIntent.getActivity(context, id, intent, pendingIntentFlags)
 
         // 构建通知
         val builder = NotificationCompat.Builder(context, channelId)

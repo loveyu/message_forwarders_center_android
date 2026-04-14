@@ -15,79 +15,47 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberDrawerState
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.service.ForwardService
-import info.loveyu.mfca.ui.ComponentDetailSheet
-import info.loveyu.mfca.ui.ComponentStatus
-import info.loveyu.mfca.ui.ComponentType
-import info.loveyu.mfca.ui.DrawerMenu
-import info.loveyu.mfca.ui.DrawerMenuItem
-import info.loveyu.mfca.ui.getEnabledAndDisabledComponents
+import info.loveyu.mfca.ui.MainScreen
+import info.loveyu.mfca.ui.NotifyHistoryScreen
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import info.loveyu.mfca.util.AppStatusManager
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
-import kotlinx.coroutines.launch
+
+enum class BottomTab(
+    val icon: ImageVector,
+    val labelResId: Int
+) {
+    HOME(Icons.Default.Home, R.string.tab_home),
+    NOTIFY_HISTORY(Icons.Default.Notifications, R.string.tab_notify_history)
+}
 
 class MainActivity : ComponentActivity() {
+    private val pendingNotifyId = mutableIntStateOf(-1)
+    private val pendingHighlight = mutableStateOf(false)
+
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -105,11 +73,9 @@ class MainActivity : ComponentActivity() {
     private val wifiPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
-        // Trigger network state refresh after permission result
         if (ForwardService.isServiceAlive()) {
             LinkManager.refreshNetworkState()
         }
-        // 精确定位授权后，请求后台定位权限（Android 10+ 需要分步请求）
         requestBackgroundLocationIfNeeded()
     }
 
@@ -137,7 +103,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Android 11+ 请求所有文件访问权限（sdcard:// 路径需要）
+        // Android 11+ 请求所有文件访问权限
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
                 try {
@@ -170,64 +136,16 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // 处理初始 intent
+        handleIntent(intent)
+
         setContent {
             MfcaTheme {
-                val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-                val scope = rememberCoroutineScope()
-                val preferences = remember { Preferences(this@MainActivity) }
-
-                // Check config existence on startup
-                LaunchedEffect(Unit) {
-                    LogManager.init(this@MainActivity, preferences)
-                    if (!ForwardService.isServiceAlive() && !preferences.hasConfig()) {
-                        Toast.makeText(
-                            this@MainActivity,
-                            R.string.config_not_found,
-                            Toast.LENGTH_LONG
-                        ).show()
-                        // Launch ConfigActivity directly if no config found
-                        startActivity(Intent(this@MainActivity, ConfigActivity::class.java))
-                    }
-                }
-
-                ModalNavigationDrawer(
-                    drawerState = drawerState,
-                    drawerContent = {
-                        DrawerMenu(
-                            onItemClick = { item ->
-                                scope.launch { drawerState.close() }
-                                when (item) {
-                                    DrawerMenuItem.CONFIG -> {
-                                        startActivity(Intent(this@MainActivity, ConfigActivity::class.java))
-                                    }
-                                    DrawerMenuItem.SAMPLES -> {
-                                        startActivity(Intent(this@MainActivity, HelpActivity::class.java))
-                                    }
-                                    DrawerMenuItem.SETTINGS -> {
-                                        startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
-                                    }
-                                }
-                            }
-                        )
-                    }
-                ) {
-                    MainScreen(
-                        onOpenDrawer = { scope.launch { drawerState.open() } },
-                        onStartServer = {
-                            if (!preferences.hasConfig()) {
-                                Toast.makeText(
-                                    this@MainActivity,
-                                    R.string.config_not_found,
-                                    Toast.LENGTH_LONG
-                                ).show()
-                                startActivity(Intent(this@MainActivity, ConfigActivity::class.java))
-                            } else {
-                                startServer()
-                            }
-                        },
-                        onStopServer = { stopServer() }
-                    )
-                }
+                MainContent(
+                    activity = this@MainActivity,
+                    pendingNotifyId = pendingNotifyId,
+                    pendingHighlight = pendingHighlight
+                )
             }
         }
     }
@@ -235,6 +153,21 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         ensureServiceRunning()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        val notifyId = intent?.getIntExtra("notify_id", -1) ?: -1
+        val highlight = intent?.getBooleanExtra("highlight", false) ?: false
+        if (highlight && notifyId != -1) {
+            pendingNotifyId.intValue = notifyId
+            pendingHighlight.value = true
+        }
     }
 
     private fun ensureServiceRunning() {
@@ -249,14 +182,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startServer() {
+    internal fun startServer() {
         val intent = Intent(this, ForwardService::class.java).apply {
             action = ForwardService.ACTION_START
         }
         startForegroundService(intent)
     }
 
-    private fun stopServer() {
+    internal fun stopServer() {
         val intent = Intent(this, ForwardService::class.java).apply {
             action = ForwardService.ACTION_STOP
         }
@@ -264,504 +197,70 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen {
-    Config, Help, Settings, Licenses
-}
-
-private fun getLogColor(log: String): Color {
-    return when {
-        log.contains("[E:") -> Color(0xFFE53935) // ERROR - Red
-        log.contains("[W:") -> Color(0xFFFFA726) // WARN - Orange
-        log.contains("[I:") -> Color(0xFF43A047) // INFO - Green
-        log.contains("[D:") -> Color(0xFF42A5F5) // DEBUG - Blue
-        else -> Color.Unspecified
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(
-    onOpenDrawer: () -> Unit,
-    onStartServer: () -> Unit,
-    onStopServer: () -> Unit
+private fun MainContent(
+    activity: MainActivity,
+    pendingNotifyId: androidx.compose.runtime.MutableIntState,
+    pendingHighlight: androidx.compose.runtime.MutableState<Boolean>
 ) {
-    val context = LocalContext.current
-    val preferences = remember { Preferences(context) }
+    val preferences = remember { Preferences(activity) }
+    var selectedTab by remember { mutableStateOf(BottomTab.HOME) }
+    var highlightNotifyId by remember { mutableStateOf<Int?>(null) }
 
-    var isRunning by remember { mutableStateOf(ForwardService.isRunning) }
-    var isStarting by remember { mutableStateOf(ForwardService.isStarting) }
-    var isPaused by remember { mutableStateOf(LogManager.isPaused()) }
-    var isFileLogging by remember { mutableStateOf(LogManager.isFileLoggingEnabled()) }
-    var isAllLogcatEnabled by remember { mutableStateOf(LogManager.isAllLogcatEnabled()) }
-
-    // Bottom sheet states
-    val componentSheetState = rememberModalBottomSheetState()
-    val detailSheetState = rememberModalBottomSheetState()
-    var showComponentSheet by remember { mutableStateOf(false) }
-    var selectedComponent by remember { mutableStateOf<ComponentStatus?>(null) }
-
-    val logs by LogManager.logs.collectAsState()
-    val listState = rememberLazyListState()
-
-    LaunchedEffect(logs.size) {
-        if (logs.isNotEmpty()) {
-            listState.animateScrollToItem(logs.size - 1)
+    // 监听 pendingHighlight 变化（通知点击触发）
+    LaunchedEffect(pendingHighlight.value) {
+        if (pendingHighlight.value && pendingNotifyId.intValue != -1) {
+            highlightNotifyId = pendingNotifyId.intValue
+            selectedTab = BottomTab.NOTIFY_HISTORY
+            pendingHighlight.value = false
         }
     }
 
-    ForwardService.onStatsChanged = {
-        isRunning = ForwardService.isRunning
-        isStarting = ForwardService.isStarting
-    }
-
-    // Sync initial state from service on first composition
     LaunchedEffect(Unit) {
-        isRunning = ForwardService.isRunning
-        isStarting = ForwardService.isStarting
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            ForwardService.onStatsChanged = null
+        LogManager.init(activity, preferences)
+        if (!ForwardService.isServiceAlive() && !preferences.hasConfig()) {
+            Toast.makeText(activity, R.string.config_not_found, Toast.LENGTH_LONG).show()
+            activity.startActivity(Intent(activity, ConfigActivity::class.java))
         }
     }
-
-    // Listen for start failures - runs on main thread
-    LaunchedEffect(Unit) {
-        ForwardService.onStartFailed = { errorMsg ->
-            Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
-        }
-    }
-
-    // Close component sheet when service stops
-    LaunchedEffect(isRunning) {
-        if (!isRunning) {
-            showComponentSheet = false
-            selectedComponent = null
-        }
-    }
-
-    // Network state version for component status refresh
-    val networkStateVersion by LinkManager.networkStateVersion.collectAsState()
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.app_name)) },
-                navigationIcon = {
-                    IconButton(onClick = onOpenDrawer) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "菜单"
-                        )
-                    }
+        bottomBar = {
+            NavigationBar {
+                BottomTab.entries.forEach { tab ->
+                    NavigationBarItem(
+                        icon = { Icon(tab.icon, contentDescription = null) },
+                        label = { Text(stringResource(tab.labelResId)) },
+                        selected = selectedTab == tab,
+                        onClick = {
+                            selectedTab = tab
+                            if (tab != BottomTab.NOTIFY_HISTORY) {
+                                highlightNotifyId = null
+                            }
+                        }
+                    )
                 }
-            )
+            }
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // 顶部状态卡片
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            if (isStarting) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(14.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            } else if (isRunning) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .background(
-                                            color = MaterialTheme.colorScheme.primary,
-                                            shape = CircleShape
-                                        )
-                                )
-                            }
-                            Text(
-                                text = when {
-                                    isStarting -> "启动中..."
-                                    isRunning -> stringResource(R.string.status_running)
-                                    else -> stringResource(R.string.status_stopped)
-                                },
-                                style = MaterialTheme.typography.titleMedium,
-                                color = when {
-                                    isStarting -> MaterialTheme.colorScheme.primary
-                                    isRunning -> MaterialTheme.colorScheme.primary
-                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            )
-                        }
-                        if (isStarting) {
-                            Button(onClick = {}, enabled = false) {
-                                Text(stringResource(R.string.start_service))
-                            }
-                        } else if (isRunning) {
-                            Button(onClick = onStopServer) {
-                                Text(stringResource(R.string.stop_service))
-                            }
-                        } else {
-                            Button(onClick = onStartServer) {
-                                Text(stringResource(R.string.start_service))
-                            }
-                        }
-                    }
-
-                }
-            }
-
-            // 组件状态卡片 - 仅在服务运行时显示
-            if (isRunning) {
-                val (enabledComponents, disabledComponents) = getEnabledAndDisabledComponents(context)
-                val totalCount = enabledComponents.size + disabledComponents.size
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showComponentSheet = true }
-                ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.List,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = stringResource(R.string.component_status),
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                        }
-                        if (totalCount > 0) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                if (enabledComponents.isNotEmpty()) {
-                                    ComponentCountBadge(
-                                        count = enabledComponents.size,
-                                        label = "启用",
-                                        color = Color(0xFF4CAF50)
-                                    )
-                                }
-                                if (disabledComponents.isNotEmpty()) {
-                                    ComponentCountBadge(
-                                        count = disabledComponents.size,
-                                        label = "未启用",
-                                        color = Color(0xFF9E9E9E)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    if (totalCount > 0) {
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // Horizontal scroll of component chips
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            enabledComponents.take(5).forEach { component ->
-                                ComponentChip(
-                                    component = component,
-                                    isEnabled = true,
-                                    onClick = {
-                                        selectedComponent = component
-                                        showComponentSheet = true
-                                    }
-                                )
-                            }
-                            disabledComponents.take(5).forEach { component ->
-                                ComponentChip(
-                                    component = component,
-                                    isEnabled = false,
-                                    onClick = {
-                                        selectedComponent = component
-                                        showComponentSheet = true
-                                    }
-                                )
-                            }
-                        }
+        when (selectedTab) {
+            BottomTab.HOME -> MainScreen(
+                onStartServer = {
+                    if (!preferences.hasConfig()) {
+                        Toast.makeText(activity, R.string.config_not_found, Toast.LENGTH_LONG).show()
+                        activity.startActivity(Intent(activity, ConfigActivity::class.java))
                     } else {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "暂无组件",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        activity.startServer()
                     }
-                }
-            }
-            }
-
-            // 底部日志卡片 - 占据剩余全部位置
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = stringResource(R.string.log_section),
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = LogManager.getLogLevel().name,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            TextButton(
-                                onClick = {
-                                    if (isPaused) {
-                                        LogManager.resumeLogs()
-                                    } else {
-                                        LogManager.pauseLogs()
-                                    }
-                                    isPaused = LogManager.isPaused()
-                                }
-                            ) {
-                                Text(if (isPaused) "▶️" else "⏸️")
-                            }
-                            TextButton(
-                                onClick = { LogManager.clearLogs() }
-                            ) {
-                                Text("🗑️")
-                            }
-                            TextButton(
-                                onClick = {
-                                    if (isFileLogging) {
-                                        LogManager.setFileLoggingEnabled(false, preferences)
-                                        isFileLogging = false
-                                        Toast.makeText(context, "已停止保存日志", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        LogManager.setFileLoggingEnabled(true, preferences)
-                                        isFileLogging = true
-                                        Toast.makeText(context, "已开始保存日志到文件", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            ) {
-                                Text(if (isFileLogging) "❌" else "💾")
-                            }
-                            TextButton(
-                                onClick = {
-                                    val newState = !isAllLogcatEnabled
-                                    LogManager.logWarn("UI", "Toggle logcat all: $isAllLogcatEnabled -> $newState")
-                                    LogManager.setAllLogcatEnabled(newState, preferences)
-                                    isAllLogcatEnabled = LogManager.isAllLogcatEnabled()
-                                }
-                            ) {
-                                Text(
-                                    if (isAllLogcatEnabled) "🐱" else "🐾"
-                                )
-                            }
-                        }
-                    }
-
-                    HorizontalDivider()
-
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        state = listState
-                    ) {
-                        items(logs) { log ->
-                            Text(
-                                text = log.chunked(1).joinToString("\u200B"),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = getLogColor(log),
-                                softWrap = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 2.dp)
-                                    .clickable {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("log", log))
-                                        Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
-                                    }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Component status bottom sheet
-    if (showComponentSheet) {
-        ComponentDetailSheet(
-            component = selectedComponent,
-            sheetState = detailSheetState,
-            onDismiss = {
-                showComponentSheet = false
-                selectedComponent = null
-            }
-        )
-    }
-}
-
-@Composable
-fun StatItem(label: String, value: Int) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = value.toString(),
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall
-        )
-    }
-}
-
-@Composable
-fun ComponentCountBadge(
-    count: Int,
-    label: String,
-    color: Color
-) {
-    Row(
-        modifier = Modifier
-            .background(
-                color = color.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(16.dp)
+                },
+                onStopServer = { activity.stopServer() },
+                modifier = Modifier.padding(padding)
             )
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .background(color, CircleShape)
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = "$count",
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            color = color
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = color
-        )
-    }
-}
 
-@Composable
-fun ComponentChip(
-    component: ComponentStatus,
-    isEnabled: Boolean,
-    onClick: () -> Unit
-) {
-    val backgroundColor = if (isEnabled) {
-        when (component.type) {
-            ComponentType.LINK -> Color(0xFFE3F2FD)
-            ComponentType.HTTP_INPUT -> Color(0xFFE8F5E9)
-            ComponentType.LINK_INPUT -> Color(0xFFFFF3E0)
-        }
-    } else {
-        Color(0xFFF5F5F5)
-    }
-
-    val borderColor = if (isEnabled) {
-        when (component.type) {
-            ComponentType.LINK -> Color(0xFF1976D2)
-            ComponentType.HTTP_INPUT -> Color(0xFF388E3C)
-            ComponentType.LINK_INPUT -> Color(0xFFF57C00)
-        }
-    } else {
-        Color(0xFFBDBDBD)
-    }
-
-    val textColor = if (isEnabled) {
-        when (component.type) {
-            ComponentType.LINK -> Color(0xFF1976D2)
-            ComponentType.HTTP_INPUT -> Color(0xFF388E3C)
-            ComponentType.LINK_INPUT -> Color(0xFFF57C00)
-        }
-    } else {
-        Color(0xFF757575)
-    }
-
-    Card(
-        modifier = Modifier.clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = backgroundColor),
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .background(
-                        color = if (component.isRunning) Color(0xFF4CAF50) else Color(0xFF9E9E9E),
-                        shape = CircleShape
-                    )
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = component.name,
-                style = MaterialTheme.typography.labelMedium,
-                color = textColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+            BottomTab.NOTIFY_HISTORY -> NotifyHistoryScreen(
+                onBack = { selectedTab = BottomTab.HOME },
+                highlightNotifyId = highlightNotifyId,
+                modifier = Modifier.padding(padding)
             )
         }
     }

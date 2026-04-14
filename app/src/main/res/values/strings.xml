@@ -81,4 +81,7 @@
     <string name="link_error_channel_name">连接错误</string>
     <string name="link_error_title">链接连接失败</string>
     <string name="link_recovered_title">链接已恢复</string>
+    <string name="notify_history">通知历史</string>
+    <string name="tab_home">主页</string>
+    <string name="tab_notify_history">通知</string>
 </resources>

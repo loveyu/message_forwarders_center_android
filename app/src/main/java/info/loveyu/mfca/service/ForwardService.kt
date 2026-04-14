@@ -18,8 +18,8 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import info.loveyu.mfca.InputMethodFloatingActivity
-import info.loveyu.mfca.StatusFloatingActivity
 import info.loveyu.mfca.MainActivity
+import info.loveyu.mfca.StatusFloatingActivity
 import info.loveyu.mfca.R
 import info.loveyu.mfca.config.AppConfig
 import info.loveyu.mfca.config.AppStatusConfig
@@ -30,6 +30,8 @@ import info.loveyu.mfca.input.InputMessage
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.pipeline.RuleEngine
+import info.loveyu.mfca.notification.NotifyHistoryCleanup
+import info.loveyu.mfca.notification.NotifyHistoryDbHelper
 import info.loveyu.mfca.queue.QueueManager
 import info.loveyu.mfca.server.HttpServer
 import info.loveyu.mfca.server.MessageForwarder
@@ -285,7 +287,12 @@ class ForwardService : Service() {
             LinkManager.onFailureResetTick()
         }
 
-        // 5. 批量 flush 日志文件缓冲
+        // 5. 通知历史自动清理（≈10 分钟）
+        if (tickCount % FAILURE_RESET_TICK_INTERVAL == 0) {
+            NotifyHistoryCleanup.onTick(this)
+        }
+
+        // 6. 批量 flush 日志文件缓冲
         LogManager.logDebug("SERVICE", "Tick #$tickCount end, flushing logs")
         LogManager.flush()
     }
@@ -450,6 +457,12 @@ class ForwardService : Service() {
                 val notificationTag = intent.getStringExtra("notification_tag") ?: ""
                 val notificationId = intent.getIntExtra("notification_id", -1)
                 LogManager.logInfo("INTERNAL", "Notification opened: output=$outputName, tag=$notificationTag, id=$notificationId")
+                // 启动通知历史页面并定位到该通知
+                val activityIntent = Intent(this@ForwardService, MainActivity::class.java)
+                activityIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                activityIntent.putExtra("notify_id", notificationId)
+                activityIntent.putExtra("highlight", true)
+                startActivity(activityIntent)
                 return START_STICKY
             }
         }
