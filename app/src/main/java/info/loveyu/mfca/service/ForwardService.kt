@@ -107,7 +107,6 @@ class ForwardService : Service() {
         // Current config URL
         @Volatile
         var currentConfigUrl: String = ""
-            private set
 
         fun isServiceAlive(): Boolean = serviceInstance != null
 
@@ -229,7 +228,8 @@ class ForwardService : Service() {
                 return START_STICKY
             }
             ACTION_RELOAD_CONFIG -> {
-                reloadConfig()
+                stopAll()
+                start()
                 return START_STICKY
             }
             "OPEN_NOTIFICATION" -> {

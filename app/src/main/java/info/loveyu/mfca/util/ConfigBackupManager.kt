@@ -10,7 +10,7 @@ object ConfigBackupManager {
 
     private const val BACKUP_DIR = "config_backups"
     private const val BACKUP_PREFIX = "config_backup_"
-    private const val BACKUP_SUFFIX = ".json"
+    private const val BACKUP_SUFFIX = ".yaml"
 
     data class BackupInfo(
         val file: File,

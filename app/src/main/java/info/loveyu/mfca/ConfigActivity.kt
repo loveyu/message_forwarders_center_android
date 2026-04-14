@@ -86,7 +86,7 @@ fun ConfigScreenContent(
                 file
             )
             val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/json")
+                setDataAndType(uri, "text/yaml")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             context.startActivity(Intent.createChooser(intent, "选择编辑器"))
@@ -103,12 +103,23 @@ fun ConfigScreenContent(
             return
         }
         try {
-            val tempFile = File(context.cacheDir, "current_config.json")
+            val tempFile = File(context.getExternalFilesDir(null) ?: context.cacheDir, "current_config.yaml")
             tempFile.writeText(currentConfig)
             openFileWithEditor(tempFile)
         } catch (e: Exception) {
             Toast.makeText(context, "无法打开文件: ${e.message}", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    fun restartService() {
+        val stopIntent = Intent(context, ForwardService::class.java).apply {
+            action = ForwardService.ACTION_STOP
+        }
+        context.startService(stopIntent)
+        val startIntent = Intent(context, ForwardService::class.java).apply {
+            action = ForwardService.ACTION_START
+        }
+        context.startService(startIntent)
     }
 
     fun handleDownloadConfig() {
@@ -139,14 +150,10 @@ fun ConfigScreenContent(
                         preferences.saveFullConfig(content)
                         preferences.configFilePath = configUrl
 
-                        val success = ForwardService.loadConfig(content, configUrl)
-                        if (success) {
-                            LogManager.log("CONFIG", "YAML配置应用成功")
-                            Toast.makeText(context, R.string.config_download_success, Toast.LENGTH_SHORT).show()
-                        } else {
-                            LogManager.log("CONFIG", "配置加载失败")
-                            Toast.makeText(context, R.string.config_validate_failed, Toast.LENGTH_SHORT).show()
-                        }
+                        ForwardService.currentConfigUrl = configUrl
+                        restartService()
+                        LogManager.log("CONFIG", "YAML配置应用成功")
+                        Toast.makeText(context, R.string.config_download_success, Toast.LENGTH_SHORT).show()
                     } catch (e: Exception) {
                         LogManager.log("CONFIG", "配置解析失败: ${e.message}")
                         Toast.makeText(context, R.string.config_validate_failed, Toast.LENGTH_SHORT).show()
@@ -167,14 +174,9 @@ fun ConfigScreenContent(
                 ConfigLoader.loadConfig(savedConfig)
                 LogManager.log("CONFIG", "配置解析成功")
 
-                val success = ForwardService.loadConfig(savedConfig)
-                if (success) {
-                    LogManager.log("CONFIG", "配置重载成功")
-                    Toast.makeText(context, R.string.config_reload_success, Toast.LENGTH_SHORT).show()
-                } else {
-                    LogManager.log("CONFIG", "配置重载失败")
-                    Toast.makeText(context, R.string.config_reload_failed, Toast.LENGTH_SHORT).show()
-                }
+                restartService()
+                LogManager.log("CONFIG", "配置重载成功")
+                Toast.makeText(context, R.string.config_reload_success, Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 LogManager.log("CONFIG", "配置重载失败: ${e.message}")
                 Toast.makeText(context, R.string.config_reload_failed, Toast.LENGTH_SHORT).show()
@@ -197,14 +199,9 @@ fun ConfigScreenContent(
                 ConfigLoader.loadConfig(content)
                 preferences.saveFullConfig(content)
 
-                val success = ForwardService.loadConfig(content)
-                if (success) {
-                    LogManager.log("CONFIG", "已恢复备份: ${backup.displayName}")
-                    Toast.makeText(context, R.string.config_restore_success, Toast.LENGTH_SHORT).show()
-                } else {
-                    LogManager.log("CONFIG", "备份恢复失败")
-                    Toast.makeText(context, R.string.config_restore_failed, Toast.LENGTH_SHORT).show()
-                }
+                restartService()
+                LogManager.log("CONFIG", "已恢复备份: ${backup.displayName}")
+                Toast.makeText(context, R.string.config_restore_success, Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 LogManager.log("CONFIG", "备份恢复失败: ${e.message}")
                 Toast.makeText(context, R.string.config_restore_failed, Toast.LENGTH_SHORT).show()
