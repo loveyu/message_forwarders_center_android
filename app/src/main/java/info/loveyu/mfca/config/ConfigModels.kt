@@ -29,7 +29,9 @@ data class AppConfig(
  */
 data class SchedulerConfig(
     val tickInterval: Duration = Duration("30s"),
-    val chargingTickInterval: Duration? = null
+    val chargingTickInterval: Duration? = null,
+    val wakeLockTimeout: Duration = Duration("1h"),
+    val wifiLockTimeout: Duration = Duration("1h")
 ) {
     /** 保证最小 15 秒 */
     val effectiveTickInterval: Duration

@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
+import java.io.BufferedWriter
 import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStreamWriter
@@ -32,7 +33,7 @@ object LogManager {
     private var maxLogLines = 1000
 
     private var logFile: File? = null
-    private var logFileWriter: OutputStreamWriter? = null
+    private var logFileWriter: BufferedWriter? = null
     private var contextRef: WeakReference<Context>? = null
 
     private val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
@@ -164,7 +165,10 @@ object LogManager {
         logFile = File(logDir, "log_$timestamp.txt")
 
         try {
-            logFileWriter = OutputStreamWriter(FileOutputStream(logFile, true), Charsets.UTF_8)
+            logFileWriter = BufferedWriter(
+                OutputStreamWriter(FileOutputStream(logFile, true), Charsets.UTF_8),
+                8192
+            )
             // Write existing logs to file
             _logs.value.forEach { line ->
                 logFileWriter?.write(line)
@@ -190,9 +194,20 @@ object LogManager {
         try {
             logFileWriter?.write(line)
             logFileWriter?.write("\n")
-            logFileWriter?.flush()
         } catch (e: Exception) {
             Log.e("LogManager", "Failed to write to log file", e)
+        }
+    }
+
+    /**
+     * 由统一 Ticker 在每个 tick 末尾调用，批量 flush 日志文件缓冲。
+     * 避免每条日志都触发磁盘 I/O。
+     */
+    fun flush() {
+        try {
+            logFileWriter?.flush()
+        } catch (e: Exception) {
+            Log.e("LogManager", "Failed to flush log file", e)
         }
     }
 

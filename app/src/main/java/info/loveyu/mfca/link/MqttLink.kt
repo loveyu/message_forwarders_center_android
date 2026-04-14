@@ -258,15 +258,15 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
     }
 
     /**
-     * 由统一 Ticker 调用，输出心跳状态日志。
-     * 替代原来每连接一个独立 Timer 线程的方式。
+     * 采集心跳状态数据（非阻塞，仅读取 volatile 字段）。
+     * 由 LinkManager 在 tick 中调用，将结果缓冲到下次 tick 再写入日志。
      */
-    fun logHeartbeatStatus() {
-        if (!connected) return
+    fun collectHeartbeatStatus(): String? {
+        if (!connected) return null
         val now = System.currentTimeMillis()
         val uptimeSec = (now - connectedAt) / 1000
         val idleSec = (now - lastOutboundActivity) / 1000
-        LogManager.logDebug("MQTT", "Heartbeat: uptime=${uptimeSec}s, idle=${idleSec}s, keepAlive=${keepAliveSeconds}s, pingExpected=${idleSec >= keepAliveSeconds}")
+        return "Heartbeat[$id]: uptime=${uptimeSec}s, idle=${idleSec}s, keepAlive=${keepAliveSeconds}s, pingExpected=${idleSec >= keepAliveSeconds}"
     }
 
     override fun isConnected(): Boolean = connected

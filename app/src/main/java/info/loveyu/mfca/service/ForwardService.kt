@@ -232,6 +232,14 @@ class ForwardService : Service() {
     @Volatile
     private var chargingTickIntervalMs: Long = 30_000L
 
+    // Lock timeout from config (0 = permanent)
+    @Volatile
+    private var wakeLockTimeoutMs: Long = 3_600_000L // default 1h
+    @Volatile
+    private var wifiLockTimeoutMs: Long = 3_600_000L // default 1h
+    private var wakeLockTimeoutFuture: ScheduledFuture<*>? = null
+    private var wifiLockTimeoutFuture: ScheduledFuture<*>? = null
+
     @Volatile
     private var isApplyingConfig = false
 
@@ -262,22 +270,22 @@ class ForwardService : Service() {
         lastTickTime = System.currentTimeMillis()
         tickCount++
 
-        // 1. 刷新统计 & 通知栏
-        refreshStats()
-
-        // 2. Link 健康检查 + MQTT 心跳日志
+        // 1. Link 健康检查 + MQTT 心跳日志
         LinkManager.onTick()
 
-        // 3. Input 健康检查
+        // 2. Input 健康检查
         InputManager.onTick()
 
-        // 4. SqliteQueue 处理（根据各自的 retryInterval 判断是否到期）
+        // 3. SqliteQueue 处理（根据各自的 retryInterval 判断是否到期）
         QueueManager.onTick()
 
-        // 5. 每 N 个 tick 执行失败重置（≈10 分钟）
+        // 4. 每 N 个 tick 执行失败重置（≈10 分钟）
         if (tickCount % FAILURE_RESET_TICK_INTERVAL == 0) {
             LinkManager.onFailureResetTick()
         }
+
+        // 5. 批量 flush 日志文件缓冲
+        LogManager.flush()
     }
 
     /**
@@ -619,6 +627,8 @@ class ForwardService : Service() {
             // 8. Update tick interval from config
             normalTickIntervalMs = config.scheduler.effectiveTickInterval.millis
             chargingTickIntervalMs = config.scheduler.effectiveChargingTickInterval.millis
+            wakeLockTimeoutMs = config.scheduler.wakeLockTimeout.millis
+            wifiLockTimeoutMs = config.scheduler.wifiLockTimeout.millis
             val newInterval = if (isCharging) chargingTickIntervalMs else normalTickIntervalMs
             if (newInterval != tickIntervalMs) {
                 tickIntervalMs = newInterval
@@ -852,7 +862,8 @@ class ForwardService : Service() {
             ).apply {
                 acquire()
             }
-            LogManager.log("SERVICE", "WakeLock acquired")
+            LogManager.log("SERVICE", "WakeLock acquired (timeout=${if (wakeLockTimeoutMs > 0) "${wakeLockTimeoutMs / 1000}s" else "permanent"})")
+            scheduleWakeLockTimeout()
         }
     }
 
@@ -868,11 +879,48 @@ class ForwardService : Service() {
             wifiLock = wifiManager.createWifiLock(wifiMode, "mfca::forward_service").apply {
                 acquire()
             }
-            LogManager.log("SERVICE", "WifiLock acquired")
+            LogManager.log("SERVICE", "WifiLock acquired (timeout=${if (wifiLockTimeoutMs > 0) "${wifiLockTimeoutMs / 1000}s" else "permanent"})")
+            scheduleWifiLockTimeout()
         }
     }
 
+    private fun scheduleWakeLockTimeout() {
+        wakeLockTimeoutFuture?.cancel(false)
+        wakeLockTimeoutFuture = null
+        if (wakeLockTimeoutMs <= 0) return
+        wakeLockTimeoutFuture = appScheduler.schedule({
+            if (wakeLock?.isHeld == true) {
+                releaseWakeLock()
+                isWakeLockEnabled = false
+                saveStatus()
+                lastNotificationStats = null
+                updateNotification()
+                onStatsChanged?.invoke()
+                LogManager.log("SERVICE", "WakeLock auto-released after ${wakeLockTimeoutMs / 1000}s timeout")
+            }
+        }, wakeLockTimeoutMs, TimeUnit.MILLISECONDS)
+    }
+
+    private fun scheduleWifiLockTimeout() {
+        wifiLockTimeoutFuture?.cancel(false)
+        wifiLockTimeoutFuture = null
+        if (wifiLockTimeoutMs <= 0) return
+        wifiLockTimeoutFuture = appScheduler.schedule({
+            if (wifiLock?.isHeld == true) {
+                releaseWifiLock()
+                isWifiLockEnabled = false
+                saveStatus()
+                lastNotificationStats = null
+                updateNotification()
+                onStatsChanged?.invoke()
+                LogManager.log("SERVICE", "WifiLock auto-released after ${wifiLockTimeoutMs / 1000}s timeout")
+            }
+        }, wifiLockTimeoutMs, TimeUnit.MILLISECONDS)
+    }
+
     private fun releaseWifiLock() {
+        wifiLockTimeoutFuture?.cancel(false)
+        wifiLockTimeoutFuture = null
         wifiLock?.let {
             if (it.isHeld) {
                 it.release()
@@ -883,6 +931,8 @@ class ForwardService : Service() {
     }
 
     private fun releaseWakeLock() {
+        wakeLockTimeoutFuture?.cancel(false)
+        wakeLockTimeoutFuture = null
         wakeLock?.let {
             if (it.isHeld) {
                 it.release()

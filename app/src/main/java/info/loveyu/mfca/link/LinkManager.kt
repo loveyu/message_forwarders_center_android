@@ -51,6 +51,10 @@ object LinkManager {
     @Volatile
     private var initialized = false
 
+    // 上次记录的 transport 类型，用于 onCapabilitiesChanged 变化检测
+    @Volatile
+    private var lastTransportType: NetworkType = NetworkType.UNKNOWN
+
     // Notification state for link errors
     private val notifiedErrorLinks = mutableSetOf<String>()
 
@@ -125,6 +129,16 @@ object LinkManager {
                 network: Network,
                 networkCapabilities: NetworkCapabilities
             ) {
+                // 仅在 transport 类型实际变化时触发重连
+                val newType = when {
+                    networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> NetworkType.WIFI
+                    networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> NetworkType.MOBILE
+                    networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> NetworkType.ETHERNET
+                    else -> NetworkType.UNKNOWN
+                }
+                if (newType == lastTransportType) return
+                LogManager.logDebug("LINK", "Transport changed: $lastTransportType -> $newType")
+                lastTransportType = newType
                 resetAllFailureCounts()
                 updateNetworkType()
                 // 网络能力变更（WiFi↔移动网络等）触发 tick
@@ -167,12 +181,16 @@ object LinkManager {
         } else {
             currentNetworkType = NetworkType.UNKNOWN
         }
+        lastTransportType = currentNetworkType
 
         LogManager.logDebug("LINK", "Network type: $currentNetworkType")
         LogManager.logDebug("NETWORK", NetworkChecker.getDetailedNetworkInfo(ctx))
 
         // Notify UI to refresh component states
         _networkStateVersion.value++
+
+        // 刷新组件统计（网络变化可能导致 when/deny 条件变化）
+        ForwardService.refreshStats()
 
         // During initialization, skip connection management (applyConfig's connectAll handles it)
         if (!initialized) return
@@ -198,10 +216,10 @@ object LinkManager {
 
         checkAllLinkConditions()
 
-        // MQTT 心跳日志（替代每个 MqttLink 的独立 Timer）
+        // MQTT 心跳日志
         links.values.forEach { link ->
-            if (link is MqttLink && link.isConnected()) {
-                link.logHeartbeatStatus()
+            if (link is MqttLink) {
+                link.collectHeartbeatStatus()?.let { LogManager.logDebug("MQTT", it) }
             }
         }
     }
