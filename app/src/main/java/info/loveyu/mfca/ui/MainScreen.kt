@@ -107,28 +107,17 @@ import info.loveyu.mfca.ui.theme.StatusDisabledDark
 import info.loveyu.mfca.ui.theme.StatusDisabledLight
 import info.loveyu.mfca.ui.theme.StatusRunningDark
 import info.loveyu.mfca.ui.theme.StatusRunningLight
+import info.loveyu.mfca.util.LogEntry
 import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
 
-private fun getLogColor(log: String): Color {
-    return when {
-        log.contains("[E:") -> LogErrorColor
-        log.contains("[W:") -> LogWarnColor
-        log.contains("[I:") -> LogInfoColor
-        log.contains("[D:") -> LogDebugColor
-        else -> Color.Unspecified
-    }
-}
-
-private fun getLogPriority(log: String): Int {
-    return when {
-        log.contains("[E:") -> LogLevel.ERROR.androidPriority
-        log.contains("[W:") -> LogLevel.WARN.androidPriority
-        log.contains("[I:") -> LogLevel.INFO.androidPriority
-        log.contains("[D:") -> LogLevel.DEBUG.androidPriority
-        else -> LogLevel.INFO.androidPriority
-    }
+/** LogLevel 到 Compose Color 的映射（替代原来的字符串解析） */
+private fun LogLevel.toColor(): Color = when (this) {
+    LogLevel.ERROR -> LogErrorColor
+    LogLevel.WARN -> LogWarnColor
+    LogLevel.INFO -> LogInfoColor
+    LogLevel.DEBUG -> LogDebugColor
 }
 
 @Composable
@@ -201,9 +190,8 @@ fun MainScreen(
 
     val logs by LogManager.logs.collectAsState()
     val currentLogLevel by LogManager.logLevelFlow.collectAsState()
-    val displayLogs = remember(logs, currentLogLevel) {
-        logs.filter { getLogPriority(it) >= currentLogLevel.androidPriority }
-    }
+    // 过滤在写入时进行，UI 直接引用全部日志
+    val displayLogs = logs
     val listState = rememberLazyListState()
 
     LaunchedEffect(displayLogs.size) {
@@ -440,18 +428,18 @@ fun MainScreen(
                         .weight(1f),
                     state = listState
                 ) {
-                    items(displayLogs) { log ->
+                    items(displayLogs, key = { it.id }) { entry ->
                         Text(
-                            text = log.chunked(1).joinToString("\u200B"),
+                            text = entry.formatted,
                             style = MaterialTheme.typography.bodySmall,
-                            color = getLogColor(log),
+                            color = entry.level.toColor(),
                             softWrap = true,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 2.dp)
                                 .clickable {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("log", log))
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("log", entry.formatted))
                                     Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
                                 }
                         )

@@ -450,6 +450,7 @@ fun SettingsScreenContent(
                                         onClick = {
                                             selectedLogLevel = level
                                             LogManager.setLogLevel(level, preferences)
+                                            LogManager.appendLog(LogLevel.INFO, "SETTINGS", "日志等级已切换为 ${level.name}")
                                             expandedLogLevel = false
                                         }
                                     )

@@ -23,9 +23,28 @@ enum class LogLevel(val androidPriority: Int, val tag: String) {
     ERROR(Log.ERROR, "E")
 }
 
+/**
+ * 日志条目结构（替代原来的字符串列表）。
+ * level 在 LogManager.log() 时解析完毕，UI 层直接使用无需重复解析。
+ */
+data class LogEntry(
+    val id: Long,
+    val timestamp: String,
+    val level: LogLevel,
+    val tag: String,
+    val message: String,
+    val contextJson: String? = null
+) {
+    /** 格式化字符串（用于复制到剪贴板） */
+    val formatted: String = buildString {
+        append("[$timestamp] [${level.tag}:$tag] $message")
+        contextJson?.let { append(" $it") }
+    }
+}
+
 object LogManager {
-    private val _logs = MutableStateFlow<List<String>>(emptyList())
-    val logs: StateFlow<List<String>> = _logs.asStateFlow()
+    private val _logs = MutableStateFlow<List<LogEntry>>(emptyList())
+    val logs: StateFlow<List<LogEntry>> = _logs.asStateFlow()
 
     private val _logLevel = MutableStateFlow(LogLevel.INFO)
     val logLevelFlow: StateFlow<LogLevel> = _logLevel.asStateFlow()
@@ -49,8 +68,14 @@ object LogManager {
         .withZone(ZoneId.systemDefault())
 
     // 环形缓冲：避免每条日志复制整个列表
-    private val logBuffer = ArrayDeque<String>(1000)
+    private val logBuffer = ArrayDeque<LogEntry>(1000)
     private val bufferLock = Any()
+
+    // 自增 ID 计数器（提供稳定 key）
+    private var logIdCounter = 0L
+    private val idLock = Any()
+
+    private fun nextId(): Long = synchronized(idLock) { ++logIdCounter }
 
     fun init(ctx: Context, prefs: Preferences) {
         contextRef = WeakReference(ctx.applicationContext)
@@ -81,27 +106,32 @@ object LogManager {
                 null
             }
         }
-        val logLine = if (contextJson != null) {
-            "[$timestamp] [${level.tag}:$tag] $message $contextJson"
-        } else {
-            "[$timestamp] [${level.tag}:$tag] $message"
-        }
 
         if (isAllLogcatEnabled || level.androidPriority >= Log.WARN) {
             val logcatMsg = if (contextJson != null) "$message $contextJson" else message
             Log.println(level.androidPriority, tag, logcatMsg)
         }
 
-        // 环形缓冲写入，零复制
+        // 构造 LogEntry（level 解析完毕，UI 层直接使用）
+        val entry = LogEntry(
+            id = nextId(),
+            timestamp = timestamp,
+            level = level,
+            tag = tag,
+            message = message,
+            contextJson = contextJson?.toString()
+        )
+
+        // 环形缓冲写入
         synchronized(bufferLock) {
             while (logBuffer.size >= maxLogLines) {
                 logBuffer.removeFirst()
             }
-            logBuffer.addLast(logLine)
+            logBuffer.addLast(entry)
             _logs.value = logBuffer.toList()
         }
 
-        // Write to file if enabled
+        // Write to file if enabled（文件格式不变）
         if (isFileLoggingEnabled) {
             val fileLine = if (contextJson != null) {
                 "[$fileTimestamp] [${level.tag}:$tag] $message $contextJson"
@@ -109,6 +139,29 @@ object LogManager {
                 "[$fileTimestamp] [${level.tag}:$tag] $message"
             }
             writeToFile(fileLine)
+        }
+    }
+
+    /**
+     * 追加单条日志（供外部调用，如等级切换时追加提示）。
+     * 绕过 currentLogLevel 过滤，直接追加。
+     */
+    fun appendLog(level: LogLevel, tag: String, message: String) {
+        val now = Instant.now()
+        val entry = LogEntry(
+            id = nextId(),
+            timestamp = dateFormat.format(now),
+            level = level,
+            tag = tag,
+            message = message,
+            contextJson = null
+        )
+        synchronized(bufferLock) {
+            while (logBuffer.size >= maxLogLines) {
+                logBuffer.removeFirst()
+            }
+            logBuffer.addLast(entry)
+            _logs.value = logBuffer.toList()
         }
     }
 
@@ -194,8 +247,8 @@ object LogManager {
             )
             // Write existing logs to file
             synchronized(bufferLock) {
-                logBuffer.forEach { line ->
-                    logFileWriter?.write(line)
+                logBuffer.forEach { entry ->
+                    logFileWriter?.write(entry.formatted)
                     logFileWriter?.write("\n")
                 }
             }
@@ -249,7 +302,7 @@ object LogManager {
 
         try {
             val logsCopy = synchronized(bufferLock) { logBuffer.toList() }
-            file.writeText(logsCopy.joinToString("\n"))
+            file.writeText(logsCopy.joinToString("\n") { it.formatted })
             return file.absolutePath
         } catch (e: Exception) {
             return null
