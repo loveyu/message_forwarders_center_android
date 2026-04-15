@@ -28,6 +28,7 @@ import info.loveyu.mfca.deadletter.DeadLetterHandler
 import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.input.InputMessage
 import info.loveyu.mfca.link.LinkManager
+import info.loveyu.mfca.output.ClipboardOutput
 import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.pipeline.RuleEngine
 import info.loveyu.mfca.queue.QueueManager
@@ -325,12 +326,20 @@ class ForwardService : Service() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
                     Intent.ACTION_SCREEN_ON -> {
-                        LogManager.logDebug("SERVICE", "Screen on, triggering tick")
+                        LogManager.logDebug("SERVICE", "Screen on, triggering tick and flushing clipboard")
+                        ClipboardOutput.notifyScreenOn()
                         doTriggerTick()
+                        flushClipboardOutputs()
                     }
                     Intent.ACTION_USER_PRESENT -> {
-                        LogManager.logDebug("SERVICE", "User present (unlocked), triggering tick")
+                        LogManager.logDebug("SERVICE", "User present (unlocked), triggering tick and flushing clipboard")
+                        ClipboardOutput.notifyScreenOn()
                         doTriggerTick()
+                        flushClipboardOutputs()
+                    }
+                    Intent.ACTION_SCREEN_OFF -> {
+                        LogManager.logDebug("SERVICE", "Screen off, clipboard outputs will buffer")
+                        ClipboardOutput.notifyScreenOff()
                     }
                     Intent.ACTION_POWER_CONNECTED -> {
                         LogManager.logDebug("SERVICE", "Power connected, switching to charging interval")
@@ -348,6 +357,7 @@ class ForwardService : Service() {
             addAction(Intent.ACTION_USER_PRESENT)
             addAction(Intent.ACTION_POWER_CONNECTED)
             addAction(Intent.ACTION_POWER_DISCONNECTED)
+            addAction(Intent.ACTION_SCREEN_OFF)
         }
         registerReceiver(screenOnReceiver, filter)
         // 检测当前充电状态
@@ -359,6 +369,20 @@ class ForwardService : Service() {
         isCharging = bm.isCharging
         tickIntervalMs = if (isCharging) chargingTickIntervalMs else normalTickIntervalMs
         LogManager.logDebug("SERVICE", "Initial charging state: $isCharging, tickInterval=${tickIntervalMs}ms")
+    }
+
+    /**
+     * 亮屏/解锁时刷入剪贴板缓冲区。
+     * 在 appScheduler 线程执行，避免阻塞主线程。
+     */
+    private fun flushClipboardOutputs() {
+        appScheduler.execute {
+            try {
+                OutputManager.flushAllClipboardOutputs()
+            } catch (e: Exception) {
+                LogManager.logError("SERVICE", "Failed to flush clipboard outputs: ${e.message}")
+            }
+        }
     }
 
     /**

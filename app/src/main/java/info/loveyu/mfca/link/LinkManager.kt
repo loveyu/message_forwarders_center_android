@@ -111,6 +111,7 @@ object LinkManager {
                 LogManager.log("LINK", "Network available")
                 isNetworkAvailable = true
                 resetAllFailureCounts()
+                NetworkChecker.invalidateCache()
                 updateNetworkType()
                 // 事件触发提前 tick，加速重连
                 ForwardService.triggerTick()
@@ -120,6 +121,7 @@ object LinkManager {
                 LogManager.logWarn("LINK", "Network lost")
                 isNetworkAvailable = false
                 resetAllFailureCounts()
+                NetworkChecker.invalidateCache()
                 updateNetworkType()
                 // 网络丢失也触发 tick，及时更新状态
                 ForwardService.triggerTick()
@@ -140,6 +142,7 @@ object LinkManager {
                 LogManager.logDebug("LINK", "Transport changed: $lastTransportType -> $newType")
                 lastTransportType = newType
                 resetAllFailureCounts()
+                NetworkChecker.invalidateCache()
                 updateNetworkType()
                 // 网络能力变更（WiFi↔移动网络等）触发 tick
                 ForwardService.triggerTick()

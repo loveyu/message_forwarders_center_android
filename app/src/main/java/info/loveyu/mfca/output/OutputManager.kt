@@ -66,6 +66,17 @@ object OutputManager {
 
     fun getAllOutputs(): Map<String, Output> = outputs.toMap()
 
+    /**
+     * 刷入所有剪贴板输出的缓冲区（亮屏时调用）
+     */
+    fun flushAllClipboardOutputs() {
+        outputs.values.forEach { output ->
+            if (output is ClipboardOutput) {
+                output.flushDeferred()
+            }
+        }
+    }
+
     fun getOutputStatus(): Map<String, Boolean> {
         return outputs.mapValues { it.value.isAvailable() }
     }
