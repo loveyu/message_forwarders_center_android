@@ -516,13 +516,11 @@ private fun NotifyRecordCard(record: NotifyRecord, isHighlighted: Boolean, onCli
                 androidx.compose.foundation.Image(
                     bitmap = iconBitmap!!.asImageBitmap(),
                     contentDescription = null,
-                    modifier = Modifier.size(40.dp).clip(CircleShape)
+                    modifier = Modifier.size(40.dp)
                 )
             } else {
                 Box(
-                    modifier = Modifier.size(40.dp).clip(CircleShape).then(
-                        Modifier.background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                    ),
+                    modifier = Modifier.size(40.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(

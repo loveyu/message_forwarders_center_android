@@ -30,6 +30,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -66,7 +69,8 @@ class MainActivity : ComponentActivity() {
                 startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
                     putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
                 })
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
         }
     }
 
@@ -87,7 +91,10 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED
-                && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                && ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                )
                 != PackageManager.PERMISSION_GRANTED
             ) {
                 backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
@@ -168,7 +175,8 @@ class MainActivity : ComponentActivity() {
         if (!ForwardService.isServiceAlive()) {
             val status = AppStatusManager.loadStatus(this)
             val intent = Intent(this, ForwardService::class.java).apply {
-                action = if (status.isRunning) ForwardService.ACTION_START else ForwardService.ACTION_INIT
+                action =
+                    if (status.isRunning) ForwardService.ACTION_START else ForwardService.ACTION_INIT
             }
             startForegroundService(intent)
         } else {
@@ -221,7 +229,8 @@ private fun MainContent(
         showTabLabel = preferences.showTabLabel
         onPauseOrDispose { }
     }
-    val notifyDrawerState = remember { androidx.compose.material3.DrawerState(androidx.compose.material3.DrawerValue.Closed) }
+    val notifyDrawerState =
+        remember { androidx.compose.material3.DrawerState(androidx.compose.material3.DrawerValue.Closed) }
     val notifyScope = rememberCoroutineScope()
 
     Scaffold(
@@ -237,12 +246,14 @@ private fun MainContent(
         },
         bottomBar = {
             NavigationBar(
-                modifier = if (!showTabLabel) Modifier.height(64.dp) else Modifier.height(84.dp)
+                modifier = if (!showTabLabel) Modifier.height(96.dp) else Modifier,
             ) {
                 BottomTab.entries.forEach { tab ->
                     NavigationBarItem(
                         icon = { Icon(tab.icon, contentDescription = null) },
-                        label = if (showTabLabel) {{ Text(stringResource(tab.labelResId)) }} else null,
+                        label = if (showTabLabel) {
+                            { Text(stringResource(tab.labelResId)) }
+                        } else null,
                         selected = selectedTab == tab,
                         onClick = {
                             selectedTab = tab
@@ -257,7 +268,8 @@ private fun MainContent(
             BottomTab.HOME -> MainScreen(
                 onStartServer = {
                     if (!preferences.hasConfig()) {
-                        Toast.makeText(activity, R.string.config_not_found, Toast.LENGTH_LONG).show()
+                        Toast.makeText(activity, R.string.config_not_found, Toast.LENGTH_LONG)
+                            .show()
                         activity.startActivity(Intent(activity, ConfigActivity::class.java))
                     } else {
                         activity.startServer()

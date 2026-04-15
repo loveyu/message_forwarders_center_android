@@ -277,11 +277,11 @@ private fun NotifyIcon(record: NotifyRecord, size: androidx.compose.ui.unit.Dp) 
         Image(
             bitmap = iconBitmap!!.asImageBitmap(),
             contentDescription = null,
-            modifier = Modifier.size(size).clip(CircleShape)
+            modifier = Modifier.size(size)
         )
     } else {
         Box(
-            modifier = Modifier.size(size).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
+            modifier = Modifier.size(size).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
