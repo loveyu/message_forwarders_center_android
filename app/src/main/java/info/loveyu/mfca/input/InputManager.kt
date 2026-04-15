@@ -211,6 +211,8 @@ object InputManager {
                 }
                 val link = LinkManager.getLink(config.linkId)
                 if (link == null || !link.isConnected()) {
+                    // Skip stopping if link is still connecting (startup phase)
+                    if (link?.isConnecting() == true) return@forEach
                     if (input.isRunning()) {
                         LogManager.logDebug("INPUT", "Stopping ${config.name}: link ${config.linkId} not connected")
                         input.stop()

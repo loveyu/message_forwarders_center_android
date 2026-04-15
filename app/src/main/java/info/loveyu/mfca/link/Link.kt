@@ -23,6 +23,12 @@ interface Link {
     fun disconnect()
     fun isConnected(): Boolean
 
+    /**
+     * 是否正在连接中（异步连接尚未完成）。
+     * InputManager 健康检查时跳过正在连接的 link，避免误停止 input。
+     */
+    fun isConnecting(): Boolean = false
+
     fun send(data: ByteArray): Boolean
     fun send(text: String): Boolean
 

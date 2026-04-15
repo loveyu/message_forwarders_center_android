@@ -272,6 +272,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
     }
 
     override fun isConnected(): Boolean = connected
+    override fun isConnecting(): Boolean = connecting
 
     override fun shouldAutoReconnect(): Boolean = autoReconnect
 

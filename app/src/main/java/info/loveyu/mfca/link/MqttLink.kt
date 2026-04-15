@@ -270,6 +270,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
     }
 
     override fun isConnected(): Boolean = connected
+    override fun isConnecting(): Boolean = connecting
 
     /**
      * Reset failure count so the next health check cycle can retry.
