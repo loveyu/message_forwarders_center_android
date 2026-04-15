@@ -765,15 +765,19 @@ class ForwardService : Service() {
             CHANNEL_ID,
             getString(R.string.service_notification_channel),
             NotificationManager.IMPORTANCE_LOW
-        )
+        ).apply {
+            setLockscreenVisibility(Notification.VISIBILITY_PUBLIC)
+        }
         manager.createNotificationChannel(channel)
 
         val linkErrorChannel = NotificationChannel(
             LINK_ERROR_CHANNEL_ID,
             getString(R.string.link_error_channel_name),
             NotificationManager.IMPORTANCE_LOW
-        )
-        linkErrorChannel.group = LINK_ERROR_GROUP_ID
+        ).apply {
+            group = LINK_ERROR_GROUP_ID
+            setLockscreenVisibility(Notification.VISIBILITY_PUBLIC)
+        }
         manager.createNotificationChannelGroup(
             NotificationChannelGroup(LINK_ERROR_GROUP_ID, getString(R.string.link_error_channel_name))
         )
@@ -806,6 +810,7 @@ class ForwardService : Service() {
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
 
         // Only show action buttons when service is running
         if (isRunning) {

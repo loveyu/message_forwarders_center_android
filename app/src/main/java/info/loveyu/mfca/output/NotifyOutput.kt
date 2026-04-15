@@ -76,6 +76,7 @@ class NotifyOutput(
             description = "Message Forwarder 通知渠道: $channelName"
             enableLights(true)
             enableVibration(true)
+            setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC)
         }
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -385,6 +386,7 @@ class NotifyOutput(
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .setGroup(group)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
 
         // 设置大图标
         iconBitmap?.let {
@@ -422,6 +424,7 @@ class NotifyOutput(
             .setGroup(group)
             .setGroupSummary(true)
             .setAutoCancel(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         if (popup == true) {
             summaryBuilder.setPriority(NotificationCompat.PRIORITY_HIGH)
         }

@@ -424,6 +424,7 @@ object LinkManager {
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setContentIntent(contentIntent)
             .setOngoing(true)
+            .setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
             .build()
 
         val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -451,6 +452,7 @@ object LinkManager {
             .setContentIntent(contentIntent)
             .setOngoing(false)
             .setTimeoutAfter(5_000L)
+            .setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
             .build()
 
         val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
