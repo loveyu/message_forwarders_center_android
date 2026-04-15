@@ -12,8 +12,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeoutOrNull
 import java.io.EOFException
 import java.net.Socket
 import java.net.SocketException
@@ -227,22 +225,12 @@ class TcpLink(override val config: LinkConfig, private val context: Context) : L
         }
         return try {
             val framed = frameProtocol.frame(data)
-            val success = runBlocking {
-                withTimeoutOrNull(writeTimeoutMs) {
-                    val os = socket?.outputStream ?: return@withTimeoutOrNull false
-                    os.write(framed)
-                    os.flush()
-                    true
-                }
-            }
-            if (success == null) {
-                LogManager.logWarn("TCP", "Write timeout (${writeTimeoutMs}ms), disconnecting")
-                disconnect()
-                false
-            } else {
-                LogManager.logDebug("TCP", "Sent frame: ${frameProtocol.name}, size=${framed.size}")
-                true
-            }
+            val os = socket?.outputStream ?: return false
+            // 直接阻塞写入（调用方已在 worker 线程），避免 runBlocking 开销
+            os.write(framed)
+            os.flush()
+            LogManager.logDebug("TCP", "Sent frame: ${frameProtocol.name}, size=${framed.size}")
+            true
         } catch (e: Exception) {
             LogManager.logError("TCP", "Send error: ${e.message}")
             errorListener?.invoke(e)

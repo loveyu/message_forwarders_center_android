@@ -22,6 +22,13 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class ExpressionEngine {
 
+    companion object {
+        // 预编译正则，避免热路径每次重新编译
+        private val ARRAY_ACCESS_REGEX = Regex("""\[(\d+)\](.*)""")
+        private val PATH_PART_REGEX = Regex("""\.?(\w+)?\[(\d+)\]""")
+        private val FUNC_CALL_REGEX = Regex("""^(\w+)\((.*)\)$""")
+    }
+
     // 预编译表达式缓存
     private val compiledFilters = ConcurrentHashMap<String, CompiledFilter>()
 
@@ -280,7 +287,7 @@ class ExpressionEngine {
         }
 
         // 解析数组访问
-        val arrayMatch = Regex("""\[(\d+)\](.*)""").find(path)
+        val arrayMatch = ARRAY_ACCESS_REGEX.find(path)
         if (arrayMatch != null) {
             val index = arrayMatch.groupValues[1].toIntOrNull() ?: return null
             val remaining = arrayMatch.groupValues[2]
@@ -357,7 +364,7 @@ class ExpressionEngine {
 
         while (remaining.isNotEmpty()) {
             // 检查数组访问
-            val arrayMatch = Regex("""\.?(\w+)?\[(\d+)\]""").find(remaining)
+            val arrayMatch = PATH_PART_REGEX.find(remaining)
             if (arrayMatch != null) {
                 val objectPath = arrayMatch.groupValues[1]
                 val arrayIndex = arrayMatch.groupValues[2].toIntOrNull()
@@ -615,16 +622,29 @@ class ExpressionEngine {
     }
 
     /**
-     * 执行过滤器
-     * @param expression 过滤器表达式
-     * @param data 消息数据
-     * @param headers 可选的 Headers Map，用于 $headers.mqtt_topic 等访问
+     * 执行过滤器（从原始字节解析 JSON）
      */
     fun executeFilter(expression: String, data: ByteArray, headers: Map<String, String>? = null): Boolean {
         val json = try {
             JSONObject(String(data))
         } catch (e: Exception) {
             return true // 非 JSON 数据默认通过
+        }
+
+        val compiled = compileFilter(expression)
+        if (compiled.error != null) return true
+
+        return evaluateCompiledFilter(compiled.parsed!!, json, headers)
+    }
+
+    /**
+     * 执行过滤器（复用已解析的 JSONObject，避免重复解析）
+     */
+    fun executeFilter(expression: String, preParsedJson: JSONObject?, data: ByteArray, headers: Map<String, String>? = null): Boolean {
+        val json = preParsedJson ?: try {
+            JSONObject(String(data))
+        } catch (e: Exception) {
+            return true
         }
 
         val compiled = compileFilter(expression)
@@ -720,7 +740,7 @@ class ExpressionEngine {
         val trimmed = expression.trim()
 
         // 检查是否是函数调用
-        val funcMatch = Regex("""^(\w+)\((.*)\)$""").find(trimmed)
+        val funcMatch = FUNC_CALL_REGEX.find(trimmed)
         if (funcMatch != null) {
             val funcName = funcMatch.groupValues[1]
             val argsStr = funcMatch.groupValues[2]
@@ -872,6 +892,29 @@ class ExpressionEngine {
     ): ByteArray {
         val dataStr = String(data)
         val json = try { JSONObject(dataStr) } catch (_: Exception) { null }
+        return doEvaluateFormatTemplate(template, dataStr, json, headers)
+    }
+
+    /**
+     * 格式化模板（复用已解析的 JSONObject）
+     */
+    fun evaluateFormatTemplate(
+        template: String,
+        data: ByteArray,
+        preParsedJson: JSONObject?,
+        headers: Map<String, String>
+    ): ByteArray {
+        val dataStr = String(data)
+        val json = preParsedJson ?: try { JSONObject(dataStr) } catch (_: Exception) { null }
+        return doEvaluateFormatTemplate(template, dataStr, json, headers)
+    }
+
+    private fun doEvaluateFormatTemplate(
+        template: String,
+        dataStr: String,
+        json: JSONObject?,
+        headers: Map<String, String>
+    ): ByteArray {
 
         val result = StringBuilder()
         var i = 0
@@ -921,7 +964,7 @@ class ExpressionEngine {
         }
 
         // 函数调用 (需要 JSON)
-        val funcMatch = Regex("""^(\w+)\((.*)\)$""").find(normalizedExpr)
+        val funcMatch = FUNC_CALL_REGEX.find(normalizedExpr)
         if (funcMatch != null && json != null) {
             val funcResult = evaluateExtractExpression(json, normalizedExpr, headers)
             return funcResult?.let { String(it) } ?: ""

@@ -303,9 +303,10 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
             message.qos = qos
             lastOutboundActivity = System.currentTimeMillis()
             val token = client?.publish(topic, message)
-            token?.waitForCompletion(5000)
+            // Fire-and-forget: 不再 waitForCompletion，避免阻塞 RuleEngine worker 线程
+            // 发布失败通过 connectionLost 回调感知
             LogManager.logDebug("MQTT", "Published to $topic: ${data.size} bytes")
-            true
+            token != null
         } catch (e: Exception) {
             LogManager.logError("MQTT", "Publish error: ${e.message}")
             errorListener?.invoke(e)

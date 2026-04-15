@@ -9,11 +9,14 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.net.HttpURLConnection
-import java.net.URL
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.TimeUnit
 
 /**
- * HTTP 输出
+ * HTTP 输出（OkHttp 连接池复用）
  */
 class HttpOutput(
     override val name: String,
@@ -26,6 +29,15 @@ class HttpOutput(
     private var available = true
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    // 共享 OkHttpClient，复用连接池
+    private val client by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(config.timeout.millis, TimeUnit.MILLISECONDS)
+            .readTimeout(config.timeout.millis, TimeUnit.MILLISECONDS)
+            .writeTimeout(config.timeout.millis, TimeUnit.MILLISECONDS)
+            .build()
+    }
 
     override fun send(item: QueueItem, callback: ((Boolean) -> Unit)?) {
         scope.launch {
@@ -67,27 +79,19 @@ class HttpOutput(
 
     private fun doSend(item: QueueItem): OutputResult {
         return try {
-            val url = URL(config.url)
-            val connection = url.openConnection() as HttpURLConnection
+            val body = item.data.toRequestBody("application/octet-stream".toMediaType())
+            val request = Request.Builder()
+                .url(config.url)
+                .method(config.method, body)
+                .build()
 
-            connection.requestMethod = config.method
-            connection.doOutput = true
-            connection.doInput = true
-            connection.connectTimeout = config.timeout.millis.toInt()
-            connection.readTimeout = config.timeout.millis.toInt()
-            connection.setRequestProperty("Content-Type", "application/octet-stream")
-
-            connection.outputStream.use { output ->
-                output.write(item.data)
-            }
-
-            val responseCode = connection.responseCode
-            connection.disconnect()
-
-            if (responseCode in 200..299) {
-                OutputResult.Success(responseCode)
-            } else {
-                OutputResult.Failure("HTTP $responseCode")
+            client.newCall(request).execute().use { response ->
+                val responseCode = response.code
+                if (responseCode in 200..299) {
+                    OutputResult.Success(responseCode)
+                } else {
+                    OutputResult.Failure("HTTP $responseCode")
+                }
             }
         } catch (e: Exception) {
             available = false

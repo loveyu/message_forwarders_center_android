@@ -71,6 +71,15 @@ class WebSocketLink(override val config: LinkConfig) : Link {
     companion object {
         private const val MAX_CONSECUTIVE_FAILURES = 5
         private const val DEFAULT_RETRY_INTERVAL_MS = 10_000L // 10 seconds
+
+        // 共享 OkHttpClient，复用连接池和线程池
+        private val sharedClient by lazy {
+            OkHttpClient.Builder()
+                .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .pingInterval(30, TimeUnit.SECONDS)
+                .build()
+        }
     }
 
     init {
@@ -233,11 +242,6 @@ class WebSocketLink(override val config: LinkConfig) : Link {
         val writeTimeout = params["writeTimeout"]?.toLongOrNull() ?: 30L
         val pingInterval = params["pingInterval"]?.toLongOrNull() ?: 30L
 
-        val builder = OkHttpClient.Builder()
-            .readTimeout(readTimeout, TimeUnit.SECONDS)
-            .writeTimeout(writeTimeout, TimeUnit.SECONDS)
-            .pingInterval(pingInterval, TimeUnit.SECONDS)
-
         // TLS: wss:// scheme or explicit tls config
         val isWss = config.dsn?.startsWith("wss://") == true
         if (isWss || config.tls != null) {
@@ -248,14 +252,23 @@ class WebSocketLink(override val config: LinkConfig) : Link {
                     peerCertificates = certs
                 }
                 if (sslConfig != null) {
-                    builder.sslSocketFactory(sslConfig.socketFactory, sslConfig.trustManager)
+                    return sharedClient.newBuilder()
+                        .readTimeout(readTimeout, TimeUnit.SECONDS)
+                        .writeTimeout(writeTimeout, TimeUnit.SECONDS)
+                        .pingInterval(pingInterval, TimeUnit.SECONDS)
+                        .sslSocketFactory(sslConfig.socketFactory, sslConfig.trustManager)
+                        .build()
                 }
             } else {
                 LogManager.logWarn("WS", "No context available for TLS configuration, using system defaults")
             }
         }
 
-        return builder.build()
+        return sharedClient.newBuilder()
+            .readTimeout(readTimeout, TimeUnit.SECONDS)
+            .writeTimeout(writeTimeout, TimeUnit.SECONDS)
+            .pingInterval(pingInterval, TimeUnit.SECONDS)
+            .build()
     }
 
     override fun disconnect() {

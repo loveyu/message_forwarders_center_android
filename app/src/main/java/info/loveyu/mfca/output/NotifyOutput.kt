@@ -29,7 +29,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.regex.Pattern
 
 /**
  * 通知输出
@@ -42,7 +41,7 @@ class NotifyOutput(
 
     override val type: OutputType = OutputType.internal
 
-    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val iconCacheManager = IconCacheManager(context)
     private val historyDbHelper = NotifyHistoryDbHelper(context)
 
@@ -55,8 +54,8 @@ class NotifyOutput(
         // 全局序列号生成器 (0-999 循环)
         private val sequence = AtomicInteger(0)
 
-        // 模板变量正则: {variable} 或 {date:format}
-        private val TEMPLATE_REGEX = Pattern.compile("\\{(\\w+(?:\\.[\\w.]+)?|date:[^}]+)\\}")
+        // 模板变量正则: {variable} 或 {date:format}（预编译）
+        private val TEMPLATE_REGEX = Regex("\\{(\\w+(?:\\.[\\w.]+)?|date:[^}]+)\\}")
     }
 
     init {
@@ -229,7 +228,7 @@ class NotifyOutput(
         val dataStr = String(item.data, Charsets.UTF_8)
         val sdfCache = mutableMapOf<String, SimpleDateFormat>()
 
-        return template.replace(TEMPLATE_REGEX.toRegex()) { match ->
+        return template.replace(TEMPLATE_REGEX) { match ->
             val key = match.groupValues[1]
             when {
                 key == "channel" -> channelId

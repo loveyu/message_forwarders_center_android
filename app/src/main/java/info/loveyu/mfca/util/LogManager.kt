@@ -11,8 +11,9 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStreamWriter
 import java.lang.ref.WeakReference
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 enum class LogLevel(val androidPriority: Int, val tag: String) {
@@ -41,8 +42,15 @@ object LogManager {
     private var logFileWriter: BufferedWriter? = null
     private var contextRef: WeakReference<Context>? = null
 
-    private val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-    private val fileDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+    // 线程安全的 DateTimeFormatter（替代非线程安全的 SimpleDateFormat）
+    private val dateFormat = DateTimeFormatter.ofPattern("HH:mm:ss", Locale.getDefault())
+        .withZone(ZoneId.systemDefault())
+    private val fileDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+        .withZone(ZoneId.systemDefault())
+
+    // 环形缓冲：避免每条日志复制整个列表
+    private val logBuffer = ArrayDeque<String>(1000)
+    private val bufferLock = Any()
 
     fun init(ctx: Context, prefs: Preferences) {
         contextRef = WeakReference(ctx.applicationContext)
@@ -63,7 +71,7 @@ object LogManager {
         if (isPaused) return
         if (level.androidPriority < currentLogLevel.androidPriority) return
 
-        val now = Date()
+        val now = Instant.now()
         val timestamp = dateFormat.format(now)
         val fileTimestamp = fileDateFormat.format(now)
         val contextJson = context?.let {
@@ -84,8 +92,14 @@ object LogManager {
             Log.println(level.androidPriority, tag, logcatMsg)
         }
 
-        // Write to UI log
-        _logs.value = (_logs.value + logLine).takeLast(maxLogLines)
+        // 环形缓冲写入，零复制
+        synchronized(bufferLock) {
+            while (logBuffer.size >= maxLogLines) {
+                logBuffer.removeFirst()
+            }
+            logBuffer.addLast(logLine)
+            _logs.value = logBuffer.toList()
+        }
 
         // Write to file if enabled
         if (isFileLoggingEnabled) {
@@ -108,7 +122,10 @@ object LogManager {
     fun logError(tag: String, message: String) = log(LogLevel.ERROR, tag, message)
 
     fun clearLogs() {
-        _logs.value = emptyList()
+        synchronized(bufferLock) {
+            logBuffer.clear()
+            _logs.value = emptyList()
+        }
     }
 
     fun pauseLogs() {
@@ -166,7 +183,8 @@ object LogManager {
             logDir.mkdirs()
         }
 
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val timestamp = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss", Locale.getDefault())
+            .withZone(ZoneId.systemDefault()).format(Instant.now())
         logFile = File(logDir, "log_$timestamp.txt")
 
         try {
@@ -175,9 +193,11 @@ object LogManager {
                 8192
             )
             // Write existing logs to file
-            _logs.value.forEach { line ->
-                logFileWriter?.write(line)
-                logFileWriter?.write("\n")
+            synchronized(bufferLock) {
+                logBuffer.forEach { line ->
+                    logFileWriter?.write(line)
+                    logFileWriter?.write("\n")
+                }
             }
             logFileWriter?.flush()
         } catch (e: Exception) {
@@ -223,11 +243,13 @@ object LogManager {
             logDir.mkdirs()
         }
 
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val timestamp = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss", Locale.getDefault())
+            .withZone(ZoneId.systemDefault()).format(Instant.now())
         val file = File(logDir, "log_$timestamp.log")
 
         try {
-            file.writeText(_logs.value.joinToString("\n"))
+            val logsCopy = synchronized(bufferLock) { logBuffer.toList() }
+            file.writeText(logsCopy.joinToString("\n"))
             return file.absolutePath
         } catch (e: Exception) {
             return null

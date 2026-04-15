@@ -79,8 +79,13 @@ class ClipboardOutput(
         private val logHistory = mutableMapOf<String, ArrayDeque<String>>()
         private const val MAX_LOG_ENTRIES = 3
 
+        // 预分配 MessageDigest，避免每次 send 都 getInstance
+        private val sha1Digest by lazy { MessageDigest.getInstance("SHA-1") }
+
+        @Synchronized
         private fun sha1(text: String): String {
-            val digest = MessageDigest.getInstance("SHA-1")
+            val digest = sha1Digest
+            digest.reset()
             val hashBytes = digest.digest(text.toByteArray())
             return hashBytes.joinToString("") { "%02x".format(it) }
         }

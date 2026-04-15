@@ -116,10 +116,23 @@ class RuleEngine(
         }
     }
 
+    /**
+     * 尝试从 ByteArray 解析 JSONObject，失败返回 null
+     */
+    private fun parseJson(data: ByteArray): JSONObject? {
+        return try {
+            JSONObject(String(data))
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private suspend fun processRule(rule: RuleConfig, inputMessage: InputMessage) {
         LogManager.logDebug("RULE", "Processing rule: ${rule.name} (${rule.pipeline.size} steps)")
 
         var currentData = inputMessage.data
+        // 跟踪已解析的 JSONObject，数据不变时复用
+        var currentJson: JSONObject? = parseJson(currentData)
 
         for (step in rule.pipeline) {
             val transform = step.transform
@@ -136,9 +149,10 @@ class RuleEngine(
             // Apply enrich if specified (before other transforms)
             if (!skipStep && transform?.enrich != null) {
                 try {
-                    val enriched = applyEnrich(transform.enrich, currentData)
+                    val enriched = applyEnrich(transform.enrich, currentData, currentJson)
                     if (enriched != null) {
                         currentData = enriched
+                        currentJson = parseJson(currentData)
                     }
                 } catch (e: Exception) {
                     LogManager.logWarn("RULE", "Rule [${rule.name}] enrich [${transform.enrich}] failed: ${e.message}")
@@ -147,19 +161,21 @@ class RuleEngine(
 
             // Apply transform if present
             if (!skipStep && transform != null) {
-                val transformed = applyTransform(transform, currentData, inputMessage)
+                val transformed = applyTransform(transform, currentData, currentJson, inputMessage)
                 if (transformed == null) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] extract [${transform.extract}] -> null, SKIPPED")
                     skipStep = true
-                } else {
+                } else if (transformed !== currentData) {
+                    // 数据实际发生了变化，重新解析 JSON
                     currentData = transformed
+                    currentJson = parseJson(currentData)
                 }
             }
 
-            // Apply filter if present
+            // Apply filter if present (复用 currentJson，无需重新解析)
             if (!skipStep && transform?.filter != null) {
                 val passed = withContext(Dispatchers.Default) {
-                    evaluateFilter(transform.filter!!, currentData, inputMessage.headers)
+                    expressionEngine.executeFilter(transform.filter!!, currentJson, currentData, inputMessage.headers)
                 }
                 if (!passed) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] filter [${transform.filter}] -> REJECTED")
@@ -203,6 +219,7 @@ class RuleEngine(
         LogManager.logDebug("RULE", "Processing rule (sync): ${rule.name} (${rule.pipeline.size} steps)")
 
         var currentData = inputMessage.data
+        var currentJson: JSONObject? = parseJson(currentData)
 
         for (step in rule.pipeline) {
             val transform = step.transform
@@ -219,12 +236,12 @@ class RuleEngine(
             // Apply enrich if specified (before other transforms)
             if (!skipStep && transform?.enrich != null) {
                 try {
-                    // Run synchronously using runBlocking equivalent
                     val enriched = kotlinx.coroutines.runBlocking {
-                        applyEnrich(transform.enrich, currentData)
+                        applyEnrich(transform.enrich, currentData, currentJson)
                     }
                     if (enriched != null) {
                         currentData = enriched
+                        currentJson = parseJson(currentData)
                     }
                 } catch (e: Exception) {
                     LogManager.logWarn("RULE", "Rule [${rule.name}] enrich [${transform.enrich}] failed: ${e.message}")
@@ -233,18 +250,19 @@ class RuleEngine(
 
             // Apply transform if present
             if (!skipStep && transform != null) {
-                val transformed = applyTransform(transform, currentData, inputMessage)
+                val transformed = applyTransform(transform, currentData, currentJson, inputMessage)
                 if (transformed == null) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] extract [${transform.extract}] -> null, SKIPPED")
                     skipStep = true
-                } else {
+                } else if (transformed !== currentData) {
                     currentData = transformed
+                    currentJson = parseJson(currentData)
                 }
             }
 
             // Apply filter if present
             if (!skipStep && transform?.filter != null) {
-                if (!evaluateFilter(transform.filter!!, currentData, inputMessage.headers)) {
+                if (!expressionEngine.executeFilter(transform.filter!!, currentJson, currentData, inputMessage.headers)) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] filter [${transform.filter}] -> REJECTED")
                     skipStep = true
                 }
@@ -258,7 +276,6 @@ class RuleEngine(
             step.to.forEach { outputName ->
                 val output = OutputManager.getOutput(outputName)
                 if (output != null) {
-                    // Skip non-internal outputs when forwarding is disabled
                     if (!ForwardService.isForwardingEnabled && output.type != OutputType.internal) {
                         LogManager.logInfo("RULE", "转发已暂停, 跳过输出: $outputName")
                         return@forEach
@@ -285,11 +302,12 @@ class RuleEngine(
     private fun applyTransform(
         transform: info.loveyu.mfca.config.TransformConfig,
         data: ByteArray,
+        preParsedJson: JSONObject?,
         inputMessage: InputMessage
     ): ByteArray? {
         var currentData = data
 
-        val json = try {
+        val json = preParsedJson ?: try {
             JSONObject(String(data))
         } catch (e: Exception) {
             if (transform.extract != null) return null
@@ -308,18 +326,10 @@ class RuleEngine(
 
         // Apply format template
         transform.format?.let { template ->
-            return applyFormat(template, currentData, inputMessage.headers)
+            return expressionEngine.evaluateFormatTemplate(template, currentData, json, inputMessage.headers)
         }
 
         return currentData
-    }
-
-    /**
-     * 格式化模板: 通过表达式引擎解析 {expression} 占位符
-     * 支持 {data}, {headers}, {$headers.X}, {path.to.key}, {func(arg)} 等
-     */
-    private fun applyFormat(template: String, data: ByteArray, headers: Map<String, String>): ByteArray {
-        return expressionEngine.evaluateFormatTemplate(template, data, headers)
     }
 
     private fun evaluateFilter(filter: String, data: ByteArray, headers: Map<String, String>?): Boolean {
@@ -383,7 +393,6 @@ class RuleEngine(
 
     private fun isText(data: ByteArray): Boolean {
         if (data.isEmpty()) return true
-        // Check if data is mostly printable ASCII
         var printable = 0
         for (b in data.take(100)) {
             val byte = b.toInt() and 0xFF
@@ -421,15 +430,12 @@ class RuleEngine(
 
     fun getAllRules(): Map<String, RuleConfig> = rules.toMap()
 
-    /**
-     * 获取表达式引擎（用于调试）
-     */
     fun getExpressionEngine(): ExpressionEngine = expressionEngine
 
     /**
      * Apply enrich step: parse "type:parameter" → find enricher → call enrich()
      */
-    private suspend fun applyEnrich(enrichSpec: String, data: ByteArray): ByteArray? {
+    private suspend fun applyEnrich(enrichSpec: String, data: ByteArray, preParsedJson: JSONObject?): ByteArray? {
         val colonIndex = enrichSpec.indexOf(':')
         if (colonIndex == -1) {
             LogManager.logWarn("RULE", "Invalid enrich spec: $enrichSpec (expected type:parameter)")
@@ -444,7 +450,7 @@ class RuleEngine(
             return null
         }
 
-        val json = try {
+        val json = preParsedJson ?: try {
             JSONObject(String(data))
         } catch (e: Exception) {
             LogManager.logWarn("RULE", "Enrich requires JSON data, got non-JSON")
@@ -455,9 +461,6 @@ class RuleEngine(
         return enriched.toString().toByteArray()
     }
 
-    /**
-     * 清理所有 enricher 内存缓存
-     */
     fun clearEnricherCaches() {
         enrichers.values.forEach { enricher ->
             if (enricher is GotifyIconEnricher) {
@@ -466,9 +469,6 @@ class RuleEngine(
         }
     }
 
-    /**
-     * 关闭引擎
-     */
     fun shutdown() {
         scope.cancel()
         workerPool.close()
