@@ -28,12 +28,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.link.LinkManager
+import kotlinx.coroutines.launch
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.ui.MainScreen
 import info.loveyu.mfca.ui.NotifyHistoryContent
@@ -213,14 +215,23 @@ private fun MainContent(
         }
     }
 
-    var notifyShowClearDialog by remember { mutableStateOf(false) }
+    var showTabLabel by remember { mutableStateOf(preferences.showTabLabel) }
+
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        showTabLabel = preferences.showTabLabel
+        onPauseOrDispose { }
+    }
+    val notifyDrawerState = remember { androidx.compose.material3.DrawerState(androidx.compose.material3.DrawerValue.Closed) }
+    val notifyScope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
             when (selectedTab) {
                 BottomTab.HOME -> MainTopBar()
                 BottomTab.NOTIFY_HISTORY -> NotifyHistoryTopBar(
-                    onClear = { notifyShowClearDialog = true }
+                    onMenuClick = {
+                        notifyScope.launch { notifyDrawerState.open() }
+                    }
                 )
             }
         },
@@ -229,7 +240,7 @@ private fun MainContent(
                 BottomTab.entries.forEach { tab ->
                     NavigationBarItem(
                         icon = { Icon(tab.icon, contentDescription = null) },
-                        label = { Text(stringResource(tab.labelResId)) },
+                        label = if (showTabLabel) {{ Text(stringResource(tab.labelResId)) }} else null,
                         selected = selectedTab == tab,
                         onClick = {
                             selectedTab = tab
@@ -257,8 +268,7 @@ private fun MainContent(
             BottomTab.NOTIFY_HISTORY -> NotifyHistoryContent(
                 onBack = { selectedTab = BottomTab.HOME },
                 highlightNotifyId = highlightNotifyId,
-                showClearDialog = notifyShowClearDialog,
-                onClearDialogDismissed = { notifyShowClearDialog = false },
+                drawerState = notifyDrawerState,
                 contentPadding = innerPadding
             )
         }

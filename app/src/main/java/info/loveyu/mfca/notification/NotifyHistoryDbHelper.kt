@@ -27,7 +27,7 @@ class NotifyHistoryDbHelper(context: Context) :
         const val COL_OUTPUT_NAME = "outputName"
         const val COL_CHANNEL = "channel"
         const val COL_TAG = "tag"
-        const val COL_GROUP = "group"
+        const val COL_GROUP = "notifyGroup"
         const val COL_ICON_URL = "iconUrl"
         const val COL_SOURCE_RULE = "sourceRule"
         const val COL_SOURCE_INPUT = "sourceInput"
@@ -258,6 +258,25 @@ class NotifyHistoryDbHelper(context: Context) :
     fun deleteAll(): Int {
         val db = writableDatabase
         return db.delete(TABLE_NAME, null, null)
+    }
+
+    /**
+     * 删除符合筛选条件的记录
+     */
+    fun deleteFiltered(
+        keyword: String? = null,
+        sourceRule: String? = null,
+        outputName: String? = null,
+        timeRange: TimeRange = TimeRange.ALL
+    ): Int {
+        val db = writableDatabase
+        val selection = buildSelection(keyword, sourceRule, outputName, timeRange)
+        val selectionArgs = buildSelectionArgs(keyword, sourceRule, outputName, timeRange)
+        return if (selection.isNullOrEmpty()) {
+            db.delete(TABLE_NAME, null, null)
+        } else {
+            db.delete(TABLE_NAME, selection, selectionArgs)
+        }
     }
 
     /**

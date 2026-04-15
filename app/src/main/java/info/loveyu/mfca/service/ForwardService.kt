@@ -287,10 +287,10 @@ class ForwardService : Service() {
             LinkManager.onFailureResetTick()
         }
 
-        // 5. 通知历史自动清理（≈10 分钟）
-        if (tickCount % FAILURE_RESET_TICK_INTERVAL == 0) {
-            NotifyHistoryCleanup.onTick(this)
-        }
+        // 5. 通知历史自动清理（暂时关闭，后续调整）
+        // if (tickCount % FAILURE_RESET_TICK_INTERVAL == 0) {
+        //     NotifyHistoryCleanup.onTick(this)
+        // }
 
         // 6. 批量 flush 日志文件缓冲
         LogManager.logDebug("SERVICE", "Tick #$tickCount end, flushing logs")

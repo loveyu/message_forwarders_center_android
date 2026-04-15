@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Forwarders Center</string>
+    <string name="app_name">Forwarders</string>
     <string name="server_running">服务运行中</string>
     <string name="server_stopped">服务已停止</string>
     <string name="start_server">启动服务</string>
@@ -81,7 +81,8 @@
     <string name="link_error_channel_name">连接错误</string>
     <string name="link_error_title">链接连接失败</string>
     <string name="link_recovered_title">链接已恢复</string>
-    <string name="notify_history">通知历史</string>
+    <string name="notify_history">通知管理</string>
     <string name="tab_home">主页</string>
     <string name="tab_notify_history">通知</string>
+    <string name="show_tab_label">显示底部导航标签</string>
 </resources>

@@ -13,7 +13,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,27 +28,30 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -60,12 +62,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.PaddingValues
 import info.loveyu.mfca.notification.NotifyHistoryDbHelper
 import info.loveyu.mfca.notification.NotifyRecord
 import info.loveyu.mfca.notification.TimeRange
@@ -81,14 +82,14 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 @Composable
-fun NotifyHistoryTopBar(onClear: () -> Unit) {
+fun NotifyHistoryTopBar(onMenuClick: () -> Unit) {
     TopAppBar(
-        title = { Text("通知历史") },
+        title = { Text("通知管理") },
         actions = {
-            IconButton(onClick = onClear) {
+            IconButton(onClick = onMenuClick) {
                 Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "清空"
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "菜单"
                 )
             }
         }
@@ -100,8 +101,7 @@ fun NotifyHistoryTopBar(onClear: () -> Unit) {
 fun NotifyHistoryContent(
     onBack: () -> Unit,
     highlightNotifyId: Int? = null,
-    showClearDialog: Boolean = false,
-    onClearDialogDismissed: () -> Unit = {},
+    drawerState: androidx.compose.material3.DrawerState,
     contentPadding: PaddingValues = PaddingValues()
 ) {
     val context = LocalContext.current
@@ -122,6 +122,10 @@ fun NotifyHistoryContent(
 
     var selectedRecord by remember { mutableStateOf<NotifyRecord?>(null) }
     var highlightId by remember { mutableStateOf<Long?>(null) }
+
+    // Drawer and filter state (not persisted)
+    var showTimeFilter by remember { mutableStateOf(false) }
+    var showClearConfirmDialog by remember { mutableStateOf(false) }
 
     val dbHelper = remember { NotifyHistoryDbHelper(context) }
 
@@ -177,7 +181,7 @@ fun NotifyHistoryContent(
         }
     }
 
-    // 详情视图 — 整体替换内容区
+    // Detail view — replaces content area
     if (selectedRecord != null) {
         NotifyDetailContent(
             record = selectedRecord!!,
@@ -195,89 +199,275 @@ fun NotifyHistoryContent(
         return
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(contentPadding)) {
-        SearchBar(keyword = searchKeyword, onKeywordChange = { searchKeyword = it })
-
-        FilterBar(
-            sourceRules = sourceRuleOptions,
-            outputNames = outputNameOptions,
-            selectedSourceRule = selectedSourceRule,
-            selectedOutputName = selectedOutputName,
-            selectedTimeRange = selectedTimeRange,
-            onSourceRuleChange = { selectedSourceRule = it; loadRecords() },
-            onOutputNameChange = { selectedOutputName = it; loadRecords() },
-            onTimeRangeChange = { selectedTimeRange = it; loadRecords() }
-        )
-
-        Text(
-            text = "共 $totalCount 条记录",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-        )
-
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else if (records.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(text = "暂无通知记录", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        gesturesEnabled = true,
+        drawerContent = {
+            ModalDrawerSheet(
+                modifier = Modifier.fillMaxWidth(0.75f),
+                windowInsets = androidx.compose.foundation.layout.WindowInsets(0)
             ) {
-                itemsIndexed(items = records, key = { _, record -> record.id }) { _, record ->
-                    NotifyRecordCard(
-                        record = record,
-                        isHighlighted = record.id == highlightId,
-                        onClick = { selectedRecord = record },
-                        onLongClick = {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("通知内容", record.content))
-                            Toast.makeText(context, "已复制内容", Toast.LENGTH_SHORT).show()
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                        .padding(contentPadding)
+                ) {
+                    Text(
+                        text = "筛选设置",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    // Source rule filter
+                    Text(
+                        text = "来源规则",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                    FilterOptionList(
+                        options = sourceRuleOptions,
+                        selected = selectedSourceRule,
+                        onSelect = {
+                            selectedSourceRule = it
+                            loadRecords()
                         }
                     )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Output name filter
+                    Text(
+                        text = "输出名称",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                    FilterOptionList(
+                        options = outputNameOptions,
+                        selected = selectedOutputName,
+                        onSelect = {
+                            selectedOutputName = it
+                            loadRecords()
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Time filter toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("显示时间筛选")
+                        Switch(
+                            checked = showTimeFilter,
+                            onCheckedChange = { showTimeFilter = it }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    // Clear filtered records
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            showClearConfirmDialog = true
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("清空当前筛选记录")
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+        }
+    ) {
+    // Main content
+        Column(modifier = Modifier.fillMaxSize().padding(contentPadding)) {
+            SearchBar(keyword = searchKeyword, onKeywordChange = { searchKeyword = it })
+
+            // Time filter row (conditionally shown)
+            if (showTimeFilter) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    TimeRangeChip("全部", selectedTimeRange == TimeRange.ALL) { selectedTimeRange = TimeRange.ALL; loadRecords() }
+                    TimeRangeChip("今日", selectedTimeRange == TimeRange.TODAY) { selectedTimeRange = TimeRange.TODAY; loadRecords() }
+                    TimeRangeChip("7天", selectedTimeRange == TimeRange.WEEK) { selectedTimeRange = TimeRange.WEEK; loadRecords() }
+                    TimeRangeChip("30天", selectedTimeRange == TimeRange.MONTH) { selectedTimeRange = TimeRange.MONTH; loadRecords() }
+                }
+            }
+
+            // Active filter indicators
+            val hasActiveFilter = selectedSourceRule != null || selectedOutputName != null || (showTimeFilter && selectedTimeRange != TimeRange.ALL)
+            if (hasActiveFilter) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    selectedSourceRule?.let {
+                        FilterIndicatorChip("来源: $it") {
+                            selectedSourceRule = null
+                            loadRecords()
+                        }
+                    }
+                    selectedOutputName?.let {
+                        FilterIndicatorChip("输出: $it") {
+                            selectedOutputName = null
+                            loadRecords()
+                        }
+                    }
+                    if (showTimeFilter && selectedTimeRange != TimeRange.ALL) {
+                        val label = when (selectedTimeRange) {
+                            TimeRange.TODAY -> "今日"
+                            TimeRange.WEEK -> "7天"
+                            TimeRange.MONTH -> "30天"
+                            TimeRange.ALL -> "全部"
+                        }
+                        FilterIndicatorChip("时间: $label") {
+                            selectedTimeRange = TimeRange.ALL
+                            loadRecords()
+                        }
+                    }
+                }
+            }
+
+            if (totalCount > 0) {
+                Text(
+                    text = "共 $totalCount 条记录",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+            }
+
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (records.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(text = "暂无通知记录", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    itemsIndexed(items = records, key = { _, record -> record.id }) { _, record ->
+                        NotifyRecordCard(
+                            record = record,
+                            isHighlighted = record.id == highlightId,
+                            onClick = { selectedRecord = record },
+                            onLongClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("通知内容", record.content))
+                                Toast.makeText(context, "已复制内容", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
                 }
             }
         }
     }
 
-    if (showClearDialog) {
+    // Clear confirmation dialog
+    if (showClearConfirmDialog) {
         AlertDialog(
-            onDismissRequest = onClearDialogDismissed,
-            title = { Text("清空所有记录") },
-            text = { Text("确定要清空所有通知历史记录吗？此操作不可撤销。") },
+            onDismissRequest = { showClearConfirmDialog = false },
+            title = { Text("清空筛选记录") },
+            text = { Text("确定要清空当前筛选条件下的所有通知记录吗？此操作不可撤销。") },
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch(Dispatchers.IO) {
-                        dbHelper.deleteAll()
+                        dbHelper.deleteFiltered(
+                            keyword = searchKeyword.ifBlank { null },
+                            sourceRule = selectedSourceRule,
+                            outputName = selectedOutputName,
+                            timeRange = selectedTimeRange
+                        )
                         launch(Dispatchers.Main) {
-                            onClearDialogDismissed()
+                            showClearConfirmDialog = false
                             loadRecords()
                         }
                     }
                 }) { Text("清空", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = onClearDialogDismissed) { Text("取消") }
+                TextButton(onClick = { showClearConfirmDialog = false }) { Text("取消") }
             }
         )
     }
 }
 
-// 保持旧名兼容（NotifyHistoryScreen 作为组合入口）
+@Composable
+private fun FilterOptionList(
+    options: List<String>,
+    selected: String?,
+    onSelect: (String?) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        FilterOptionItem(label = "全部", isSelected = selected == null) { onSelect(null) }
+        options.forEach { option ->
+            FilterOptionItem(label = option, isSelected = selected == option) { onSelect(option) }
+        }
+    }
+}
+
+@Composable
+private fun FilterOptionItem(label: String, isSelected: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+        )
+    }
+}
+
+@Composable
+private fun FilterIndicatorChip(label: String, onClear: () -> Unit) {
+    AssistChip(
+        onClick = onClear,
+        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+        modifier = Modifier.height(28.dp)
+    )
+}
+
+// Keep old name for compatibility
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotifyHistoryScreen(
     onBack: () -> Unit,
     highlightNotifyId: Int? = null,
     modifier: Modifier = Modifier
 ) {
-    NotifyHistoryContent(onBack = onBack, highlightNotifyId = highlightNotifyId)
+    val drawerState = rememberDrawerState(androidx.compose.material3.DrawerValue.Closed)
+    NotifyHistoryContent(onBack = onBack, highlightNotifyId = highlightNotifyId, drawerState = drawerState)
 }
 
 @Composable
@@ -285,60 +475,12 @@ private fun SearchBar(keyword: String, onKeywordChange: (String) -> Unit) {
     OutlinedTextField(
         value = keyword,
         onValueChange = onKeywordChange,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp),
         placeholder = { Text("搜索标题、内容...") },
-        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
         singleLine = true,
-        shape = RoundedCornerShape(24.dp)
+        shape = RoundedCornerShape(12.dp),
     )
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun FilterBar(
-    sourceRules: List<String>,
-    outputNames: List<String>,
-    selectedSourceRule: String?,
-    selectedOutputName: String?,
-    selectedTimeRange: TimeRange,
-    onSourceRuleChange: (String?) -> Unit,
-    onOutputNameChange: (String?) -> Unit,
-    onTimeRangeChange: (TimeRange) -> Unit
-) {
-    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterDropdown(label = "来源规则", options = sourceRules, selected = selectedSourceRule, onSelect = onSourceRuleChange, modifier = Modifier.weight(1f))
-            FilterDropdown(label = "输出名称", options = outputNames, selected = selectedOutputName, onSelect = onOutputNameChange, modifier = Modifier.weight(1f))
-        }
-        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            TimeRangeChip("全部", selectedTimeRange == TimeRange.ALL) { onTimeRangeChange(TimeRange.ALL) }
-            TimeRangeChip("今日", selectedTimeRange == TimeRange.TODAY) { onTimeRangeChange(TimeRange.TODAY) }
-            TimeRangeChip("7天", selectedTimeRange == TimeRange.WEEK) { onTimeRangeChange(TimeRange.WEEK) }
-            TimeRangeChip("30天", selectedTimeRange == TimeRange.MONTH) { onTimeRangeChange(TimeRange.MONTH) }
-        }
-    }
-}
-
-@Composable
-private fun FilterDropdown(label: String, options: List<String>, selected: String?, onSelect: (String?) -> Unit, modifier: Modifier = Modifier) {
-    var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }, modifier = modifier) {
-        OutlinedTextField(
-            value = selected ?: "",
-            onValueChange = {},
-            readOnly = true,
-            placeholder = { Text(label, style = MaterialTheme.typography.bodySmall) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
-            textStyle = MaterialTheme.typography.bodySmall
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(text = { Text("全部", style = MaterialTheme.typography.bodySmall) }, onClick = { onSelect(null); expanded = false })
-            options.forEach { option ->
-                DropdownMenuItem(text = { Text(option, style = MaterialTheme.typography.bodySmall) }, onClick = { onSelect(option); expanded = false })
-            }
-        }
-    }
 }
 
 @Composable

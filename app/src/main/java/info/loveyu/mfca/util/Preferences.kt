@@ -49,6 +49,10 @@ class Preferences(context: Context) {
         get() = prefs.getInt("max_log_lines", 1000)
         set(value) = prefs.edit().putInt("max_log_lines", value).apply()
 
+    var showTabLabel: Boolean
+        get() = prefs.getBoolean("show_tab_label", true)
+        set(value) = prefs.edit().putBoolean("show_tab_label", value).apply()
+
     fun saveFullConfig(configJson: String) {
         prefs.edit().putString("full_config", configJson).apply()
     }

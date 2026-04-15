@@ -119,6 +119,7 @@ fun SettingsScreenContent(
     var showClearConfirmDialog by remember { mutableStateOf(false) }
     var showExportSuccess by remember { mutableStateOf<String?>(null) }
     var autoStart by remember { mutableStateOf(false) }
+    var showTabLabel by remember { mutableStateOf(preferences.showTabLabel) }
 
     // Icon cache state
     var iconCacheCount by remember { mutableIntStateOf(0) }
@@ -372,6 +373,29 @@ fun SettingsScreenContent(
                                 val newStatus = currentStatus.copy(autoStart = enabled)
                                 AppStatusManager.saveStatus(context, newStatus)
                                 LogManager.log("SETTINGS", "Auto-start ${if (enabled) "enabled" else "disabled"}")
+                            }
+                        )
+                    }
+                }
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(stringResource(R.string.show_tab_label))
+                        Switch(
+                            checked = showTabLabel,
+                            onCheckedChange = { enabled ->
+                                showTabLabel = enabled
+                                preferences.showTabLabel = enabled
                             }
                         )
                     }
