@@ -1,9 +1,6 @@
 package info.loveyu.mfca
 
 import android.Manifest
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -15,6 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -38,7 +36,9 @@ import androidx.core.content.ContextCompat
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.ui.MainScreen
-import info.loveyu.mfca.ui.NotifyHistoryScreen
+import info.loveyu.mfca.ui.NotifyHistoryContent
+import info.loveyu.mfca.ui.NotifyHistoryTopBar
+import info.loveyu.mfca.ui.MainTopBar
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import info.loveyu.mfca.util.AppStatusManager
 import info.loveyu.mfca.util.LogManager
@@ -61,30 +61,24 @@ class MainActivity : ComponentActivity() {
     ) { granted ->
         if (!granted) {
             try {
-                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
                     putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-                }
-                startActivity(intent)
-            } catch (_: Exception) {
-            }
+                })
+            } catch (_: Exception) {}
         }
     }
 
     private val wifiPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
-        if (ForwardService.isServiceAlive()) {
-            LinkManager.refreshNetworkState()
-        }
+        if (ForwardService.isServiceAlive()) LinkManager.refreshNetworkState()
         requestBackgroundLocationIfNeeded()
     }
 
     private val backgroundLocationLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { _ ->
-        if (ForwardService.isServiceAlive()) {
-            LinkManager.refreshNetworkState()
-        }
+        if (ForwardService.isServiceAlive()) LinkManager.refreshNetworkState()
     }
 
     private fun requestBackgroundLocationIfNeeded() {
@@ -103,7 +97,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Android 11+ 请求所有文件访问权限
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
                 try {
@@ -136,7 +129,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // 处理初始 intent
         handleIntent(intent)
 
         setContent {
@@ -183,17 +175,15 @@ class MainActivity : ComponentActivity() {
     }
 
     internal fun startServer() {
-        val intent = Intent(this, ForwardService::class.java).apply {
+        startForegroundService(Intent(this, ForwardService::class.java).apply {
             action = ForwardService.ACTION_START
-        }
-        startForegroundService(intent)
+        })
     }
 
     internal fun stopServer() {
-        val intent = Intent(this, ForwardService::class.java).apply {
+        startService(Intent(this, ForwardService::class.java).apply {
             action = ForwardService.ACTION_STOP
-        }
-        startService(intent)
+        })
     }
 }
 
@@ -207,7 +197,6 @@ private fun MainContent(
     var selectedTab by remember { mutableStateOf(BottomTab.HOME) }
     var highlightNotifyId by remember { mutableStateOf<Int?>(null) }
 
-    // 监听 pendingHighlight 变化（通知点击触发）
     LaunchedEffect(pendingHighlight.value) {
         if (pendingHighlight.value && pendingNotifyId.intValue != -1) {
             highlightNotifyId = pendingNotifyId.intValue
@@ -224,7 +213,17 @@ private fun MainContent(
         }
     }
 
+    var notifyShowClearDialog by remember { mutableStateOf(false) }
+
     Scaffold(
+        topBar = {
+            when (selectedTab) {
+                BottomTab.HOME -> MainTopBar()
+                BottomTab.NOTIFY_HISTORY -> NotifyHistoryTopBar(
+                    onClear = { notifyShowClearDialog = true }
+                )
+            }
+        },
         bottomBar = {
             NavigationBar {
                 BottomTab.entries.forEach { tab ->
@@ -234,15 +233,13 @@ private fun MainContent(
                         selected = selectedTab == tab,
                         onClick = {
                             selectedTab = tab
-                            if (tab != BottomTab.NOTIFY_HISTORY) {
-                                highlightNotifyId = null
-                            }
+                            if (tab != BottomTab.NOTIFY_HISTORY) highlightNotifyId = null
                         }
                     )
                 }
             }
         }
-    ) { padding ->
+    ) { innerPadding ->
         when (selectedTab) {
             BottomTab.HOME -> MainScreen(
                 onStartServer = {
@@ -254,13 +251,15 @@ private fun MainContent(
                     }
                 },
                 onStopServer = { activity.stopServer() },
-                modifier = Modifier.padding(padding)
+                contentPadding = innerPadding
             )
 
-            BottomTab.NOTIFY_HISTORY -> NotifyHistoryScreen(
+            BottomTab.NOTIFY_HISTORY -> NotifyHistoryContent(
                 onBack = { selectedTab = BottomTab.HOME },
                 highlightNotifyId = highlightNotifyId,
-                modifier = Modifier.padding(padding)
+                showClearDialog = notifyShowClearDialog,
+                onClearDialogDismissed = { notifyShowClearDialog = false },
+                contentPadding = innerPadding
             )
         }
     }
