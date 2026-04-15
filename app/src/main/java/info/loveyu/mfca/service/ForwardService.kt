@@ -542,7 +542,6 @@ class ForwardService : Service() {
 
             receivedCount++
             onStatsChanged?.invoke()
-            updateNotification()
 
             val target = preferences.forwardTarget
             if (target.isNotEmpty() && isForwardingEnabled) {
@@ -550,7 +549,6 @@ class ForwardService : Service() {
                     if (success) {
                         forwardedCount++
                         onStatsChanged?.invoke()
-                        updateNotification()
                     }
                 }
             }
@@ -622,7 +620,6 @@ class ForwardService : Service() {
             ruleEngine = RuleEngine(config, this) {
                 forwardedCount++
                 onStatsChanged?.invoke()
-                updateNotification()
             }
 
             // 6. Initialize Inputs with message handler
@@ -674,7 +671,6 @@ class ForwardService : Service() {
 
         receivedCount++
         onStatsChanged?.invoke()
-        updateNotification()
 
         // Process through rule engine
         LogManager.log("TRACE:FS", "Calling ruleEngine.process for ${message.source}")
@@ -789,10 +785,10 @@ class ForwardService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // 状态栏显示: L链路数 I输入数 O输出数 R接收 S发送
+        // 状态栏显示: L链路数 I输入数 O输出数
         val statsText = if (isRunning) {
             buildString {
-                append("L${linkCount} I${inputCount} O${outputCount} · R${receivedCount} S${forwardedCount}")
+                append("L${linkCount} I${inputCount} O${outputCount}")
                 if (!isReceivingEnabled) append(" | 暂停接收")
                 if (!isForwardingEnabled) append(" | 暂停转发")
                 if (isWakeLockEnabled) append(" | W锁")
@@ -845,7 +841,7 @@ class ForwardService : Service() {
     private fun updateNotification() {
         val statsText = if (isRunning) {
             buildString {
-                append("L${linkCount} I${inputCount} O${outputCount} · R${receivedCount} S${forwardedCount}")
+                append("L${linkCount} I${inputCount} O${outputCount}")
                 if (!isReceivingEnabled) append(" | 暂停接收")
                 if (!isForwardingEnabled) append(" | 暂停转发")
                 if (isWakeLockEnabled) append(" | W锁")

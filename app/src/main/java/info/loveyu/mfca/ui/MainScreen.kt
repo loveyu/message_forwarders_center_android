@@ -278,7 +278,7 @@ fun MainScreen(
                     Text(
                         text = when {
                             isStarting -> "启动中..."
-                            isRunning -> stringResource(R.string.status_running)
+                            isRunning -> "${stringResource(R.string.status_running)} · R${ForwardService.receivedCount} S${ForwardService.forwardedCount}"
                             else -> stringResource(R.string.status_stopped)
                         },
                         style = MaterialTheme.typography.titleMedium,
