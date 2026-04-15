@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import info.loveyu.mfca.config.LinkConfig
 import info.loveyu.mfca.config.LinkType
+import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.CertResolver
 import info.loveyu.mfca.util.LogManager
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
@@ -162,6 +163,8 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                         LogManager.logDebug("MQTT", "Connection lost trace: $trace")
                     }
                     cause?.let { errorListener?.invoke(it as? Exception ?: Exception(it.message)) }
+                    // 触发立即重连，避免等待下一个周期 tick（最多 30s）
+                    ForwardService.triggerTick()
                 }
 
                 override fun messageArrived(topic: String?, message: MqttMessage?) {
