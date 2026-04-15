@@ -8,12 +8,13 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,14 +22,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
@@ -48,6 +46,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -56,6 +55,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,13 +65,12 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import info.loveyu.mfca.NotifyDetailActivity
 import info.loveyu.mfca.notification.NotifyHistoryDbHelper
 import info.loveyu.mfca.notification.NotifyHistoryDbHelper.Companion.changeVersion
@@ -84,8 +83,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.collectAsState
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -373,7 +370,7 @@ fun NotifyHistoryContent(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                 ) {
                     itemsIndexed(items = records, key = { _, record -> record.id }) { _, record ->
                         NotifyRecordCard(
@@ -478,11 +475,12 @@ private fun SearchBar(keyword: String, onKeywordChange: (String) -> Unit) {
     OutlinedTextField(
         value = keyword,
         onValueChange = onKeywordChange,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp),
-        placeholder = { Text("搜索标题、内容...") },
-        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).height(48.dp),
+        placeholder = { Text("搜索标题、内容...", style = MaterialTheme.typography.bodyMedium) },
+        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(24.dp)) },
         singleLine = true,
         shape = RoundedCornerShape(12.dp),
+        textStyle = MaterialTheme.typography.bodyLarge,
     )
 }
 
@@ -519,11 +517,11 @@ private fun NotifyRecordCard(record: NotifyRecord, isHighlighted: Boolean, onCli
                 androidx.compose.foundation.Image(
                     bitmap = iconBitmap!!.asImageBitmap(),
                     contentDescription = null,
-                    modifier = Modifier.size(32.dp).clip(CircleShape)
+                    modifier = Modifier.size(40.dp).clip(CircleShape)
                 )
             } else {
                 Box(
-                    modifier = Modifier.size(32.dp).clip(CircleShape).then(
+                    modifier = Modifier.size(40.dp).clip(CircleShape).then(
                         Modifier.background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                     ),
                     contentAlignment = Alignment.Center
