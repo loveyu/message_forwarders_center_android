@@ -5,12 +5,15 @@ import android.os.Environment
 import info.loveyu.mfca.config.InternalOutputConfig
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.util.LogManager
+import java.io.BufferedWriter
 import java.io.File
 import java.io.FileOutputStream
+import java.io.OutputStreamWriter
 import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 文件输出
@@ -26,10 +29,12 @@ import java.util.Locale
  *
  * options:
  * - autoExtension (bool) 仅在未设置 fileName 或为空时生效，自动添加 .dat 扩展名
- * - append (bool) 追加写入，与 overwrite 冲突
+ * - append (bool) 追加写入，与 overwrite 冲突；append 模式默认启用 8KB 缓冲
  * - overwrite (bool) 覆盖写入，与 append 冲突
  * - lock (bool) 是否加锁写入，默认 true
  * - eof (string) 写入数据后追加的字符串，默认 null 不追加
+ * - buffer (int) 缓冲大小(bytes)，仅 append 模式生效；默认 8192
+ * - bufferMaxIdle (duration) handle 空闲超时，超时后关闭；格式 "5m"(默认), "30s", "1h"
  */
 class FileOutput(
     private val context: Context,
@@ -37,6 +42,13 @@ class FileOutput(
     private val config: InternalOutputConfig
 ) : InternalOutput {
     override val type: OutputType = OutputType.internal
+
+    // 缓冲句柄映射：key = resolved file path
+    private val handles = ConcurrentHashMap<String, BufferedFileHandle>()
+
+    // 缓冲配置（send 时从 options 解析，相同 output 的配置固定）
+    private var configuredBufferSize: Int? = null
+    private var configuredMaxIdleMs: Long = 5 * 60 * 1000L // 默认 5 分钟
 
     override fun send(item: QueueItem, callback: ((Boolean) -> Unit)?) {
         try {
@@ -61,6 +73,8 @@ class FileOutput(
             val eof = options["eof"] as? String
             val append = options["append"] as? Boolean ?: false
             val overwrite = options["overwrite"] as? Boolean ?: false
+            val bufferSizeOpt = options["buffer"] as? Int
+            val maxIdleMs = parseDuration(options["bufferMaxIdle"] ?: "5m")
 
             val dataToWrite = if (eof != null) {
                 item.data + eof.toByteArray(Charsets.UTF_8)
@@ -88,6 +102,29 @@ class FileOutput(
                 return
             }
 
+            // 缓冲写入路径：append + 已配置 bufferSize
+            val effectiveBufferSize = when {
+                bufferSizeOpt != null -> bufferSizeOpt
+                append -> 8192 // append 模式默认 8KB 缓冲
+                else -> null
+            }
+
+            if (writeMode == WriteMode.APPEND && effectiveBufferSize != null) {
+                // 更新类级别的缓冲配置（首次写入时确定）
+                if (configuredBufferSize == null) configuredBufferSize = effectiveBufferSize
+                if (configuredMaxIdleMs == 5 * 60 * 1000L) configuredMaxIdleMs = maxIdleMs
+
+                val resolvedPath = file.absolutePath
+                val handle = handles.getOrPut(resolvedPath) {
+                    BufferedFileHandle(resolvedPath, effectiveBufferSize)
+                }
+                handle.write(dataToWrite)
+                LogManager.logDebug("FILE", "Buffered write: $resolvedPath (buffered ${dataToWrite.size} bytes)")
+                callback?.invoke(true)
+                return
+            }
+
+            // 直接写入路径（无缓冲）
             when {
                 useLock -> writeWithLock(file, dataToWrite, writeMode)
                 writeMode == WriteMode.APPEND -> file.appendBytes(dataToWrite)
@@ -183,6 +220,109 @@ class FileOutput(
                 path.removePrefix("file://")
             }
             else -> throw IllegalArgumentException("Unsupported path protocol: $path, must use data://, sdcard:// or file://")
+        }
+    }
+
+    /**
+     * 按 resolved path 独立缓冲的写入句柄。
+     * 每个句柄维护自己的 BufferedWriter，线程安全。
+     */
+    private class BufferedFileHandle(
+        private val resolvedPath: String,
+        private val bufferSize: Int
+    ) {
+        private var writer: BufferedWriter? = null
+        private var file: File? = null
+        var lastAccessMs: Long = System.currentTimeMillis()
+        var isDirty: Boolean = false
+        private val lock = Any()
+
+        private fun getWriter(): BufferedWriter {
+            return writer ?: synchronized(lock) {
+                writer ?: run {
+                    val f = File(resolvedPath)
+                    file = f
+                    // 确保父目录存在
+                    f.parentFile?.mkdirs()
+                    val fos = FileOutputStream(f, true) // append mode
+                    val bw = BufferedWriter(OutputStreamWriter(fos, Charsets.UTF_8), bufferSize)
+                    writer = bw
+                    bw
+                }
+            }
+        }
+
+        fun write(data: ByteArray) {
+            synchronized(lock) {
+                val w = getWriter()
+                w.write(String(data, Charsets.UTF_8))
+                w.flush() // 刷新到底层 OutputStream，但不到磁盘
+                isDirty = true
+                lastAccessMs = System.currentTimeMillis()
+            }
+        }
+
+        fun flushIfDirty() {
+            synchronized(lock) {
+                if (!isDirty) return
+                try {
+                    writer?.flush()
+                    isDirty = false
+                    LogManager.logDebug("FILE", "Flushed buffer to: $resolvedPath")
+                } catch (e: Exception) {
+                    LogManager.logWarn("FILE", "Failed to flush buffer: $resolvedPath - ${e.message}")
+                }
+            }
+        }
+
+        fun close() {
+            synchronized(lock) {
+                flushIfDirty()
+                try {
+                    writer?.close()
+                } catch (e: Exception) {
+                    LogManager.logDebug("FILE", "Error closing writer: $resolvedPath - ${e.message}")
+                }
+                writer = null
+                file = null
+            }
+        }
+    }
+
+    /**
+     * 刷新所有缓冲句柄并清理空闲句柄。
+     * 由 ForwardService tick 周期调用。
+     */
+    fun flushAll() {
+        val maxIdle = configuredMaxIdleMs
+        handles.entries.removeIf { (path, handle) ->
+            handle.flushIfDirty()
+            val idle = System.currentTimeMillis() - handle.lastAccessMs
+            if (idle > maxIdle) {
+                handle.close()
+                LogManager.logDebug("FILE", "Closed idle handle: $path, idle=${idle}ms")
+                true
+            } else false
+        }
+    }
+
+    /**
+     * 解析 duration 字符串，如 "5m", "30s", "1h"
+     */
+    private fun parseDuration(value: Any?): Long {
+        val str = value?.toString() ?: return 5 * 60 * 1000L
+        return try {
+            val trimmed = str.trim()
+            val number = trimmed.dropLast(trimmed.length - trimmed.indexOfFirst { !it.isDigit() }.coerceAtLeast(0)).toLongOrNull() ?: 300_000L
+            when {
+                trimmed.endsWith("s") -> number * 1000
+                trimmed.endsWith("m") -> number * 60 * 1000
+                trimmed.endsWith("h") -> number * 60 * 60 * 1000
+                trimmed.endsWith("d") -> number * 24 * 60 * 60 * 1000
+                else -> number
+            }
+        } catch (e: Exception) {
+            5 * 60 * 1000L
         }
     }
 

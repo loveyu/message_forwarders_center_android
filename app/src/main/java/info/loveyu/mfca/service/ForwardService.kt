@@ -294,6 +294,9 @@ class ForwardService : Service() {
         // 6. 批量 flush 日志文件缓冲
         LogManager.logDebug("SERVICE", "Tick #$tickCount end, flushing logs")
         LogManager.flush()
+
+        // 7. 批量 flush 文件输出缓冲
+        OutputManager.flushAllFileOutputs()
     }
 
     /**

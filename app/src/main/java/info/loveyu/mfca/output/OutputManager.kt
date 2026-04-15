@@ -77,6 +77,17 @@ object OutputManager {
         }
     }
 
+    /**
+     * 刷新所有文件输出的缓冲（tick 周期调用）
+     */
+    fun flushAllFileOutputs() {
+        outputs.values.forEach { output ->
+            if (output is FileOutput) {
+                output.flushAll()
+            }
+        }
+    }
+
     fun getOutputStatus(): Map<String, Boolean> {
         return outputs.mapValues { it.value.isAvailable() }
     }
