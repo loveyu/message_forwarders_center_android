@@ -131,6 +131,9 @@ object LinkManager {
                 network: Network,
                 networkCapabilities: NetworkCapabilities
             ) {
+                // 无条件刷新网络快照（WiFi AP 漫游时 transport 不变但 SSID/BSSID 可能变）
+                NetworkChecker.invalidateCache()
+
                 // 仅在 transport 类型实际变化时触发重连
                 val newType = when {
                     networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> NetworkType.WIFI
@@ -142,10 +145,14 @@ object LinkManager {
                 LogManager.logDebug("LINK", "Transport changed: $lastTransportType -> $newType")
                 lastTransportType = newType
                 resetAllFailureCounts()
-                NetworkChecker.invalidateCache()
                 updateNetworkType()
                 // 网络能力变更（WiFi↔移动网络等）触发 tick
                 ForwardService.triggerTick()
+            }
+
+            override fun onLinkPropertiesChanged(network: Network, linkProperties: android.net.LinkProperties) {
+                // IP 地址等链路属性变更时刷新快照
+                NetworkChecker.invalidateCache()
             }
         }
 

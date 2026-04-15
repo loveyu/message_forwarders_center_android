@@ -27,7 +27,8 @@ object NetworkChecker {
 
     /**
      * 网络状态快照，缓存系统服务查询结果，避免每次 shouldEnable 都查询。
-     * 一批 shouldEnable 调用（同一次 tick 内）共享同一快照。
+     * 纯事件驱动缓存：仅在 invalidateCache() 调用时失效（网络变更回调触发），
+     * 网络稳定期间零系统服务查询。
      */
     private data class NetworkSnapshot(
         val networkType: String?,
@@ -38,33 +39,22 @@ object NetworkChecker {
 
     @Volatile
     private var cachedSnapshot: NetworkSnapshot? = null
-    @Volatile
-    private var snapshotTime: Long = 0L
-
-    /** 缓存有效期，默认 10 秒（小于默认 tick 间隔 30s） */
-    private const val SNAPSHOT_TTL_MS = 10_000L
 
     /**
-     * 获取网络状态快照（带缓存）
+     * 获取网络状态快照（纯事件驱动，无 TTL 过期）
      */
     private fun getSnapshot(context: Context): NetworkSnapshot {
-        val now = System.currentTimeMillis()
-        val cached = cachedSnapshot
-        if (cached != null && now - snapshotTime < SNAPSHOT_TTL_MS) {
-            return cached
-        }
+        cachedSnapshot?.let { return it }
 
         val snapshot = querySnapshot(context)
         cachedSnapshot = snapshot
-        snapshotTime = now
         return snapshot
     }
 
     /**
-     * 强制刷新快照（网络变化事件时调用）
+     * 强制刷新快照（网络变更事件时调用）
      */
     fun invalidateCache() {
-        snapshotTime = 0L
         cachedSnapshot = null
     }
 
