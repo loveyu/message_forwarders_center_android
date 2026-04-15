@@ -56,7 +56,7 @@ class MqttInput(
 
             val message = InputMessage(
                 source = inputName,
-                data = msg.payload,
+                data = msg.payload.copyOf(),
                 headers = mapOf(
                     "mqtt_topic" to topic,
                     "mqtt_qos" to msg.qos.toString(),
