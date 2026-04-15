@@ -74,6 +74,11 @@
             android:exported="false"
             android:theme="@style/Theme.MessageForwardersCenter" />
 
+        <activity
+            android:name=".NotifyDetailActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MessageForwardersCenter" />
+
         <service
             android:name=".service.ForwardService"
             android:exported="false"

@@ -30,8 +30,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.height
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.link.LinkManager
@@ -236,7 +238,9 @@ private fun MainContent(
             }
         },
         bottomBar = {
-            NavigationBar {
+            NavigationBar(
+                modifier = if (!showTabLabel) Modifier.height(64.dp) else Modifier.height(84.dp)
+            ) {
                 BottomTab.entries.forEach { tab ->
                     NavigationBarItem(
                         icon = { Icon(tab.icon, contentDescription = null) },

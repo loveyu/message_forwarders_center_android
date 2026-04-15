@@ -5,6 +5,8 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * 通知历史数据库帮助类
@@ -17,6 +19,9 @@ class NotifyHistoryDbHelper(context: Context) :
         const val DATABASE_NAME = "notify_history.db"
         const val DATABASE_VERSION = 1
         const val TABLE_NAME = "notify_records"
+
+        private val _changeVersion = MutableStateFlow(0)
+        val changeVersion: StateFlow<Int> = _changeVersion
 
         // 列名
         const val COL_ID = "id"
@@ -91,7 +96,9 @@ class NotifyHistoryDbHelper(context: Context) :
             put(COL_PERSISTENT, if (record.persistent) 1 else 0)
             put(COL_CREATED_AT, record.createdAt)
         }
-        return db.insert(TABLE_NAME, null, values)
+        return db.insert(TABLE_NAME, null, values).also {
+            if (it > 0) _changeVersion.value += 1
+        }
     }
 
     /**

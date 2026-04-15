@@ -47,6 +47,38 @@ import info.loveyu.mfca.input.HttpInput
 import info.loveyu.mfca.input.HttpVirtualInput
 import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.link.LinkManager
+import info.loveyu.mfca.ui.theme.DisabledChipBgDark
+import info.loveyu.mfca.ui.theme.DisabledChipBgLight
+import info.loveyu.mfca.ui.theme.DisabledChipBorderDark
+import info.loveyu.mfca.ui.theme.DisabledChipBorderLight
+import info.loveyu.mfca.ui.theme.ErrorCardBgDark
+import info.loveyu.mfca.ui.theme.ErrorCardBgLight
+import info.loveyu.mfca.ui.theme.ErrorCardIconDark
+import info.loveyu.mfca.ui.theme.ErrorCardIconLight
+import info.loveyu.mfca.ui.theme.HttpInputChipBgDark
+import info.loveyu.mfca.ui.theme.HttpInputChipBgLight
+import info.loveyu.mfca.ui.theme.HttpInputChipBorderDark
+import info.loveyu.mfca.ui.theme.HttpInputChipBorderLight
+import info.loveyu.mfca.ui.theme.LinkChipBgDark
+import info.loveyu.mfca.ui.theme.LinkChipBgLight
+import info.loveyu.mfca.ui.theme.LinkChipBorderDark
+import info.loveyu.mfca.ui.theme.LinkChipBorderLight
+import info.loveyu.mfca.ui.theme.LinkInputChipBgDark
+import info.loveyu.mfca.ui.theme.LinkInputChipBgLight
+import info.loveyu.mfca.ui.theme.LinkInputChipBorderDark
+import info.loveyu.mfca.ui.theme.LinkInputChipBorderLight
+import info.loveyu.mfca.ui.theme.StatusDisabledDark
+import info.loveyu.mfca.ui.theme.StatusDisabledLight
+import info.loveyu.mfca.ui.theme.StatusErrorDark
+import info.loveyu.mfca.ui.theme.StatusErrorLight
+import info.loveyu.mfca.ui.theme.StatusRunningDark
+import info.loveyu.mfca.ui.theme.StatusRunningLight
+import info.loveyu.mfca.ui.theme.StatusWarningDark
+import info.loveyu.mfca.ui.theme.StatusWarningLight
+import info.loveyu.mfca.ui.theme.WarningCardBgDark
+import info.loveyu.mfca.ui.theme.WarningCardBgLight
+import info.loveyu.mfca.ui.theme.WarningCardIconDark
+import info.loveyu.mfca.ui.theme.WarningCardIconLight
 import info.loveyu.mfca.util.NetworkChecker
 
 /**
@@ -412,24 +444,32 @@ fun ComponentCard(
     isEnabled: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
     val backgroundColor = if (isEnabled) {
         when (component.type) {
-            ComponentType.LINK -> Color(0xFFE3F2FD) // Light blue for links
-            ComponentType.HTTP_INPUT -> Color(0xFFE8F5E9) // Light green for HTTP inputs
-            ComponentType.LINK_INPUT -> Color(0xFFFFF3E0) // Light orange for link inputs
+            ComponentType.LINK -> if (isDark) LinkChipBgDark else LinkChipBgLight
+            ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBgDark else HttpInputChipBgLight
+            ComponentType.LINK_INPUT -> if (isDark) LinkInputChipBgDark else LinkInputChipBgLight
         }
     } else {
-        Color(0xFFF5F5F5) // Light gray for disabled
+        if (isDark) DisabledChipBgDark else DisabledChipBgLight
     }
 
     val borderColor = if (isEnabled) {
         when (component.type) {
-            ComponentType.LINK -> Color(0xFF1976D2)
-            ComponentType.HTTP_INPUT -> Color(0xFF388E3C)
-            ComponentType.LINK_INPUT -> Color(0xFFF57C00)
+            ComponentType.LINK -> if (isDark) LinkChipBorderDark else LinkChipBorderLight
+            ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBorderDark else HttpInputChipBorderLight
+            ComponentType.LINK_INPUT -> if (isDark) LinkInputChipBorderDark else LinkInputChipBorderLight
         }
     } else {
-        Color(0xFFBDBDBD)
+        if (isDark) DisabledChipBorderDark else DisabledChipBorderLight
+    }
+
+    val statusDotColor = when {
+        component.error != null -> if (isDark) StatusErrorDark else StatusErrorLight
+        component.isRunning -> if (isDark) StatusRunningDark else StatusRunningLight
+        isEnabled -> if (isDark) StatusWarningDark else StatusWarningLight
+        else -> if (isDark) StatusDisabledDark else StatusDisabledLight
     }
 
     Card(
@@ -450,14 +490,7 @@ fun ComponentCard(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(
-                            when {
-                                component.error != null -> Color(0xFFF44336) // Red for error
-                                component.isRunning -> Color(0xFF4CAF50) // Green for running
-                                isEnabled -> Color(0xFFFF9800) // Orange for enabled but stopped
-                                else -> Color(0xFF9E9E9E) // Gray for disabled
-                            }
-                        )
+                        .background(statusDotColor)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
 
@@ -499,9 +532,9 @@ fun ComponentCard(
                     contentDescription = null,
                     modifier = Modifier.size(12.dp),
                     tint = when {
-                        component.error != null -> Color(0xFFF44336)
-                        component.isRunning -> Color(0xFF4CAF50)
-                        else -> Color(0xFF9E9E9E)
+                        component.error != null -> if (isDark) StatusErrorDark else StatusErrorLight
+                        component.isRunning -> if (isDark) StatusRunningDark else StatusRunningLight
+                        else -> if (isDark) StatusDisabledDark else StatusDisabledLight
                     }
                 )
                 Spacer(modifier = Modifier.width(4.dp))
@@ -513,7 +546,7 @@ fun ComponentCard(
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = when {
-                        component.error != null -> Color(0xFFF44336)
+                        component.error != null -> if (isDark) StatusErrorDark else StatusErrorLight
                         else -> MaterialTheme.colorScheme.onSurfaceVariant
                     }
                 )
@@ -530,6 +563,8 @@ fun ComponentDetailSheet(
     onDismiss: () -> Unit
 ) {
     if (component == null) return
+
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -585,7 +620,11 @@ fun ComponentDetailSheet(
                 StatusItem(
                     label = "网络条件",
                     value = if (component.isEnabled) "符合" else "不符合",
-                    valueColor = if (component.isEnabled) Color(0xFF4CAF50) else Color(0xFFF44336)
+                    valueColor = if (component.isEnabled) {
+                        if (isDark) StatusRunningDark else StatusRunningLight
+                    } else {
+                        if (isDark) StatusErrorDark else StatusErrorLight
+                    }
                 )
                 StatusItem(
                     label = "运行状态",
@@ -595,9 +634,9 @@ fun ComponentDetailSheet(
                         else -> "已停止"
                     },
                     valueColor = when {
-                        component.error != null -> Color(0xFFF44336)
-                        component.isRunning -> Color(0xFF4CAF50)
-                        else -> Color(0xFF9E9E9E)
+                        component.error != null -> if (isDark) StatusErrorDark else StatusErrorLight
+                        component.isRunning -> if (isDark) StatusRunningDark else StatusRunningLight
+                        else -> if (isDark) StatusDisabledDark else StatusDisabledLight
                     }
                 )
             }
@@ -607,7 +646,7 @@ fun ComponentDetailSheet(
                 Spacer(modifier = Modifier.height(16.dp))
                 Card(
                     colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFFFFF3E0)
+                        containerColor = if (isDark) WarningCardBgDark else WarningCardBgLight
                     ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
@@ -619,7 +658,7 @@ fun ComponentDetailSheet(
                             imageVector = Icons.Default.Warning,
                             contentDescription = null,
                             modifier = Modifier.size(20.dp),
-                            tint = Color(0xFFF57C00)
+                            tint = if (isDark) WarningCardIconDark else WarningCardIconLight
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
@@ -643,7 +682,7 @@ fun ComponentDetailSheet(
                 Spacer(modifier = Modifier.height(16.dp))
                 Card(
                     colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFFFFEBEE)
+                        containerColor = if (isDark) ErrorCardBgDark else ErrorCardBgLight
                     ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
@@ -655,7 +694,7 @@ fun ComponentDetailSheet(
                             imageVector = Icons.Default.Warning,
                             contentDescription = null,
                             modifier = Modifier.size(20.dp),
-                            tint = Color(0xFFF44336)
+                            tint = if (isDark) ErrorCardIconDark else ErrorCardIconLight
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
@@ -667,7 +706,7 @@ fun ComponentDetailSheet(
                             Text(
                                 text = component.error,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFFF44336)
+                                color = if (isDark) ErrorCardIconDark else ErrorCardIconLight
                             )
                         }
                     }

@@ -26,8 +26,13 @@ object LogManager {
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
 
+    private val _logLevel = MutableStateFlow(LogLevel.INFO)
+    val logLevelFlow: StateFlow<LogLevel> = _logLevel.asStateFlow()
+
     private var isPaused = false
-    private var currentLogLevel = LogLevel.INFO
+    private var currentLogLevel: LogLevel
+        get() = _logLevel.value
+        set(value) { _logLevel.value = value }
     private var isFileLoggingEnabled = false
     private var isAllLogcatEnabled = false
     private var maxLogLines = 1000

@@ -71,16 +71,63 @@ import info.loveyu.mfca.R
 import info.loveyu.mfca.SettingsActivity
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.service.ForwardService
+import info.loveyu.mfca.ui.theme.BadgeDisabledDark
+import info.loveyu.mfca.ui.theme.BadgeDisabledLight
+import info.loveyu.mfca.ui.theme.BadgeEnabledDark
+import info.loveyu.mfca.ui.theme.BadgeEnabledLight
+import info.loveyu.mfca.ui.theme.DisabledChipBgDark
+import info.loveyu.mfca.ui.theme.DisabledChipBgLight
+import info.loveyu.mfca.ui.theme.DisabledChipBorderDark
+import info.loveyu.mfca.ui.theme.DisabledChipBorderLight
+import info.loveyu.mfca.ui.theme.DisabledChipTextDark
+import info.loveyu.mfca.ui.theme.DisabledChipTextLight
+import info.loveyu.mfca.ui.theme.HttpInputChipBgDark
+import info.loveyu.mfca.ui.theme.HttpInputChipBgLight
+import info.loveyu.mfca.ui.theme.HttpInputChipBorderDark
+import info.loveyu.mfca.ui.theme.HttpInputChipBorderLight
+import info.loveyu.mfca.ui.theme.HttpInputChipTextDark
+import info.loveyu.mfca.ui.theme.HttpInputChipTextLight
+import info.loveyu.mfca.ui.theme.LinkChipBgDark
+import info.loveyu.mfca.ui.theme.LinkChipBgLight
+import info.loveyu.mfca.ui.theme.LinkChipBorderDark
+import info.loveyu.mfca.ui.theme.LinkChipBorderLight
+import info.loveyu.mfca.ui.theme.LinkChipTextDark
+import info.loveyu.mfca.ui.theme.LinkChipTextLight
+import info.loveyu.mfca.ui.theme.LinkInputChipBgDark
+import info.loveyu.mfca.ui.theme.LinkInputChipBgLight
+import info.loveyu.mfca.ui.theme.LinkInputChipBorderDark
+import info.loveyu.mfca.ui.theme.LinkInputChipBorderLight
+import info.loveyu.mfca.ui.theme.LinkInputChipTextDark
+import info.loveyu.mfca.ui.theme.LinkInputChipTextLight
+import info.loveyu.mfca.ui.theme.LogDebugColor
+import info.loveyu.mfca.ui.theme.LogErrorColor
+import info.loveyu.mfca.ui.theme.LogInfoColor
+import info.loveyu.mfca.ui.theme.LogWarnColor
+import info.loveyu.mfca.ui.theme.StatusDisabledDark
+import info.loveyu.mfca.ui.theme.StatusDisabledLight
+import info.loveyu.mfca.ui.theme.StatusRunningDark
+import info.loveyu.mfca.ui.theme.StatusRunningLight
+import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
 
 private fun getLogColor(log: String): Color {
     return when {
-        log.contains("[E:") -> Color(0xFFE53935)
-        log.contains("[W:") -> Color(0xFFFFA726)
-        log.contains("[I:") -> Color(0xFF43A047)
-        log.contains("[D:") -> Color(0xFF42A5F5)
+        log.contains("[E:") -> LogErrorColor
+        log.contains("[W:") -> LogWarnColor
+        log.contains("[I:") -> LogInfoColor
+        log.contains("[D:") -> LogDebugColor
         else -> Color.Unspecified
+    }
+}
+
+private fun getLogPriority(log: String): Int {
+    return when {
+        log.contains("[E:") -> LogLevel.ERROR.androidPriority
+        log.contains("[W:") -> LogLevel.WARN.androidPriority
+        log.contains("[I:") -> LogLevel.INFO.androidPriority
+        log.contains("[D:") -> LogLevel.DEBUG.androidPriority
+        else -> LogLevel.INFO.androidPriority
     }
 }
 
@@ -153,11 +200,15 @@ fun MainScreen(
     var selectedComponent by remember { mutableStateOf<ComponentStatus?>(null) }
 
     val logs by LogManager.logs.collectAsState()
+    val currentLogLevel by LogManager.logLevelFlow.collectAsState()
+    val displayLogs = remember(logs, currentLogLevel) {
+        logs.filter { getLogPriority(it) >= currentLogLevel.androidPriority }
+    }
     val listState = rememberLazyListState()
 
-    LaunchedEffect(logs.size) {
-        if (logs.isNotEmpty()) {
-            listState.animateScrollToItem(logs.size - 1)
+    LaunchedEffect(displayLogs.size) {
+        if (displayLogs.isNotEmpty()) {
+            listState.animateScrollToItem(displayLogs.size - 1)
         }
     }
 
@@ -194,66 +245,61 @@ fun MainScreen(
         modifier = Modifier
             .fillMaxSize()
             .padding(contentPadding)
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // 顶部状态卡片
         Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (isStarting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(14.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        } else if (isRunning) {
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .background(
-                                        color = MaterialTheme.colorScheme.primary,
-                                        shape = CircleShape
-                                    )
-                            )
-                        }
-                        Text(
-                            text = when {
-                                isStarting -> "启动中..."
-                                isRunning -> stringResource(R.string.status_running)
-                                else -> stringResource(R.string.status_stopped)
-                            },
-                            style = MaterialTheme.typography.titleMedium,
-                            color = when {
-                                isStarting -> MaterialTheme.colorScheme.primary
-                                isRunning -> MaterialTheme.colorScheme.primary
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
-                            }
+                    if (isStarting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else if (isRunning) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .background(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    shape = CircleShape
+                                )
                         )
                     }
-                    if (isStarting) {
-                        Button(onClick = {}, enabled = false) {
-                            Text(stringResource(R.string.start_service))
+                    Text(
+                        text = when {
+                            isStarting -> "启动中..."
+                            isRunning -> stringResource(R.string.status_running)
+                            else -> stringResource(R.string.status_stopped)
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = when {
+                            isStarting -> MaterialTheme.colorScheme.primary
+                            isRunning -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
                         }
-                    } else if (isRunning) {
-                        Button(onClick = onStopServer) {
-                            Text(stringResource(R.string.stop_service))
-                        }
-                    } else {
-                        Button(onClick = onStartServer) {
-                            Text(stringResource(R.string.start_service))
-                        }
+                    )
+                }
+                if (isStarting) {
+                    Button(onClick = {}, enabled = false) {
+                        Text(stringResource(R.string.start_service))
+                    }
+                } else if (isRunning) {
+                    Button(onClick = onStopServer) {
+                        Text(stringResource(R.string.stop_service))
+                    }
+                } else {
+                    Button(onClick = onStartServer) {
+                        Text(stringResource(R.string.start_service))
                     }
                 }
             }
@@ -269,7 +315,7 @@ fun MainScreen(
                     .fillMaxWidth()
                     .clickable { showComponentSheet = true }
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -291,22 +337,22 @@ fun MainScreen(
                         if (totalCount > 0) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 if (enabledComponents.isNotEmpty()) {
-                                    ComponentCountBadge(count = enabledComponents.size, label = "启用", color = Color(0xFF4CAF50))
+                                    ComponentCountBadge(count = enabledComponents.size, label = "启用", isEnabled = true)
                                 }
                                 if (disabledComponents.isNotEmpty()) {
-                                    ComponentCountBadge(count = disabledComponents.size, label = "未启用", color = Color(0xFF9E9E9E))
+                                    ComponentCountBadge(count = disabledComponents.size, label = "未启用", isEnabled = false)
                                 }
                             }
                         }
                     }
 
                     if (totalCount > 0) {
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             enabledComponents.take(5).forEach { component ->
                                 ComponentChip(component = component, isEnabled = true, onClick = {
@@ -338,10 +384,11 @@ fun MainScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
+                .padding(bottom = 8.dp)
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -349,22 +396,22 @@ fun MainScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(text = stringResource(R.string.log_section), style = MaterialTheme.typography.titleMedium)
                         Text(
-                            text = LogManager.getLogLevel().name,
+                            text = currentLogLevel.name,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         TextButton(onClick = {
                             if (isPaused) LogManager.resumeLogs() else LogManager.pauseLogs()
                             isPaused = LogManager.isPaused()
-                        }) { Text(if (isPaused) "▶️" else "⏸️") }
-                        TextButton(onClick = { LogManager.clearLogs() }) { Text("🗑️") }
+                        }) { Text(if (isPaused) "继续" else "暂停", style = MaterialTheme.typography.labelSmall) }
+                        TextButton(onClick = { LogManager.clearLogs() }) { Text("清空", style = MaterialTheme.typography.labelSmall) }
                         TextButton(onClick = {
                             if (isFileLogging) {
                                 LogManager.setFileLoggingEnabled(false, preferences)
@@ -375,13 +422,13 @@ fun MainScreen(
                                 isFileLogging = true
                                 Toast.makeText(context, "已开始保存日志到文件", Toast.LENGTH_SHORT).show()
                             }
-                        }) { Text(if (isFileLogging) "❌" else "💾") }
+                        }) { Text(if (isFileLogging) "停存" else "存日志", style = MaterialTheme.typography.labelSmall) }
                         TextButton(onClick = {
                             val newState = !isAllLogcatEnabled
                             LogManager.logWarn("UI", "Toggle logcat all: $isAllLogcatEnabled -> $newState")
                             LogManager.setAllLogcatEnabled(newState, preferences)
                             isAllLogcatEnabled = LogManager.isAllLogcatEnabled()
-                        }) { Text(if (isAllLogcatEnabled) "🐱" else "🐾") }
+                        }) { Text(if (isAllLogcatEnabled) "全Log" else "Logcat", style = MaterialTheme.typography.labelSmall) }
                     }
                 }
 
@@ -393,7 +440,7 @@ fun MainScreen(
                         .weight(1f),
                     state = listState
                 ) {
-                    items(logs) { log ->
+                    items(displayLogs) { log ->
                         Text(
                             text = log.chunked(1).joinToString("\u200B"),
                             style = MaterialTheme.typography.bodySmall,
@@ -427,7 +474,13 @@ fun MainScreen(
 }
 
 @Composable
-fun ComponentCountBadge(count: Int, label: String, color: Color) {
+fun ComponentCountBadge(count: Int, label: String, isEnabled: Boolean) {
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val color = if (isEnabled) {
+        if (isDark) BadgeEnabledDark else BadgeEnabledLight
+    } else {
+        if (isDark) BadgeDisabledDark else BadgeDisabledLight
+    }
     Row(
         modifier = Modifier
             .background(color = color.copy(alpha = 0.1f), shape = RoundedCornerShape(16.dp))
@@ -444,35 +497,42 @@ fun ComponentCountBadge(count: Int, label: String, color: Color) {
 
 @Composable
 fun ComponentChip(component: ComponentStatus, isEnabled: Boolean, onClick: () -> Unit) {
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
     val backgroundColor = if (isEnabled) {
         when (component.type) {
-            ComponentType.LINK -> Color(0xFFE3F2FD)
-            ComponentType.HTTP_INPUT -> Color(0xFFE8F5E9)
-            ComponentType.LINK_INPUT -> Color(0xFFFFF3E0)
+            ComponentType.LINK -> if (isDark) LinkChipBgDark else LinkChipBgLight
+            ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBgDark else HttpInputChipBgLight
+            ComponentType.LINK_INPUT -> if (isDark) LinkInputChipBgDark else LinkInputChipBgLight
         }
     } else {
-        Color(0xFFF5F5F5)
+        if (isDark) DisabledChipBgDark else DisabledChipBgLight
     }
 
     @Suppress("UNUSED")
     val borderColor = if (isEnabled) {
         when (component.type) {
-            ComponentType.LINK -> Color(0xFF1976D2)
-            ComponentType.HTTP_INPUT -> Color(0xFF388E3C)
-            ComponentType.LINK_INPUT -> Color(0xFFF57C00)
+            ComponentType.LINK -> if (isDark) LinkChipBorderDark else LinkChipBorderLight
+            ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBorderDark else HttpInputChipBorderLight
+            ComponentType.LINK_INPUT -> if (isDark) LinkInputChipBorderDark else LinkInputChipBorderLight
         }
     } else {
-        Color(0xFFBDBDBD)
+        if (isDark) DisabledChipBorderDark else DisabledChipBorderLight
     }
 
     val textColor = if (isEnabled) {
         when (component.type) {
-            ComponentType.LINK -> Color(0xFF1976D2)
-            ComponentType.HTTP_INPUT -> Color(0xFF388E3C)
-            ComponentType.LINK_INPUT -> Color(0xFFF57C00)
+            ComponentType.LINK -> if (isDark) LinkChipTextDark else LinkChipTextLight
+            ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipTextDark else HttpInputChipTextLight
+            ComponentType.LINK_INPUT -> if (isDark) LinkInputChipTextDark else LinkInputChipTextLight
         }
     } else {
-        Color(0xFF757575)
+        if (isDark) DisabledChipTextDark else DisabledChipTextLight
+    }
+
+    val statusColor = if (component.isRunning) {
+        if (isDark) StatusRunningDark else StatusRunningLight
+    } else {
+        if (isDark) StatusDisabledDark else StatusDisabledLight
     }
 
     Card(
@@ -481,14 +541,14 @@ fun ComponentChip(component: ComponentStatus, isEnabled: Boolean, onClick: () ->
         shape = RoundedCornerShape(8.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
                     .size(6.dp)
                     .background(
-                        color = if (component.isRunning) Color(0xFF4CAF50) else Color(0xFF9E9E9E),
+                        color = statusColor,
                         shape = CircleShape
                     )
             )
