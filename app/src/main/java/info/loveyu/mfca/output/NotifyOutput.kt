@@ -18,7 +18,6 @@ import info.loveyu.mfca.config.NotifyOptions
 import info.loveyu.mfca.notification.NotifyHistoryDbHelper
 import info.loveyu.mfca.notification.NotifyRecord
 import info.loveyu.mfca.queue.QueueItem
-import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.IconCacheManager
 import info.loveyu.mfca.util.LogManager
 import kotlinx.coroutines.CoroutineScope

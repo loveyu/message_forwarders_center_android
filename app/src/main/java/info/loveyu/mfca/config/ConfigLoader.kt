@@ -4,7 +4,6 @@ import info.loveyu.mfca.util.LogManager
 import org.snakeyaml.engine.v2.api.Load
 import org.snakeyaml.engine.v2.api.LoadSettings
 import java.io.File
-import java.io.StringReader
 
 object ConfigLoader {
 
