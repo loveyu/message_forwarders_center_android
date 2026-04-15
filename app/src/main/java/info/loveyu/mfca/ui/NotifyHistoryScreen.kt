@@ -558,9 +558,7 @@ private fun NotifyRecordCard(record: NotifyRecord, isHighlighted: Boolean, onCli
                 Text(
                     text = record.content,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

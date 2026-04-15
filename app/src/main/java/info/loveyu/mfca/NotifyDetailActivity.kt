@@ -10,21 +10,27 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,9 +50,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import info.loveyu.mfca.util.IconCacheManager
 import info.loveyu.mfca.notification.NotifyHistoryDbHelper
 import info.loveyu.mfca.notification.NotifyRecord
 import info.loveyu.mfca.ui.theme.MfcaTheme
@@ -142,56 +153,91 @@ private fun NotifyDetailScreen(recordId: Long, onBack: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            DetailInfoRow("时间", formatAbsoluteTime(r.createdAt))
-            r.sourceRule?.let { DetailInfoRow("来源规则", it) }
-            DetailInfoRow("输出名称", r.outputName)
-            DetailInfoRow("渠道", r.channel)
-            r.tag?.let { DetailInfoRow("标签", it) }
-            r.group?.let { DetailInfoRow("分组", it) }
-            r.iconUrl?.let { DetailInfoRow("图标", it) }
-            if (r.popup) DetailInfoRow("弹出通知", "是")
-            if (r.persistent) DetailInfoRow("常驻通知", "是")
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(text = "内容", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-            Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
-                Text(text = r.content, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(12.dp))
+            // Header: icon + title + content
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                NotifyIcon(record = r, size = 40.dp)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = r.title,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
-            if (!r.rawData.isNullOrBlank()) {
-                var showRawData by remember { mutableStateOf(false) }
-                Spacer(modifier = Modifier.height(4.dp))
-                TextButton(onClick = { showRawData = !showRawData }) {
-                    Text(if (showRawData) "收起原始数据" else "展开原始数据")
+            Text(
+                text = r.content,
+                style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp)
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+            // Time and channel
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = formatAbsoluteTime(r.createdAt),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = r.channel,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // More info & Raw data buttons
+            var showMoreInfo by remember { mutableStateOf(false) }
+            var showRawData by remember { mutableStateOf(false) }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = { showMoreInfo = !showMoreInfo }) {
+                    Text(if (showMoreInfo) "收起更多信息" else "更多信息")
                 }
-                if (showRawData) {
-                    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = formatRawData(r.rawData),
-                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                            modifier = Modifier.padding(12.dp)
-                        )
+                if (!r.rawData.isNullOrBlank()) {
+                    TextButton(onClick = { showRawData = !showRawData }) {
+                        Text(if (showRawData) "收起原始数据" else "展开原始数据")
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Copy and Delete actions
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                    onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("通知内容", r.content))
-                        Toast.makeText(context, "已复制内容", Toast.LENGTH_SHORT).show()
-                    },
-                    modifier = Modifier.weight(1f)
-                ) { Text("复制内容") }
+            if (showMoreInfo) {
+                Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        DetailInfoRow("输出名称", r.outputName)
+                        r.sourceRule?.let { DetailInfoRow("来源规则", it) }
+                        r.tag?.let { DetailInfoRow("标签", it) }
+                        r.group?.let { DetailInfoRow("分组", it) }
+                        if (r.popup) DetailInfoRow("弹出通知", "是")
+                        if (r.persistent) DetailInfoRow("常驻通知", "是")
+                    }
+                }
             }
+            if (showRawData && !r.rawData.isNullOrBlank()) {
+                Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+                    Text(
+                        text = formatRawData(r.rawData),
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            OutlinedButton(
+                onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("通知内容", r.content))
+                    Toast.makeText(context, "已复制内容", Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier.padding(horizontal = 0.dp)
+            ) { Text("复制内容") }
         }
     }
 
@@ -219,10 +265,40 @@ private fun NotifyDetailScreen(recordId: Long, onBack: () -> Unit) {
 }
 
 @Composable
+private fun NotifyIcon(record: NotifyRecord, size: androidx.compose.ui.unit.Dp) {
+    val context = LocalContext.current
+    var iconBitmap by remember(record.iconUrl) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    LaunchedEffect(record.iconUrl) {
+        if (!record.iconUrl.isNullOrBlank()) {
+            iconBitmap = IconCacheManager(context).getIcon(record.iconUrl, null)
+        }
+    }
+    if (iconBitmap != null) {
+        Image(
+            bitmap = iconBitmap!!.asImageBitmap(),
+            contentDescription = null,
+            modifier = Modifier.size(size).clip(CircleShape)
+        )
+    } else {
+        Box(
+            modifier = Modifier.size(size).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.Search,
+                contentDescription = null,
+                modifier = Modifier.size(size * 0.5f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
 private fun DetailInfoRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Text(text = "$label: ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(text = value, style = MaterialTheme.typography.bodySmall)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(text = "$label: ", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text = value, style = MaterialTheme.typography.bodyLarge)
     }
 }
 
