@@ -20,7 +20,7 @@ object QueueManager {
         // Initialize memory queues
         config.queues.memory.forEach { (name, memoryConfig) ->
             queues[name] = MemoryQueue(name, memoryConfig)
-            LogManager.log("QUEUE", "Registered memory queue: $name (capacity: ${memoryConfig.capacity})")
+            LogManager.logDebug("QUEUE", "Registered memory queue: $name (capacity: ${memoryConfig.capacity})")
         }
 
         // Initialize SQLite queues
@@ -28,7 +28,7 @@ object QueueManager {
             val ctx = contextRef?.get() ?: return@forEach
             val queue = SqliteQueue(ctx, name, sqliteConfig)
             queues[name] = queue
-            LogManager.log("QUEUE", "Registered SQLite queue: $name (path: ${sqliteConfig.path})")
+            LogManager.logDebug("QUEUE", "Registered SQLite queue: $name (path: ${sqliteConfig.path})")
         }
     }
 
@@ -43,7 +43,7 @@ object QueueManager {
             try {
                 queue.start()
             } catch (e: Exception) {
-                LogManager.log("QUEUE", "Failed to start ${queue.name}: ${e.message}")
+                LogManager.logError("QUEUE", "Failed to start ${queue.name}: ${e.message}")
             }
         }
     }
@@ -53,7 +53,7 @@ object QueueManager {
             try {
                 queue.stop()
             } catch (e: Exception) {
-                LogManager.log("QUEUE", "Error stopping ${queue.name}: ${e.message}")
+                LogManager.logWarn("QUEUE", "Error stopping ${queue.name}: ${e.message}")
             }
         }
     }
@@ -73,7 +73,7 @@ object QueueManager {
                 try {
                     queue.onTick()
                 } catch (e: Exception) {
-                    LogManager.log("QUEUE", "Error in onTick for ${queue.name}: ${e.message}")
+                    LogManager.logError("QUEUE", "Error in onTick for ${queue.name}: ${e.message}")
                 }
             }
         }

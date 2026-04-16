@@ -43,7 +43,7 @@ class MemoryQueue(
                         queue.offer(item)
                     }
                     OverflowStrategy.dropNew -> {
-                        LogManager.log("QUEUE", "Memory queue $name dropped item (overflow)")
+                        LogManager.logWarn("QUEUE", "Memory queue $name dropped item (overflow)")
                         return false
                     }
                     OverflowStrategy.block -> {
@@ -95,7 +95,7 @@ class MemoryQueue(
                                 enqueue(item.copy(retryCount = item.retryCount + 1))
                             }
                         } catch (e: Exception) {
-                            LogManager.log("QUEUE", "Worker $workerId error: ${e.message}")
+                            LogManager.logWarn("QUEUE", "Worker $workerId error: ${e.message}")
                             enqueue(item.copy(retryCount = item.retryCount + 1))
                         }
                     } else {
@@ -110,7 +110,7 @@ class MemoryQueue(
             }
             workers.add(worker)
         }
-        LogManager.log("QUEUE", "Memory queue $name started with ${config.workers} workers")
+        LogManager.logDebug("QUEUE", "Memory queue $name started with ${config.workers} workers")
     }
 
     override fun stop() {
@@ -119,7 +119,7 @@ class MemoryQueue(
         wakeSignal.close()
         // 重建 Channel 以支持后续可能的 start() 调用
         wakeSignal = Channel(Channel.CONFLATED)
-        LogManager.log("QUEUE", "Memory queue $name stopped")
+        LogManager.logDebug("QUEUE", "Memory queue $name stopped")
     }
 
     fun setConsumer(consumer: QueueConsumer) {

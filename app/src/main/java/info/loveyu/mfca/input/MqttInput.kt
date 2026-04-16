@@ -63,7 +63,7 @@ class MqttInput(
                     "mqtt_retained" to msg.isRetained.toString()
                 )
             )
-            LogManager.log("MQTT", "Message received on topic=$topic for $inputName (${msg.payload.size} bytes)")
+            LogManager.logDebug("MQTT", "Message received on topic=$topic for $inputName (${msg.payload.size} bytes)")
             if (messageListener != null) {
                 messageListener!!.invoke(message)
             } else {
@@ -75,12 +75,12 @@ class MqttInput(
             link.subscribe(topic, qos)
         }
         running = true
-        LogManager.log("MQTT", "MQTT input started: $inputName (topics: $topicsToSubscribe, qos: $qos)")
+        LogManager.logDebug("MQTT", "MQTT input started: $inputName (topics: $topicsToSubscribe, qos: $qos)")
     }
 
     override fun stop() {
         running = false
-        LogManager.log("MQTT", "MQTT input stopped: $inputName")
+        LogManager.logDebug("MQTT", "MQTT input stopped: $inputName")
     }
 
     override fun isRunning(): Boolean = running

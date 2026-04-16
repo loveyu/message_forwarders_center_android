@@ -131,7 +131,7 @@ class FileOutput(
                 else -> file.writeBytes(dataToWrite)
             }
 
-            LogManager.log("INTERNAL", "Written to file: ${file.absolutePath} (${writeMode.name.lowercase()}, ${dataToWrite.size} bytes)")
+            LogManager.logDebug("INTERNAL", "Written to file: ${file.absolutePath} (${writeMode.name.lowercase()}, ${dataToWrite.size} bytes)")
             callback?.invoke(true)
         } catch (e: Exception) {
             LogManager.logError("INTERNAL", "File write failed: $name - ${e.message}")

@@ -52,7 +52,7 @@ class HttpOutput(
                 try {
                     val result = doSend(item)
                     if (result is OutputResult.Success) {
-                        LogManager.log("HTTP", "HTTP output $name succeeded (${result.responseCode})")
+                        LogManager.logDebug("HTTP", "HTTP output $name succeeded (${result.responseCode})")
                         callback?.invoke(true)
                         return@launch
                     } else {

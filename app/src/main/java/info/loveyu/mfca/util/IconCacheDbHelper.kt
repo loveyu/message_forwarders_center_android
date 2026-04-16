@@ -93,7 +93,7 @@ class IconCacheDbHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_N
         val db = writableDatabase
         val deleted = db.delete(TABLE_ICON_CACHE, "$COLUMN_CACHED_AT < ?", arrayOf(cutoff.toString()))
         if (deleted > 0) {
-            LogManager.log("ICON_CACHE", "Cleaned up $deleted expired icon cache entries")
+            LogManager.logDebug("ICON_CACHE", "Cleaned up $deleted expired icon cache entries")
         }
         return deleted
     }

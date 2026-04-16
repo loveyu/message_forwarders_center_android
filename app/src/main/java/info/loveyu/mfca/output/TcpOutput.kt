@@ -47,7 +47,7 @@ class TcpOutput(
 
         val success = link.send(item.data)
         if (success) {
-            LogManager.log("TCP", "Data sent via $name")
+            LogManager.logDebug("TCP", "Data sent via $name")
         } else {
             LogManager.logWarn("TCP", "Failed to send via $name")
         }

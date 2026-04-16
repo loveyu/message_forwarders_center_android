@@ -54,7 +54,7 @@ class BroadcastOutput(
             // Also send as system broadcast for other apps
             context.sendBroadcast(intent)
 
-            LogManager.log("INTERNAL", "Broadcast sent on channel: $channel, action=${intent.action}")
+            LogManager.logDebug("INTERNAL", "Broadcast sent on channel: $channel, action=${intent.action}")
             callback?.invoke(true)
         } catch (e: Exception) {
             LogManager.logError("INTERNAL", "Broadcast failed: $name - ${e.message}")

@@ -38,7 +38,7 @@ class SharedHttpInput(
         try {
             start(SOCKET_READ_TIMEOUT, false)
             running = true
-            LogManager.log("HTTP", "Shared HTTP server started with ${virtualInputs.size} virtual inputs on port ${listeningPort}")
+            LogManager.logDebug("HTTP", "Shared HTTP server started with ${virtualInputs.size} virtual inputs on port ${listeningPort}")
         } catch (e: BindException) {
             error = "端口 ${listeningPort} 已被占用"
             LogManager.logError("HTTP", "Shared HTTP server port conflict: ${listeningPort} - ${e.message}")
@@ -52,7 +52,7 @@ class SharedHttpInput(
         running = false
         try {
             super.stop()
-            LogManager.log("HTTP", "Shared HTTP server stopped")
+            LogManager.logDebug("HTTP", "Shared HTTP server stopped")
         } catch (e: Exception) {
             LogManager.logError("HTTP", "Error stopping shared HTTP server: ${e.message}")
         }

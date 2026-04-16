@@ -150,7 +150,7 @@ class TcpLink(override val config: LinkConfig, private val context: Context) : L
             val keepAlive = params["keepAlive"]?.toBoolean() ?: true
             val noDelay = params["noDelay"]?.toBoolean() ?: true
 
-            LogManager.log("TCP", "Connecting to $host:$port (protocol=${frameProtocol.name}, ssl=$isSsl)")
+            LogManager.logDebug("TCP", "Connecting to $host:$port (protocol=${frameProtocol.name}, ssl=$isSsl)")
 
             val rawSocket = Socket().apply {
                 connect(java.net.InetSocketAddress(host, port), connectTimeout * 1000)
@@ -175,7 +175,7 @@ class TcpLink(override val config: LinkConfig, private val context: Context) : L
             consecutiveFailures = 0
             hadMaxFailure = false
             resolvedIp = (socket?.remoteSocketAddress as? java.net.InetSocketAddress)?.address?.hostAddress
-            LogManager.log("TCP", "Connected: $id (${frameProtocol.name})")
+            LogManager.logInfo("TCP", "Connected: $id (${frameProtocol.name})")
 
             if (shouldNotify) {
                 recoveredCallback?.invoke()
@@ -204,7 +204,7 @@ class TcpLink(override val config: LinkConfig, private val context: Context) : L
             socket?.close()
             socket = null
             LinkManager.notifyLinkStateChanged(id, connected = false)
-            LogManager.log("TCP", "Disconnected: $id")
+            LogManager.logDebug("TCP", "Disconnected: $id")
         } catch (e: Exception) {
             LogManager.logWarn("TCP", "Disconnect error: ${e.message}")
         }
@@ -222,7 +222,7 @@ class TcpLink(override val config: LinkConfig, private val context: Context) : L
 
     override fun send(data: ByteArray): Boolean {
         if (!connected.get() || socket == null) {
-            LogManager.log("TCP", "Cannot send: not connected")
+            LogManager.logDebug("TCP", "Cannot send: not connected")
             return false
         }
         return try {
@@ -262,14 +262,14 @@ class TcpLink(override val config: LinkConfig, private val context: Context) : L
                 )
                 // readLoop returned normally — stream EOF
                 if (connected.get()) {
-                    LogManager.log("TCP", "Server closed connection")
+                    LogManager.logDebug("TCP", "Server closed connection")
                     connected.set(false)
                 }
             } catch (e: SocketTimeoutException) {
                 LogManager.logWarn("TCP", "Read timeout (${readTimeoutMs}ms), disconnecting")
                 disconnect()
             } catch (e: EOFException) {
-                LogManager.log("TCP", "Server closed connection")
+                LogManager.logDebug("TCP", "Server closed connection")
                 connected.set(false)
             } catch (e: SocketException) {
                 if (connected.get()) {

@@ -33,7 +33,7 @@ class TcpInput(
                 data = data,
                 headers = emptyMap()
             )
-            LogManager.log("TCP", "Message received for $inputName (${data.size} bytes)")
+            LogManager.logDebug("TCP", "Message received for $inputName (${data.size} bytes)")
             if (messageListener != null) {
                 messageListener!!.invoke(message)
             } else {
@@ -46,12 +46,12 @@ class TcpInput(
         }
 
         running = true
-        LogManager.log("TCP", "TCP input started: $inputName")
+        LogManager.logDebug("TCP", "TCP input started: $inputName")
     }
 
     override fun stop() {
         running = false
-        LogManager.log("TCP", "TCP input stopped: $inputName")
+        LogManager.logDebug("TCP", "TCP input stopped: $inputName")
     }
 
     override fun isRunning(): Boolean = running

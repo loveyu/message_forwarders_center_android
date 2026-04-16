@@ -141,7 +141,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
             maxReconnectDelay = params["reconnectMaxInterval"]?.toLongOrNull()
                 ?: (config.reconnect?.maxInterval?.millis?.let { it / 1000 } ?: 60L)
 
-            LogManager.log("WS", "Connecting to $cleanUrl (gotify=$isGotifyProtocol)")
+            LogManager.logDebug("WS", "Connecting to $cleanUrl (gotify=$isGotifyProtocol)")
 
             val client = buildOkHttpClient()
 
@@ -190,7 +190,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
                         recoveredCallback?.invoke()
                     }
                     LinkManager.notifyLinkStateChanged(id, connected = true)
-                    LogManager.log("WS", "Connected: $id")
+                    LogManager.logInfo("WS", "Connected: $id")
                 }
 
                 override fun onMessage(webSocket: WebSocket, text: String) {
@@ -204,7 +204,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
                 }
 
                 override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                    LogManager.log("WS", "Closing: $code $reason")
+                    LogManager.logDebug("WS", "Closing: $code $reason")
                     webSocket.close(1000, null)
                 }
 
@@ -214,7 +214,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
                         connecting = false
                     }
                     LinkManager.notifyLinkStateChanged(id, connected = false)
-                    LogManager.log("WS", "Closed: $code $reason")
+                    LogManager.logDebug("WS", "Closed: $code $reason")
                 }
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -285,7 +285,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
             connected = false
         }
         LinkManager.notifyLinkStateChanged(id, connected = false)
-        LogManager.log("WS", "Disconnected: $id")
+        LogManager.logDebug("WS", "Disconnected: $id")
     }
 
     override fun isConnected(): Boolean = connected

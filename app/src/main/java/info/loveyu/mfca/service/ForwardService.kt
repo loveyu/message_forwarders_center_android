@@ -159,7 +159,7 @@ class ForwardService : Service() {
                 serviceInstance?.applyConfig(config)
                 true
             } catch (e: Exception) {
-                LogManager.log("CONFIG", "Failed to load config: ${e.message}")
+                LogManager.logWarn("CONFIG", "Failed to load config: ${e.message}")
                 false
             }
         }
@@ -430,7 +430,7 @@ class ForwardService : Service() {
         } else if (intent?.action == null && wasRunningBeforeRestart) {
             // Service restarted by system (START_STICKY) after being killed
             // Auto-restore previously running service
-            LogManager.log("SERVICE", "Auto-restoring service after system restart")
+            LogManager.logInfo("SERVICE", "Auto-restoring service after system restart")
             wasRunningBeforeRestart = false
             start()
         }
@@ -443,7 +443,7 @@ class ForwardService : Service() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         // Keep service running when user swipes app from recents
         if (isRunning) {
-            LogManager.log("SERVICE", "Task removed, restarting service to keep running")
+            LogManager.logInfo("SERVICE", "Task removed, restarting service to keep running")
             val restartIntent = Intent(this, ForwardService::class.java).apply {
                 action = ACTION_START
             }
@@ -471,13 +471,13 @@ class ForwardService : Service() {
                 applyConfig(config)
                 return
             } catch (e: Exception) {
-                LogManager.log("CONFIG", "Failed to load saved config: ${e.message}")
+                LogManager.logWarn("CONFIG", "Failed to load saved config: ${e.message}")
             }
         }
 
         // No valid config, just mark as not running
         isRunning = false
-        LogManager.log("SERVICE", "No valid config found, service not started")
+        LogManager.logInfo("SERVICE", "No valid config found, service not started")
     }
 
     private fun startLegacyMode() {
@@ -507,7 +507,7 @@ class ForwardService : Service() {
         isRunning = true
         saveStatus()
         acquireLocks()
-        LogManager.log("SERVICE", "Legacy mode started on port $port")
+        LogManager.logInfo("SERVICE", "Legacy mode started on port $port")
     }
 
     private fun stopLegacyMode() {
@@ -520,7 +520,7 @@ class ForwardService : Service() {
 
     private fun applyConfig(config: AppConfig) {
         if (isApplyingConfig) {
-            LogManager.log("CONFIG", "Config application already in progress, skipping duplicate")
+            LogManager.logDebug("CONFIG", "Config application already in progress, skipping duplicate")
             return
         }
         isApplyingConfig = true
@@ -539,7 +539,7 @@ class ForwardService : Service() {
     }
 
     private fun applyConfigInternal(config: AppConfig) {
-        LogManager.log("CONFIG", "Applying new configuration...")
+        LogManager.logInfo("CONFIG", "Applying new configuration...")
 
         // Stop existing components
         stopAll()
@@ -550,30 +550,30 @@ class ForwardService : Service() {
         // Initialize components in order
         try {
             // 1. Initialize Links
-            LogManager.log("CONFIG", "Initializing links...")
+            LogManager.logDebug("CONFIG", "Initializing links...")
             LinkManager.setContext(this)
             LinkManager.initialize(config)
 
             // 2. Initialize Queues
-            LogManager.log("CONFIG", "Initializing queues...")
+            LogManager.logDebug("CONFIG", "Initializing queues...")
             QueueManager.initialize(this, config)
 
             // 3. Initialize Outputs
-            LogManager.log("CONFIG", "Initializing outputs...")
+            LogManager.logDebug("CONFIG", "Initializing outputs...")
             OutputManager.initialize(this, config)
 
             // 4. Initialize Dead Letter Handler
             deadLetterHandler = DeadLetterHandler(this, config.deadLetter)
 
             // 5. Initialize Rule Engine
-            LogManager.log("CONFIG", "Initializing rule engine...")
+            LogManager.logDebug("CONFIG", "Initializing rule engine...")
             ruleEngine = RuleEngine(config, this) {
                 forwardedCount++
                 onStatsChanged?.invoke()
             }
 
             // 6. Initialize Inputs with message handler
-            LogManager.log("CONFIG", "Initializing inputs...")
+            LogManager.logDebug("CONFIG", "Initializing inputs...")
             InputManager.setContext(this)
             InputManager.initialize(config) { message ->
                 handleMessage(message)
@@ -593,7 +593,7 @@ class ForwardService : Service() {
             if (newInterval != tickIntervalMs) {
                 tickIntervalMs = newInterval
                 startTick()
-                LogManager.log("CONFIG", "Tick interval updated to ${newInterval}ms (charging=$isCharging)")
+                LogManager.logDebug("CONFIG", "Tick interval updated to ${newInterval}ms (charging=$isCharging)")
             }
 
             isRunning = true
@@ -601,10 +601,10 @@ class ForwardService : Service() {
             refreshStats()
             saveStatus()
             acquireLocks()
-            LogManager.log("CONFIG", "Configuration applied successfully. Service started.")
+            LogManager.logInfo("CONFIG", "Configuration applied successfully. Service started.")
             updateNotification()
         } catch (e: Exception) {
-            LogManager.log("CONFIG", "Failed to apply config: ${e.message}")
+            LogManager.logError("CONFIG", "Failed to apply config: ${e.message}")
             e.printStackTrace()
             isRunning = false
             onStartFailed?.invoke("启动失败: ${e.message}")
@@ -615,7 +615,7 @@ class ForwardService : Service() {
         LogManager.log(LogLevel.DEBUG, "FS", "NATIVE handleMessage: source=${message.source}, data=${String(message.data).take(30)}")
         LogManager.log(LogLevel.DEBUG, "TRACE:FS", "handleMessage called: source=${message.source}")
         if (!isReceivingEnabled) {
-            LogManager.logInfo("FS", "接收已暂停, 忽略消息: source=${message.source}, data=${String(message.data).take(200)}")
+            LogManager.logDebug("FS", "接收已暂停, 忽略消息: source=${message.source}, data=${String(message.data).take(200)}")
             return
         }
 
@@ -623,14 +623,14 @@ class ForwardService : Service() {
         onStatsChanged?.invoke()
 
         // Process through rule engine
-        LogManager.log("TRACE:FS", "Calling ruleEngine.process for ${message.source}")
+        LogManager.logDebug("TRACE:FS", "Calling ruleEngine.process for ${message.source}")
         ruleEngine?.process(message)
 
         // Record headers
         if (message.headers.isNotEmpty()) {
-            LogManager.log("MESSAGE", "Headers: ${message.headers}")
+            LogManager.logDebug("MESSAGE", "Headers: ${message.headers}")
         }
-        LogManager.log("MESSAGE", "Processed: ${message.source} -> ${String(message.data).take(1000)}")
+        LogManager.logDebug("MESSAGE", "Processed: ${message.source} -> ${String(message.data).take(1000)}")
     }
 
     private fun stopAll() {
@@ -645,7 +645,7 @@ class ForwardService : Service() {
         ruleEngine?.shutdown()
         ruleEngine = null
         deadLetterHandler = null
-        LogManager.log("SERVICE", "All components stopped")
+        LogManager.logInfo("SERVICE", "All components stopped")
     }
 
     private fun saveStatus() {
@@ -662,7 +662,7 @@ class ForwardService : Service() {
             )
             AppStatusManager.saveStatus(this, status)
         } catch (e: Exception) {
-            LogManager.log("APP_STATUS", "Failed to save status: ${e.message}")
+            LogManager.logWarn("APP_STATUS", "Failed to save status: ${e.message}")
         }
     }
 
@@ -681,9 +681,9 @@ class ForwardService : Service() {
             preferences.forwardingEnabled = status.isForwardingEnabled
             preferences.autoStart = status.autoStart
             wasRunningBeforeRestart = status.isRunning
-            LogManager.log("APP_STATUS", "Status loaded: running=${status.isRunning}, receive=${status.isReceivingEnabled}, forward=${status.isForwardingEnabled}, wakeLock=${status.isWakeLockEnabled}")
+            LogManager.logDebug("APP_STATUS", "Status loaded: running=${status.isRunning}, receive=${status.isReceivingEnabled}, forward=${status.isForwardingEnabled}, wakeLock=${status.isWakeLockEnabled}")
         } catch (e: Exception) {
-            LogManager.log("APP_STATUS", "Failed to load status: ${e.message}")
+            LogManager.logWarn("APP_STATUS", "Failed to load status: ${e.message}")
         }
     }
 
@@ -746,7 +746,7 @@ class ForwardService : Service() {
         notificationDelegate.invalidateStatsCache()
         updateNotification()
         onStatsChanged?.invoke()
-        LogManager.log("SERVICE", "WakeLock auto-released after ${wakeLockTimeoutMs / 1000}s timeout")
+        LogManager.logInfo("SERVICE", "WakeLock auto-released after ${wakeLockTimeoutMs / 1000}s timeout")
     }
 
     private fun onWifiLockAutoReleased() {
@@ -755,6 +755,6 @@ class ForwardService : Service() {
         notificationDelegate.invalidateStatsCache()
         updateNotification()
         onStatsChanged?.invoke()
-        LogManager.log("SERVICE", "WifiLock auto-released after ${wifiLockTimeoutMs / 1000}s timeout")
+        LogManager.logInfo("SERVICE", "WifiLock auto-released after ${wifiLockTimeoutMs / 1000}s timeout")
     }
 }

@@ -39,7 +39,7 @@ internal class ForwardServiceLockController(
             ).apply {
                 acquire()
             }
-            LogManager.log("SERVICE", "WakeLock acquired (timeout=${if (wakeTimeoutMs > 0) "${wakeTimeoutMs / 1000}s" else "permanent"})")
+            LogManager.logInfo("SERVICE", "WakeLock acquired (timeout=${if (wakeTimeoutMs > 0) "${wakeTimeoutMs / 1000}s" else "permanent"})")
         }
         scheduleWakeLockTimeout(wakeTimeoutMs, onWakeAutoRelease)
     }
@@ -56,7 +56,7 @@ internal class ForwardServiceLockController(
             wifiLock = wifiManager.createWifiLock(wifiMode, "mfca::forward_service").apply {
                 acquire()
             }
-            LogManager.log("SERVICE", "WifiLock acquired (timeout=${if (wifiTimeoutMs > 0) "${wifiTimeoutMs / 1000}s" else "permanent"})")
+            LogManager.logInfo("SERVICE", "WifiLock acquired (timeout=${if (wifiTimeoutMs > 0) "${wifiTimeoutMs / 1000}s" else "permanent"})")
         }
         scheduleWifiLockTimeout(wifiTimeoutMs, onWifiAutoRelease)
     }
@@ -67,7 +67,7 @@ internal class ForwardServiceLockController(
         wakeLock?.let {
             if (it.isHeld) {
                 it.release()
-                LogManager.log("SERVICE", "WakeLock released")
+                LogManager.logInfo("SERVICE", "WakeLock released")
             }
         }
         wakeLock = null
@@ -79,7 +79,7 @@ internal class ForwardServiceLockController(
         wifiLock?.let {
             if (it.isHeld) {
                 it.release()
-                LogManager.log("SERVICE", "WifiLock released")
+                LogManager.logInfo("SERVICE", "WifiLock released")
             }
         }
         wifiLock = null

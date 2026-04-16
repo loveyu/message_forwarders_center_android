@@ -22,7 +22,7 @@ object OutputManager {
         // HTTP outputs
         config.outputs.http.forEach { httpConfig ->
             outputs[httpConfig.name] = HttpOutput(httpConfig.name, httpConfig)
-            LogManager.log(
+            LogManager.logDebug(
                 "OUTPUT",
                 "Registered HTTP output: ${httpConfig.name} -> ${httpConfig.url}"
             )
@@ -32,14 +32,14 @@ object OutputManager {
         config.outputs.link.forEach { linkConfig ->
             val output = createLinkOutput(linkConfig)
             outputs[linkConfig.name] = output
-            LogManager.log("OUTPUT", "Registered ${linkConfig.role} output: ${linkConfig.name}")
+            LogManager.logDebug("OUTPUT", "Registered ${linkConfig.role} output: ${linkConfig.name}")
         }
 
         // Internal outputs
         config.outputs.internal.forEach { internalConfig ->
             val output = createInternalOutput(internalConfig)
             outputs[internalConfig.name] = output
-            LogManager.log(
+            LogManager.logDebug(
                 "OUTPUT",
                 "Registered internal output: ${internalConfig.name} (${internalConfig.type})"
             )

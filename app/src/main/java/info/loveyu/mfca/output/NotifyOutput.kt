@@ -428,6 +428,6 @@ class NotifyOutput(
         }
         nm.notify(group, summaryId, summaryBuilder.build())
 
-        LogManager.log("INTERNAL", "Notification sent: $title (tag=$tag, group=$group, id=$id)")
+        LogManager.logDebug("INTERNAL", "Notification sent: $title (tag=$tag, group=$group, id=$id)")
     }
 }

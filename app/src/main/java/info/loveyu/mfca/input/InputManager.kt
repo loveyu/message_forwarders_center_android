@@ -46,7 +46,7 @@ object InputManager {
     fun initialize(config: AppConfig, messageHandler: (InputMessage) -> Unit) {
         clear()
         globalMessageListener = messageHandler
-        LogManager.log("INPUT", "Initializing InputManager with ${config.inputs.http.size} HTTP inputs, ${config.inputs.link.size} link inputs")
+        LogManager.logDebug("INPUT", "Initializing InputManager with ${config.inputs.http.size} HTTP inputs, ${config.inputs.link.size} link inputs")
 
         // HTTP inputs - group by linkId for shared mode
         val standaloneInputs = mutableListOf<HttpInputConfig>()
@@ -74,7 +74,7 @@ object InputManager {
                 )
             ))
             input.setOnMessageListener { msg -> messageHandler(msg) }
-            LogManager.log("INPUT", "Registered HTTP input: ${httpConfig.name} dsn=${httpConfig.dsn}")
+            LogManager.logDebug("INPUT", "Registered HTTP input: ${httpConfig.name} dsn=${httpConfig.dsn}")
         }
 
         // Shared HTTP inputs (with link_id → SharedHttpInput + HttpVirtualInputs)
@@ -105,7 +105,7 @@ object InputManager {
                     )
                 ))
                 virtualInput.setOnMessageListener { msg -> messageHandler(msg) }
-                LogManager.log("INPUT", "Registered shared HTTP input: ${httpConfig.name} (link: $linkId)")
+                LogManager.logDebug("INPUT", "Registered shared HTTP input: ${httpConfig.name} (link: $linkId)")
             }
 
             // Register SharedHttpInput as a special entry for lifecycle management
@@ -120,7 +120,7 @@ object InputManager {
                     deny = linkConfig.deny
                 )
             ))
-            LogManager.log("INPUT", "Registered shared HTTP server for link: $linkId with ${httpConfigs.size} virtual inputs")
+            LogManager.logDebug("INPUT", "Registered shared HTTP server for link: $linkId with ${httpConfigs.size} virtual inputs")
         }
 
         // Link-based inputs (MQTT, WebSocket, TCP)
@@ -141,11 +141,11 @@ object InputManager {
                     )
                 ))
                 input.setOnMessageListener { msg -> messageHandler(msg) }
-                LogManager.log("INPUT", "Registered ${linkConfig.role} input: ${linkConfig.name} (link: $linkId)")
+                LogManager.logDebug("INPUT", "Registered ${linkConfig.role} input: ${linkConfig.name} (link: $linkId)")
             }
         }
 
-        LogManager.log("INPUT", "InputManager initialized: ${entries.size} inputs registered")
+        LogManager.logDebug("INPUT", "InputManager initialized: ${entries.size} inputs registered")
     }
 
     /**
@@ -179,7 +179,7 @@ object InputManager {
                             input.stop()
                         }
                     } else if (!input.isRunning() && input.getError() == null) {
-                        LogManager.log("INPUT", "Restarting shared HTTP server: ${config.name}")
+                        LogManager.logDebug("INPUT", "Restarting shared HTTP server: ${config.name}")
                         try {
                             input.start()
                         } catch (e: Exception) {
@@ -227,7 +227,7 @@ object InputManager {
                 if (input.getError() != null) {
                     return@forEach
                 }
-                LogManager.log("INPUT", "Restarting ${config.name} (link: ${config.linkId})...")
+                LogManager.logDebug("INPUT", "Restarting ${config.name} (link: ${config.linkId})...")
                 try {
                     input.start()
                 } catch (e: Exception) {
@@ -239,7 +239,7 @@ object InputManager {
 
     fun startAll() {
         val ctx = applicationContext
-        LogManager.log("INPUT", "Starting all inputs (${entries.size} entries)")
+        LogManager.logDebug("INPUT", "Starting all inputs (${entries.size} entries)")
         entries.forEach { entry ->
             try {
                 // Check input's own network conditions (when/deny)

@@ -169,12 +169,12 @@ class SqliteQueue(
 
     override fun start() {
         lastProcessTime = System.currentTimeMillis()
-        LogManager.log("QUEUE", "SQLite queue $name started (tick-driven, interval=${config.retryInterval.value})")
+        LogManager.logDebug("QUEUE", "SQLite queue $name started (tick-driven, interval=${config.retryInterval.value})")
     }
 
     override fun stop() {
         scope.cancel()
-        LogManager.log("QUEUE", "SQLite queue $name stopped")
+        LogManager.logDebug("QUEUE", "SQLite queue $name stopped")
     }
 
     /**
@@ -211,7 +211,7 @@ class SqliteQueue(
                     handleRetry(item)
                 }
             } catch (e: Exception) {
-                LogManager.log("QUEUE", "Error processing item: ${e.message}")
+                LogManager.logWarn("QUEUE", "Error processing item: ${e.message}")
                 handleRetry(item)
             }
         }
@@ -227,7 +227,7 @@ class SqliteQueue(
                 )
             )
         } else {
-            LogManager.log("QUEUE", "Item exceeded max retries, moving to dead letter")
+            LogManager.logWarn("QUEUE", "Item exceeded max retries, moving to dead letter")
             // TODO: Move to dead letter queue
         }
     }
@@ -255,7 +255,7 @@ class SqliteQueue(
         val deleted = db.delete("queue_items", "enqueued_at < ?", arrayOf(cutoff.toString()))
         if (deleted > 0) {
             counter.addAndGet(-deleted)
-            LogManager.log("QUEUE", "Cleaned up $deleted expired items from $name")
+            LogManager.logDebug("QUEUE", "Cleaned up $deleted expired items from $name")
         }
     }
 

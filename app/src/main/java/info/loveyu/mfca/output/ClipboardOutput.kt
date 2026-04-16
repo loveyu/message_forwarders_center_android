@@ -148,7 +148,7 @@ class ClipboardOutput(
 
             deferredItems.add(item)
         }
-        LogManager.log("INTERNAL", "Clipboard deferred: $name (buffered=${deferredItems.size}, max=$maxDeferredItems)")
+        LogManager.logDebug("INTERNAL", "Clipboard deferred: $name (buffered=${deferredItems.size}, max=$maxDeferredItems)")
     }
 
     /**
@@ -174,7 +174,7 @@ class ClipboardOutput(
         val text = latestItem.text
         val contentHash = sha1(text)
         writeToClipboard(text, contentHash)
-        LogManager.log("INTERNAL", "Clipboard flushed deferred: $name (${itemsToFlush.size} buffered, wrote latest)")
+        LogManager.logDebug("INTERNAL", "Clipboard flushed deferred: $name (${itemsToFlush.size} buffered, wrote latest)")
     }
 
     /**
@@ -184,6 +184,6 @@ class ClipboardOutput(
         val clip = ClipData.newPlainText("MessageForwarder", text)
         clipboardManager?.setPrimaryClip(clip)
         lastWrite[name] = text to System.currentTimeMillis()
-        LogManager.log("INTERNAL", "Written to clipboard: $name (hash=$contentHash, len=${text.length})")
+        LogManager.logDebug("INTERNAL", "Written to clipboard: $name (hash=$contentHash, len=${text.length})")
     }
 }

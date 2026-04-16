@@ -307,7 +307,7 @@ object NetworkChecker {
 
         // 后台时系统可能返回 <unknown ssid>，此时无法判断，跳过SSID检查以保持连接
         if (currentSsid == "<unknown ssid>" || currentSsid.isEmpty()) {
-            LogManager.log("NETWORK", "SSID unavailable (app in background?), skipping SSID check")
+            LogManager.logDebug("NETWORK", "SSID unavailable (app in background?), skipping SSID check")
             return true
         }
 
@@ -334,7 +334,7 @@ object NetworkChecker {
 
         // 后台时系统可能返回 02:00:00:00:00:00，此时无法判断，跳过BSSID检查以保持连接
         if (currentBssid == "02:00:00:00:00:00") {
-            LogManager.log("NETWORK", "BSSID unavailable (app in background?), skipping BSSID check")
+            LogManager.logDebug("NETWORK", "BSSID unavailable (app in background?), skipping BSSID check")
             return true
         }
 
@@ -373,7 +373,7 @@ object NetworkChecker {
 
             (ipInt and mask) == (netInt and mask)
         } catch (e: Exception) {
-            LogManager.log("NETWORK", "IP range check error: ${e.message}")
+            LogManager.logWarn("NETWORK", "IP range check error: ${e.message}")
             false
         }
     }

@@ -55,7 +55,7 @@ class MqttOutput(
         val qos = config.qos ?: 1
         val success = link.sendToTopic(topic, item.data, qos)
         if (success) {
-            LogManager.log("MQTT", "Sent to topic: $topic via $name")
+            LogManager.logDebug("MQTT", "Sent to topic: $topic via $name")
         } else {
             LogManager.logWarn("MQTT", "Failed to send to topic: $topic via $name")
         }

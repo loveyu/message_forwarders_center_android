@@ -82,7 +82,7 @@ class IconCacheManager(private val context: Context) {
             }
             resourceId?.let { ContextCompat.getDrawable(context, it)?.toBitmap() }
         } catch (e: Exception) {
-            LogManager.log("ICON_CACHE", "Failed to load fixed icon $iconId: ${e.message}")
+            LogManager.logWarn("ICON_CACHE", "Failed to load fixed icon $iconId: ${e.message}")
             null
         }
     }
@@ -113,7 +113,7 @@ class IconCacheManager(private val context: Context) {
                 null
             }
         } catch (e: Exception) {
-            LogManager.log("ICON_CACHE", "Failed to load local icon $path: ${e.message}")
+            LogManager.logWarn("ICON_CACHE", "Failed to load local icon $path: ${e.message}")
             null
         }
     }
@@ -128,7 +128,7 @@ class IconCacheManager(private val context: Context) {
             }
             BitmapFactory.decodeFile(file.absolutePath, options)
         } catch (e: Exception) {
-            LogManager.log("ICON_CACHE", "Failed to decode bitmap from ${file.absolutePath}: ${e.message}")
+            LogManager.logWarn("ICON_CACHE", "Failed to decode bitmap from ${file.absolutePath}: ${e.message}")
             null
         }
     }
@@ -146,13 +146,13 @@ class IconCacheManager(private val context: Context) {
 
             val responseCode = connection.responseCode
             if (responseCode != HttpURLConnection.HTTP_OK) {
-                LogManager.log("ICON_CACHE", "HTTP error $responseCode for $url")
+                LogManager.logWarn("ICON_CACHE", "HTTP error $responseCode for $url")
                 return@withContext null
             }
 
             val contentLength = connection.contentLength
             if (contentLength > MAX_ICON_SIZE) {
-                LogManager.log("ICON_CACHE", "Icon too large: $contentLength bytes for $url")
+                LogManager.logWarn("ICON_CACHE", "Icon too large: $contentLength bytes for $url")
                 return@withContext null
             }
 
@@ -174,7 +174,7 @@ class IconCacheManager(private val context: Context) {
             // 加载并返回位图
             loadBitmapFromFile(cacheFile)
         } catch (e: Exception) {
-            LogManager.log("ICON_CACHE", "Failed to download icon $url: ${e.message}")
+            LogManager.logWarn("ICON_CACHE", "Failed to download icon $url: ${e.message}")
             null
         } finally {
             connection?.disconnect()
@@ -187,7 +187,7 @@ class IconCacheManager(private val context: Context) {
     fun cleanupExpired() {
         val deleted = dbHelper.cleanupExpired()
         if (deleted > 0) {
-            LogManager.log("ICON_CACHE", "Cleaned up $deleted expired icon cache entries")
+            LogManager.logDebug("ICON_CACHE", "Cleaned up $deleted expired icon cache entries")
         }
     }
 
@@ -200,7 +200,7 @@ class IconCacheManager(private val context: Context) {
         // 清理数据库记录
         val db = dbHelper.writableDatabase
         db.delete(IconCacheDbHelper.TABLE_ICON_CACHE, null, null)
-        LogManager.log("ICON_CACHE", "Cleared all icon cache")
+        LogManager.logInfo("ICON_CACHE", "Cleared all icon cache")
     }
 
     /**

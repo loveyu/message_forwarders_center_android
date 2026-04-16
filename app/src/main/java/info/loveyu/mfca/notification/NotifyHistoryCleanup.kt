@@ -14,7 +14,7 @@ object NotifyHistoryCleanup {
             val dbHelper = NotifyHistoryDbHelper(context)
             val deleted = dbHelper.cleanupOldRecords(NotifyHistoryDbHelper.DEFAULT_MAX_RECORDS)
             if (deleted > 0) {
-                LogManager.log("NOTIFY_HISTORY", "Auto cleaned up $deleted old records")
+                LogManager.logDebug("NOTIFY_HISTORY", "Auto cleaned up $deleted old records")
             }
         } catch (e: Exception) {
             LogManager.logError("NOTIFY_HISTORY", "Cleanup failed: ${e.message}")

@@ -35,7 +35,7 @@ class WebSocketInput(
                 data = data,
                 headers = emptyMap()
             )
-            LogManager.log("WS", "Message received for $inputName (${data.size} bytes)")
+            LogManager.logDebug("WS", "Message received for $inputName (${data.size} bytes)")
             if (messageListener != null) {
                 messageListener!!.invoke(message)
             } else {
@@ -48,12 +48,12 @@ class WebSocketInput(
         }
 
         running = true
-        LogManager.log("WS", "WebSocket input started: $inputName")
+        LogManager.logDebug("WS", "WebSocket input started: $inputName")
     }
 
     override fun stop() {
         running = false
-        LogManager.log("WS", "WebSocket input stopped: $inputName")
+        LogManager.logDebug("WS", "WebSocket input stopped: $inputName")
     }
 
     override fun isRunning(): Boolean = running

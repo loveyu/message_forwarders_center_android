@@ -47,7 +47,7 @@ class WebSocketOutput(
 
         val success = link.send(item.data)
         if (success) {
-            LogManager.log("WS", "Data sent via $name")
+            LogManager.logDebug("WS", "Data sent via $name")
         } else {
             LogManager.logWarn("WS", "Failed to send via $name")
         }

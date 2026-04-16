@@ -86,7 +86,7 @@ class RuleEngine(
             LogManager.logDebug("RULE", "No rules for source=${inputMessage.source}")
             return
         }
-        LogManager.log("RULE", "Source ${inputMessage.source} matched ${matchingRules.size} rules")
+        LogManager.logDebug("RULE", "Source ${inputMessage.source} matched ${matchingRules.size} rules")
 
         matchingRules.forEach { rule ->
             scope.launch {
@@ -193,7 +193,7 @@ class RuleEngine(
                 if (output != null) {
                     // Skip non-internal outputs when forwarding is disabled
                     if (!ForwardService.isForwardingEnabled && output.type != OutputType.internal) {
-                        LogManager.logInfo("RULE", "转发已暂停, 跳过输出: $outputName")
+                        LogManager.logDebug("RULE", "转发已暂停, 跳过输出: $outputName")
                         return@forEach
                     }
                     val item = QueueItem(
@@ -277,7 +277,7 @@ class RuleEngine(
                 val output = OutputManager.getOutput(outputName)
                 if (output != null) {
                     if (!ForwardService.isForwardingEnabled && output.type != OutputType.internal) {
-                        LogManager.logInfo("RULE", "转发已暂停, 跳过输出: $outputName")
+                        LogManager.logDebug("RULE", "转发已暂停, 跳过输出: $outputName")
                         return@forEach
                     }
                     val item = QueueItem(

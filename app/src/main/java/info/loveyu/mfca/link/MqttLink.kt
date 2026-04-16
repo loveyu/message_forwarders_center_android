@@ -119,7 +119,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                 else -> rawBroker
             }
 
-            LogManager.log("MQTT", "Connecting to $parsedBroker as $resolvedClientId")
+            LogManager.logDebug("MQTT", "Connecting to $parsedBroker as $resolvedClientId")
 
             val persistence = MemoryPersistence()
             client = MqttAsyncClient(parsedBroker, resolvedClientId, persistence)
@@ -198,7 +198,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                         resolvedIp = InetAddress.getByName(h).hostAddress
                     }
                 } catch (_: Exception) {}
-                LogManager.log("MQTT", "Connected successfully (keepAlive=${keepAliveSeconds}s)")
+                LogManager.logInfo("MQTT", "Connected successfully (keepAlive=${keepAliveSeconds}s)")
                 connectedAt = System.currentTimeMillis()
                 lastOutboundActivity = connectedAt
 
@@ -245,7 +245,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         consecutiveFailures = 0
         cleanupClient()
         LinkManager.notifyLinkStateChanged(id, connected = false)
-        LogManager.log("MQTT", "Disconnected: $id")
+        LogManager.logDebug("MQTT", "Disconnected: $id")
     }
 
     private fun cleanupClient() {

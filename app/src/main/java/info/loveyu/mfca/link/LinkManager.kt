@@ -76,7 +76,7 @@ object LinkManager {
         initialized = false
         clear()
         val ctx = applicationContext ?: return
-        LogManager.log("LINK", "Initializing LinkManager with ${config.links.size} links")
+        LogManager.logDebug("LINK", "Initializing LinkManager with ${config.links.size} links")
         config.links.forEach { linkConfig ->
             // HTTP links are managed by SharedHttpInput in InputManager, skip them here
             val type = LinkType.fromDsn(linkConfig.dsn)
@@ -90,13 +90,13 @@ object LinkManager {
             link.maxFailureCallback = { showLinkErrorNotification(link.id) }
             link.recoveredCallback = { showLinkRecoveredNotification(link.id) }
             links[linkConfig.id] = link
-            LogManager.log("LINK", "Registered link: ${linkConfig.id} (${LinkType.fromDsn(linkConfig.dsn)})")
+            LogManager.logDebug("LINK", "Registered link: ${linkConfig.id} (${LinkType.fromDsn(linkConfig.dsn)})")
         }
 
         // Start network monitoring (updateNetworkType won't trigger connections until initialized=true)
         startNetworkMonitoring()
         initialized = true
-        LogManager.log("LINK", "LinkManager initialized: ${links.size} active links")
+        LogManager.logDebug("LINK", "LinkManager initialized: ${links.size} active links")
     }
 
     /**
@@ -108,7 +108,7 @@ object LinkManager {
 
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                LogManager.log("LINK", "Network available")
+                LogManager.logInfo("LINK", "Network available")
                 isNetworkAvailable = true
                 resetAllFailureCounts()
                 NetworkChecker.invalidateCache()
@@ -267,7 +267,7 @@ object LinkManager {
             // Check network conditions (when/deny)
             if (!info.loveyu.mfca.util.NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
                 if (link.isConnected()) {
-                    LogManager.log("LINK", "Disconnecting ${link.id}: network conditions not met")
+                    LogManager.logDebug("LINK", "Disconnecting ${link.id}: network conditions not met")
                     link.disconnect()
                 }
                 return@forEach
@@ -285,7 +285,7 @@ object LinkManager {
                 try {
                     val attempted = link.connect()
                     if (attempted) {
-                        LogManager.log("LINK", "Reconnecting ${link.id}...")
+                        LogManager.logDebug("LINK", "Reconnecting ${link.id}...")
                     }
                 } catch (e: Exception) {
                     LogManager.logWarn("LINK", "Reconnect failed for ${link.id}: ${e.message}")
@@ -372,7 +372,7 @@ object LinkManager {
                 }
                 if (!link.isConnected()) {
                     if (link.connect()) {
-                        LogManager.log("LINK", "Reconnected ${link.id}")
+                        LogManager.logDebug("LINK", "Reconnected ${link.id}")
                     }
                 }
             } catch (e: Exception) {
@@ -451,7 +451,7 @@ object LinkManager {
 
         val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify("link_error_$linkId", notificationId, notification)
-        LogManager.log("LINK", "Posted error notification for $linkId")
+        LogManager.logDebug("LINK", "Posted error notification for $linkId")
     }
 
     private fun showLinkRecoveredNotification(linkId: String) {
@@ -479,7 +479,7 @@ object LinkManager {
 
         val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify("link_error_$linkId", notificationId, notification)
-        LogManager.log("LINK", "Posted recovered notification for $linkId")
+        LogManager.logDebug("LINK", "Posted recovered notification for $linkId")
     }
 
     private fun cancelAllLinkErrorNotifications() {

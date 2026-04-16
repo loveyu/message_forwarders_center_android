@@ -156,13 +156,13 @@ fun SettingsScreenContent(
                     }
                     if (result != null) {
                         showExportSuccess = result
-                        LogManager.log("SETTINGS", "Export completed: $result")
+                        LogManager.logInfo("SETTINGS", "Export completed: $result")
                     } else {
                         Toast.makeText(context, R.string.export_failed, Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
                     Toast.makeText(context, R.string.export_failed, Toast.LENGTH_SHORT).show()
-                    LogManager.log("SETTINGS", "Export error: ${e.message}")
+                    LogManager.logError("SETTINGS", "Export error: ${e.message}")
                 } finally {
                     isExporting = false
                 }
@@ -327,7 +327,7 @@ fun SettingsScreenContent(
                                         context.startActivity(Intent.createChooser(intent, "浏览数据文件"))
                                         Toast.makeText(context, "数据目录: ${dataDir.absolutePath}", Toast.LENGTH_LONG).show()
                                     } catch (e: Exception) {
-                                        LogManager.log("UI", "打开数据目录失败: ${e.message}")
+                                        LogManager.logError("UI", "打开数据目录失败: ${e.message}")
                                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                         clipboard.setPrimaryClip(ClipData.newPlainText("数据目录", dataDir.absolutePath))
                                         Toast.makeText(context, "已复制路径: ${dataDir.absolutePath}", Toast.LENGTH_LONG).show()
@@ -372,7 +372,7 @@ fun SettingsScreenContent(
                                 val currentStatus = AppStatusManager.loadStatus(context)
                                 val newStatus = currentStatus.copy(autoStart = enabled)
                                 AppStatusManager.saveStatus(context, newStatus)
-                                LogManager.log("SETTINGS", "Auto-start ${if (enabled) "enabled" else "disabled"}")
+                                LogManager.logInfo("SETTINGS", "Auto-start ${if (enabled) "enabled" else "disabled"}")
                             }
                         )
                     }
@@ -688,7 +688,7 @@ fun SettingsScreenContent(
                             if (success) {
                                 backupCount = 0
                                 Toast.makeText(context, R.string.clear_success, Toast.LENGTH_SHORT).show()
-                                LogManager.log("SETTINGS", "All backups cleared")
+                                LogManager.logInfo("SETTINGS", "All backups cleared")
                             } else {
                                 Toast.makeText(context, R.string.clear_failed, Toast.LENGTH_SHORT).show()
                             }
@@ -726,7 +726,7 @@ fun SettingsScreenContent(
                             iconCacheCount = 0
                             iconCacheSize = 0L
                             Toast.makeText(context, "图标缓存已清理", Toast.LENGTH_SHORT).show()
-                            LogManager.log("SETTINGS", "Icon cache cleared")
+                            LogManager.logInfo("SETTINGS", "Icon cache cleared")
                             isClearingIconCache = false
                         }
                     }
@@ -776,7 +776,7 @@ private suspend fun exportAppDataToZip(context: Context, outputUri: Uri): String
             }
             return@withContext outputUri.lastPathSegment
         } catch (e: Exception) {
-            LogManager.log("SETTINGS", "Export error: ${e.message}")
+            LogManager.logError("SETTINGS", "Export error: ${e.message}")
             null
         }
     }
@@ -815,7 +815,7 @@ private fun zipDirectory(
                         zipOut.closeEntry()
                     }
                 } catch (e: Exception) {
-                    LogManager.log("SETTINGS", "Failed to zip file ${file.name}: ${e.message}")
+                    LogManager.logWarn("SETTINGS", "Failed to zip file ${file.name}: ${e.message}")
                 }
             }
         }
