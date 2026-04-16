@@ -43,7 +43,7 @@ class ForwardService : Service() {
         const val ACTION_TOGGLE_WAKELOCK = "info.loveyu.mfca.action.TOGGLE_WAKELOCK"
         const val ACTION_TOGGLE_WIFILOCK = "info.loveyu.mfca.action.TOGGLE_WIFILOCK"
 
-        /** 失败计数重置间隔：每 20 个 tick（tick=30s 时约 10 分钟） */
+        /** 失败计数重置间隔：每 20 个 tick（默认 tick=40s 时约 13 分钟） */
         private const val FAILURE_RESET_TICK_INTERVAL = 20
 
         /** 事件触发 tick 的最小间隔：5 秒，防止事件风暴 */
@@ -191,9 +191,9 @@ class ForwardService : Service() {
     )
     private var tickCount = 0
 
-    // tick 间隔，从 config.scheduler 读取，默认 30s
+    // tick 间隔，从 config.scheduler 读取，默认 40s
     @Volatile
-    private var tickIntervalMs: Long = 30_000L
+    private var tickIntervalMs: Long = 40_000L
 
     // 上次 tick 执行时间，用于事件触发时的最小间隔判断
     @Volatile
@@ -207,9 +207,9 @@ class ForwardService : Service() {
 
     // 配置的两个间隔值
     @Volatile
-    private var normalTickIntervalMs: Long = 30_000L
+    private var normalTickIntervalMs: Long = 40_000L
     @Volatile
-    private var chargingTickIntervalMs: Long = 30_000L
+    private var chargingTickIntervalMs: Long = 40_000L
 
     // Lock timeout from config (0 = permanent)
     @Volatile
@@ -255,7 +255,7 @@ class ForwardService : Service() {
         // 2. Input 健康检查
         InputManager.onTick()
 
-        // 3. SqliteQueue 处理（根据各自的 retryInterval 判断是否到期）
+        // 3. SqliteQueue 处理（由 tick 触发，异步执行到期批次）
         QueueManager.onTick()
 
         // 4. 每 N 个 tick 执行失败重置（≈10 分钟）

@@ -28,20 +28,20 @@ data class AppConfig(
  * 统一调度器配置
  */
 data class SchedulerConfig(
-    val tickInterval: Duration = Duration("30s"),
+    val tickInterval: Duration = Duration("40s"),
     val chargingTickInterval: Duration? = null,
     val wakeLockTimeout: Duration = Duration("1h"),
     val wifiLockTimeout: Duration = Duration("1h")
 ) {
-    /** 保证最小 15 秒 */
+    /** 保证最小 20 秒 */
     val effectiveTickInterval: Duration
-        get() = if (tickInterval.millis >= 15_000) tickInterval else Duration("15s")
+        get() = if (tickInterval.millis >= 20_000) tickInterval else Duration("20s")
 
     /** 充电时的 tick 间隔，未配置时与普通间隔一致 */
     val effectiveChargingTickInterval: Duration
         get() {
             val interval = chargingTickInterval ?: tickInterval
-            return if (interval.millis >= 15_000) interval else Duration("15s")
+            return if (interval.millis >= 20_000) interval else Duration("20s")
         }
 }
 

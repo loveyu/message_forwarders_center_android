@@ -31,7 +31,8 @@ data class QueueItem(
     val priority: Int = 0,
     val metadata: Map<String, String> = emptyMap(),
     val enqueuedAt: Long = System.currentTimeMillis(),
-    val retryCount: Int = 0
+    val retryCount: Int = 0,
+    val nextAttemptAt: Long = enqueuedAt
 ) {
     val text: String
         get() = String(data)

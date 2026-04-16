@@ -12,11 +12,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * SQLite 持久化队列实现
@@ -30,8 +29,8 @@ class SqliteQueue(
     override val type: QueueType = QueueType.sqlite
 
     private val dbHelper: QueueDbHelper
-    private val pendingQueue = ConcurrentLinkedQueue<QueueItem>()
     private val counter = AtomicInteger(0)
+    private val isProcessing = AtomicBoolean(false)
     private var consumer: QueueConsumer? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var lastProcessTime = 0L
@@ -93,30 +92,34 @@ class SqliteQueue(
             put("priority", item.priority)
             put("enqueued_at", item.enqueuedAt)
             put("retry_count", item.retryCount)
+            put("next_attempt_at", item.nextAttemptAt)
             put("metadata", serializeMetadata(item.metadata))
         }
 
         val id = db.insert("queue_items", null, values)
         if (id != -1L) {
             counter.incrementAndGet()
-            scheduleRetryIfNeeded(item)
             return true
         }
         return false
     }
 
     override fun dequeue(): QueueItem? {
+        return dequeueReady(System.currentTimeMillis())
+    }
+
+    private fun dequeueReady(now: Long): QueueItem? {
         val db = dbHelper.writableDatabase
 
         val cursor = db.query(
             "queue_items",
             null,
+            "next_attempt_at <= ?",
+            arrayOf(now.toString()),
             null,
             null,
-            null,
-            null,
-            "priority DESC, enqueued_at ASC",
-            config.batchSize.toString()
+            "priority DESC, next_attempt_at ASC, enqueued_at ASC",
+            "1"
         )
 
         var item: QueueItem? = null
@@ -162,7 +165,6 @@ class SqliteQueue(
         val db = dbHelper.writableDatabase
         db.delete("queue_items", null, null)
         counter.set(0)
-        pendingQueue.clear()
     }
 
     override fun start() {
@@ -177,16 +179,21 @@ class SqliteQueue(
 
     /**
      * 由统一 Ticker 调用。
-     * 仅当距上次处理超过 retryInterval 时才执行批处理。
+     * 当到达 queue 的最小处理间隔时，异步执行一轮到期任务批处理。
      */
     fun onTick() {
         val now = System.currentTimeMillis()
         if (now - lastProcessTime < config.retryInterval.millis) return
+        if (!isProcessing.compareAndSet(false, true)) return
         lastProcessTime = now
 
         scope.launch {
-            processBatch()
-            cleanupExpired()
+            try {
+                processBatch(now)
+                cleanupExpired()
+            } finally {
+                isProcessing.set(false)
+            }
         }
     }
 
@@ -194,9 +201,9 @@ class SqliteQueue(
         this.consumer = consumer
     }
 
-    private suspend fun processBatch() {
+    private suspend fun processBatch(now: Long) {
         repeat(config.batchSize) {
-            val item = dequeue() ?: return@repeat
+            val item = dequeueReady(now) ?: return@repeat
 
             try {
                 val success = consumer?.invoke(item) ?: false
@@ -212,12 +219,13 @@ class SqliteQueue(
 
     private fun handleRetry(item: QueueItem) {
         if (item.retryCount < config.maxRetry) {
-            pendingQueue.offer(item)
-            val delay = calculateBackoff(item.retryCount)
-            scope.launch {
-                delay(delay)
-                enqueue(item.copy(retryCount = item.retryCount + 1))
-            }
+            val nextAttemptAt = System.currentTimeMillis() + calculateBackoff(item.retryCount)
+            enqueue(
+                item.copy(
+                    retryCount = item.retryCount + 1,
+                    nextAttemptAt = nextAttemptAt
+                )
+            )
         } else {
             LogManager.log("QUEUE", "Item exceeded max retries, moving to dead letter")
             // TODO: Move to dead letter queue
@@ -239,10 +247,6 @@ class SqliteQueue(
         }
     }
 
-    private fun scheduleRetryIfNeeded(item: QueueItem) {
-        // Already handled in handleRetry
-    }
-
     private fun cleanupExpired() {
         val cleanup = config.cleanup ?: return
         val cutoff = System.currentTimeMillis() - cleanup.maxAge.millis
@@ -262,6 +266,7 @@ class SqliteQueue(
             priority = cursor.getInt(cursor.getColumnIndexOrThrow("priority")),
             enqueuedAt = cursor.getLong(cursor.getColumnIndexOrThrow("enqueued_at")),
             retryCount = cursor.getInt(cursor.getColumnIndexOrThrow("retry_count")),
+            nextAttemptAt = cursor.getLong(cursor.getColumnIndexOrThrow("next_attempt_at")),
             metadata = deserializeMetadata(cursor.getString(cursor.getColumnIndexOrThrow("metadata")))
         )
     }
@@ -281,7 +286,7 @@ class SqliteQueue(
     private inner class QueueDbHelper(
         context: Context,
         dbPath: String
-    ) : SQLiteOpenHelper(context, dbPath, null, 1) {
+    ) : SQLiteOpenHelper(context, dbPath, null, 2) {
 
         override fun onCreate(db: SQLiteDatabase) {
             db.execSQL("""
@@ -291,16 +296,21 @@ class SqliteQueue(
                     priority INTEGER DEFAULT 0,
                     enqueued_at INTEGER NOT NULL,
                     retry_count INTEGER DEFAULT 0,
+                    next_attempt_at INTEGER NOT NULL,
                     metadata TEXT
                 )
             """.trimIndent())
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_queue_priority ON queue_items(priority)")
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_queue_enqueued ON queue_items(enqueued_at)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_queue_next_attempt ON queue_items(next_attempt_at)")
         }
 
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-            db.execSQL("DROP TABLE IF EXISTS queue_items")
-            onCreate(db)
+            if (oldVersion < 2) {
+                db.execSQL("ALTER TABLE queue_items ADD COLUMN next_attempt_at INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE queue_items SET next_attempt_at = enqueued_at WHERE next_attempt_at = 0")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_queue_next_attempt ON queue_items(next_attempt_at)")
+            }
         }
     }
 }

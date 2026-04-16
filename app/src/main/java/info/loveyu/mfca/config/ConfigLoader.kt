@@ -44,7 +44,7 @@ object ConfigLoader {
         if (scheduler == null) return SchedulerConfig()
         val map = scheduler as Map<String, Any>
         return SchedulerConfig(
-            tickInterval = Duration(map["tickInterval"] as? String ?: "30s"),
+            tickInterval = Duration(map["tickInterval"] as? String ?: "40s"),
             chargingTickInterval = (map["chargingTickInterval"] as? String)?.let { Duration(it) },
             wakeLockTimeout = Duration(map["wakeLockTimeout"] as? String ?: "1h"),
             wifiLockTimeout = Duration(map["wifiLockTimeout"] as? String ?: "1h")
