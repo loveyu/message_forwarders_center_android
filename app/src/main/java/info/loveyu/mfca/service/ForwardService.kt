@@ -1,26 +1,12 @@
 package info.loveyu.mfca.service
 
 import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationChannelGroup
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.ServiceInfo
-import android.graphics.drawable.Icon
-import android.net.wifi.WifiManager
-import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
-import android.os.PowerManager
-import info.loveyu.mfca.InputMethodFloatingActivity
 import info.loveyu.mfca.MainActivity
-import info.loveyu.mfca.R
-import info.loveyu.mfca.StatusFloatingActivity
 import info.loveyu.mfca.config.AppConfig
 import info.loveyu.mfca.config.AppStatusConfig
 import info.loveyu.mfca.config.ConfigLoader
@@ -28,7 +14,6 @@ import info.loveyu.mfca.deadletter.DeadLetterHandler
 import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.input.InputMessage
 import info.loveyu.mfca.link.LinkManager
-import info.loveyu.mfca.output.ClipboardOutput
 import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.pipeline.RuleEngine
 import info.loveyu.mfca.queue.QueueManager
@@ -41,13 +26,10 @@ import info.loveyu.mfca.util.NetworkChecker
 import info.loveyu.mfca.util.Preferences
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.TimeUnit
 
 class ForwardService : Service() {
 
     companion object {
-        private const val TAG = "ForwardService"
         const val CHANNEL_ID = "forward_service_channel"
         const val LINK_ERROR_CHANNEL_ID = "link_error_channel"
         const val LINK_ERROR_GROUP_ID = "link_error_group"
@@ -124,9 +106,6 @@ class ForwardService : Service() {
         var onStatsChanged: (() -> Unit)? = null
         var onStartFailed: ((String) -> Unit)? = null
 
-        @Volatile
-        private var lastNotificationStats: String? = null
-
         private var serviceInstance: ForwardService? = null
 
         // Current loaded config
@@ -198,11 +177,6 @@ class ForwardService : Service() {
     private var legacyMode = false
     private lateinit var preferences: Preferences
 
-    // WakeLock: keeps CPU running when screen is off
-    private var wakeLock: PowerManager.WakeLock? = null
-    // WifiLock: keeps WiFi connection alive when screen is off
-    private var wifiLock: WifiManager.WifiLock? = null
-
     // New architecture components
     private var ruleEngine: RuleEngine? = null
     private var deadLetterHandler: DeadLetterHandler? = null
@@ -210,13 +184,12 @@ class ForwardService : Service() {
     // 统一调度器：替代原来分散的 statsScheduler + configExecutor
     // 同时处理周期性 tick 和一次性 config 加载任务
     private val appScheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
-    private var tickFuture: ScheduledFuture<*>? = null
+    private val tickScheduler = CoalescingTicker(
+        scheduler = appScheduler,
+        onTick = { onTick() },
+        onError = { e -> LogManager.logError("SERVICE", "Tick execution error: ${e.message}") }
+    )
     private var tickCount = 0
-    private val tickLock = Any()
-    @Volatile
-    private var tickInProgress = false
-    @Volatile
-    private var tickPending = false
 
     // tick 间隔，从 config.scheduler 读取，默认 30s
     @Volatile
@@ -227,9 +200,6 @@ class ForwardService : Service() {
     private var lastTickTime: Long = 0L
     @Volatile
     private var lastNotificationPresenceCheckMs: Long = 0L
-
-    // 屏幕亮起广播接收器（动态注册，SCREEN_ON 无法静态注册）
-    private var screenOnReceiver: BroadcastReceiver? = null
 
     // 充电状态：影响 tick 间隔
     @Volatile
@@ -246,11 +216,12 @@ class ForwardService : Service() {
     private var wakeLockTimeoutMs: Long = 3_600_000L // default 1h
     @Volatile
     private var wifiLockTimeoutMs: Long = 3_600_000L // default 1h
-    private var wakeLockTimeoutFuture: ScheduledFuture<*>? = null
-    private var wifiLockTimeoutFuture: ScheduledFuture<*>? = null
 
     @Volatile
     private var isApplyingConfig = false
+    private val notificationDelegate by lazy { ForwardServiceNotificationDelegate(this) }
+    private val lockController by lazy { ForwardServiceLockController(this, appScheduler) }
+    private val screenEventController by lazy { ForwardServiceScreenEventController(this, appScheduler) }
 
     override fun onCreate() {
         super.onCreate()
@@ -258,52 +229,14 @@ class ForwardService : Service() {
         preferences = Preferences(this)
         createNotificationChannel()
         startTick()
-        registerScreenOnReceiver()
+        registerScreenEvents()
     }
 
     /**
      * 启动统一 Ticker
      */
     private fun startTick() {
-        tickFuture?.cancel(false)
-        tickFuture = appScheduler.scheduleAtFixedRate({
-            requestTick()
-        }, tickIntervalMs, tickIntervalMs, TimeUnit.MILLISECONDS)
-    }
-
-    /**
-     * 请求执行一次 tick。
-     * - 若当前有 tick 正在执行，则仅标记 pending（合并多个请求）
-     * - 若空闲，则提交 worker 执行
-     */
-    private fun requestTick() {
-        synchronized(tickLock) {
-            if (tickInProgress) {
-                tickPending = true
-                return
-            }
-            tickInProgress = true
-        }
-        appScheduler.execute { runTickWorker() }
-    }
-
-    private fun runTickWorker() {
-        while (true) {
-            try {
-                onTick()
-            } catch (e: Exception) {
-                LogManager.logError("SERVICE", "Tick execution error: ${e.message}")
-            }
-
-            synchronized(tickLock) {
-                if (!tickPending) {
-                    tickInProgress = false
-                    return
-                }
-                // 合并多个等待请求：无论排队了多少次，只额外执行一次
-                tickPending = false
-            }
-        }
+        tickScheduler.start(tickIntervalMs)
     }
 
     /**
@@ -360,7 +293,7 @@ class ForwardService : Service() {
             return
         }
         LogManager.logDebug("SERVICE", "TriggerTick: event-driven early tick (last was ${elapsed}ms ago)")
-        requestTick()
+        tickScheduler.request()
     }
 
     /**
@@ -368,71 +301,17 @@ class ForwardService : Service() {
      * ACTION_SCREEN_ON 是受保护广播，只能动态注册。
      * 同时监听充放电事件以动态调整 tick 间隔。
      */
-    private fun registerScreenOnReceiver() {
-        if (screenOnReceiver != null) return
-        screenOnReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
-                when (intent?.action) {
-                    Intent.ACTION_SCREEN_ON -> {
-                        LogManager.logDebug("SERVICE", "Screen on, triggering tick and flushing clipboard")
-                        ClipboardOutput.notifyScreenOn()
-                        checkNotificationPresenceNow("screen_on")
-                        doTriggerTick()
-                        flushClipboardOutputs()
-                    }
-                    Intent.ACTION_USER_PRESENT -> {
-                        LogManager.logDebug("SERVICE", "User present (unlocked), triggering tick and flushing clipboard")
-                        ClipboardOutput.notifyScreenOn()
-                        checkNotificationPresenceNow("user_present")
-                        doTriggerTick()
-                        flushClipboardOutputs()
-                    }
-                    Intent.ACTION_SCREEN_OFF -> {
-                        LogManager.logDebug("SERVICE", "Screen off, clipboard outputs will buffer")
-                        ClipboardOutput.notifyScreenOff()
-                    }
-                    Intent.ACTION_POWER_CONNECTED -> {
-                        LogManager.logDebug("SERVICE", "Power connected, switching to charging interval")
-                        updateChargingState(true)
-                    }
-                    Intent.ACTION_POWER_DISCONNECTED -> {
-                        LogManager.logDebug("SERVICE", "Power disconnected, switching to normal interval")
-                        updateChargingState(false)
-                    }
-                }
-            }
-        }
-        val filter = IntentFilter().apply {
-            addAction(Intent.ACTION_SCREEN_ON)
-            addAction(Intent.ACTION_USER_PRESENT)
-            addAction(Intent.ACTION_POWER_CONNECTED)
-            addAction(Intent.ACTION_POWER_DISCONNECTED)
-            addAction(Intent.ACTION_SCREEN_OFF)
-        }
-        registerReceiver(screenOnReceiver, filter)
-        // 检测当前充电状态
-        detectInitialChargingState()
-    }
-
-    private fun detectInitialChargingState() {
-        val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
-        isCharging = bm.isCharging
-        tickIntervalMs = if (isCharging) chargingTickIntervalMs else normalTickIntervalMs
-        LogManager.logDebug("SERVICE", "Initial charging state: $isCharging, tickInterval=${tickIntervalMs}ms")
-    }
-
-    /**
-     * 亮屏/解锁时刷入剪贴板缓冲区。
-     * 在 appScheduler 线程执行，避免阻塞主线程。
-     */
-    private fun flushClipboardOutputs() {
-        appScheduler.execute {
-            try {
-                OutputManager.flushAllClipboardOutputs()
-            } catch (e: Exception) {
-                LogManager.logError("SERVICE", "Failed to flush clipboard outputs: ${e.message}")
-            }
-        }
+    private fun registerScreenEvents() {
+        screenEventController.register(
+            onInitialChargingDetected = { charging ->
+                isCharging = charging
+                tickIntervalMs = if (charging) chargingTickIntervalMs else normalTickIntervalMs
+                LogManager.logDebug("SERVICE", "Initial charging state: $isCharging, tickInterval=${tickIntervalMs}ms")
+            },
+            onChargingChanged = { charging -> updateChargingState(charging) },
+            onTriggerTick = { doTriggerTick() },
+            onNotificationCheck = { reason -> checkNotificationPresenceNow(reason) }
+        )
     }
 
     /**
@@ -451,13 +330,8 @@ class ForwardService : Service() {
         doTriggerTick()
     }
 
-    private fun unregisterScreenOnReceiver() {
-        screenOnReceiver?.let {
-            try {
-                unregisterReceiver(it)
-            } catch (_: Exception) {}
-            screenOnReceiver = null
-        }
+    private fun unregisterScreenEvents() {
+        screenEventController.unregister()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -475,7 +349,7 @@ class ForwardService : Service() {
                 isReceivingEnabled = !isReceivingEnabled
                 preferences.receivingEnabled = isReceivingEnabled
                 saveStatus()
-                lastNotificationStats = null
+                notificationDelegate.invalidateStatsCache()
                 updateNotification()
                 onStatsChanged?.invoke()
                 LogManager.logInfo("SERVICE", if (isReceivingEnabled) "已恢复接收" else "已暂停接收")
@@ -485,7 +359,7 @@ class ForwardService : Service() {
                 isForwardingEnabled = !isForwardingEnabled
                 preferences.forwardingEnabled = isForwardingEnabled
                 saveStatus()
-                lastNotificationStats = null
+                notificationDelegate.invalidateStatsCache()
                 updateNotification()
                 onStatsChanged?.invoke()
                 LogManager.logInfo("SERVICE", if (isForwardingEnabled) "已恢复转发" else "已暂停转发")
@@ -499,7 +373,7 @@ class ForwardService : Service() {
                     releaseWakeLock()
                 }
                 saveStatus()
-                lastNotificationStats = null
+                notificationDelegate.invalidateStatsCache()
                 updateNotification()
                 onStatsChanged?.invoke()
                 LogManager.logInfo("SERVICE", if (isWakeLockEnabled) "已启用 WakeLock" else "已关闭 WakeLock")
@@ -513,7 +387,7 @@ class ForwardService : Service() {
                     releaseWifiLock()
                 }
                 saveStatus()
-                lastNotificationStats = null
+                notificationDelegate.invalidateStatsCache()
                 updateNotification()
                 onStatsChanged?.invoke()
                 LogManager.logInfo("SERVICE", if (isWifiLockEnabled) "已启用 WifiLock" else "已关闭 WifiLock")
@@ -580,9 +454,9 @@ class ForwardService : Service() {
 
     override fun onDestroy() {
         stopForeground(STOP_FOREGROUND_REMOVE)
-        tickFuture?.cancel(false)
+        tickScheduler.stop()
         appScheduler.shutdown()
-        unregisterScreenOnReceiver()
+        unregisterScreenEvents()
         serviceInstance = null
         stopAll()
         super.onDestroy()
@@ -759,21 +633,6 @@ class ForwardService : Service() {
         LogManager.log("MESSAGE", "Processed: ${message.source} -> ${String(message.data).take(1000)}")
     }
 
-    private fun reloadConfig() {
-        val savedConfig = preferences.loadFullConfig()
-        if (savedConfig != null && savedConfig.isNotBlank()) {
-            try {
-                val config = ConfigLoader.loadConfig(savedConfig)
-                applyConfig(config)
-                LogManager.log("CONFIG", "Config reloaded successfully")
-            } catch (e: Exception) {
-                LogManager.log("CONFIG", "Failed to reload config: ${e.message}")
-            }
-        } else {
-            LogManager.log("CONFIG", "No saved config to reload")
-        }
-    }
-
     private fun stopAll() {
         InputManager.stopAll()
         QueueManager.stopAll()
@@ -829,110 +688,15 @@ class ForwardService : Service() {
     }
 
     private fun createNotificationChannel() {
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            getString(R.string.service_notification_channel),
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            setLockscreenVisibility(Notification.VISIBILITY_PUBLIC)
-        }
-        manager.createNotificationChannel(channel)
-
-        val linkErrorChannel = NotificationChannel(
-            LINK_ERROR_CHANNEL_ID,
-            getString(R.string.link_error_channel_name),
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            group = LINK_ERROR_GROUP_ID
-            setLockscreenVisibility(Notification.VISIBILITY_PUBLIC)
-        }
-        manager.createNotificationChannelGroup(
-            NotificationChannelGroup(LINK_ERROR_GROUP_ID, getString(R.string.link_error_channel_name))
-        )
-        manager.createNotificationChannel(linkErrorChannel)
+        notificationDelegate.createNotificationChannels()
     }
 
     private fun createNotification(): Notification {
-        val contentIntent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0, contentIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        // 状态栏显示: L链路数 I输入数 O输出数
-        val statsText = if (isRunning) {
-            buildString {
-                append("L${linkCount} I${inputCount} O${outputCount}")
-                if (!isReceivingEnabled) append(" | 暂停接收")
-                if (!isForwardingEnabled) append(" | 暂停转发")
-                if (isWakeLockEnabled) append(" | W锁")
-                if (isWifiLockEnabled) append(" | WiFi锁")
-            }
-        } else {
-            "已停止"
-        }
-
-        val builder = Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle(getString(R.string.service_notification_title))
-            .setContentText(statsText)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentIntent(pendingIntent)
-            .setOngoing(true)
-            .setVisibility(Notification.VISIBILITY_PUBLIC)
-
-        // Only show action buttons when service is running
-        if (isRunning) {
-            // Status toggle action - opens floating panel
-            val statusIntent = Intent(this, StatusFloatingActivity::class.java)
-            val statusPendingIntent = PendingIntent.getActivity(
-                this, 1, statusIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            builder.addAction(Notification.Action.Builder(
-                Icon.createWithResource(this, R.drawable.ic_notification_receive),
-                getString(R.string.notification_action_status),
-                statusPendingIntent
-            ).build())
-        }
-
-        // Input method switch action (always visible, controlled by config)
-        if (currentConfig?.quickSettings?.inputMethodSwitcher != false) {
-            val inputMethodIntent = Intent(this, InputMethodFloatingActivity::class.java)
-            val inputMethodPendingIntent = PendingIntent.getActivity(
-                this, 3, inputMethodIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            builder.addAction(Notification.Action.Builder(
-                Icon.createWithResource(this, R.drawable.ic_tile_input_method),
-                getString(R.string.notification_action_input_method),
-                inputMethodPendingIntent
-            ).build())
-        }
-
-        return builder.build()
+        return notificationDelegate.createNotification()
     }
 
     private fun updateNotification() {
-        val statsText = if (isRunning) {
-            buildString {
-                append("L${linkCount} I${inputCount} O${outputCount}")
-                if (!isReceivingEnabled) append(" | 暂停接收")
-                if (!isForwardingEnabled) append(" | 暂停转发")
-                if (isWakeLockEnabled) append(" | W锁")
-                if (isWifiLockEnabled) append(" | WiFi锁")
-            }
-        } else {
-            "已停止"
-        }
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val isNotificationPresent = manager.activeNotifications.any { statusBarNotification ->
-            statusBarNotification.id == NOTIFICATION_ID && statusBarNotification.tag == null
-        }
-        if (statsText == lastNotificationStats && isNotificationPresent) return
-        lastNotificationStats = statsText
-        manager.notify(NOTIFICATION_ID, createNotification())
+        notificationDelegate.updateNotification()
     }
 
     private fun checkNotificationPresenceNow(reason: String) {
@@ -942,107 +706,55 @@ class ForwardService : Service() {
     }
 
     private fun acquireLocks() {
-        // Acquire partial wake lock only when enabled (to avoid battery drain)
-        if (isWakeLockEnabled) {
-            acquireWakeLock()
-        }
-        // Acquire WiFi lock only when enabled (to avoid WLAN battery drain)
-        if (isWifiLockEnabled) {
-            acquireWifiLock()
-        }
+        lockController.acquireLocks(
+            wakeEnabled = isWakeLockEnabled,
+            wifiEnabled = isWifiLockEnabled,
+            wakeTimeoutMs = wakeLockTimeoutMs,
+            wifiTimeoutMs = wifiLockTimeoutMs,
+            onWakeAutoRelease = { onWakeLockAutoReleased() },
+            onWifiAutoRelease = { onWifiLockAutoReleased() }
+        )
     }
 
     private fun acquireWakeLock() {
-        if (wakeLock == null) {
-            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-            wakeLock = powerManager.newWakeLock(
-                PowerManager.PARTIAL_WAKE_LOCK,
-                "mfca::forward_service"
-            ).apply {
-                acquire()
-            }
-            LogManager.log("SERVICE", "WakeLock acquired (timeout=${if (wakeLockTimeoutMs > 0) "${wakeLockTimeoutMs / 1000}s" else "permanent"})")
-            scheduleWakeLockTimeout()
+        lockController.acquireWakeLock(wakeLockTimeoutMs) {
+            onWakeLockAutoReleased()
         }
     }
 
     private fun acquireWifiLock() {
-        if (wifiLock == null) {
-            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-            val wifiMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                WifiManager.WIFI_MODE_FULL_LOW_LATENCY
-            } else {
-                @Suppress("DEPRECATION")
-                WifiManager.WIFI_MODE_FULL_HIGH_PERF
-            }
-            wifiLock = wifiManager.createWifiLock(wifiMode, "mfca::forward_service").apply {
-                acquire()
-            }
-            LogManager.log("SERVICE", "WifiLock acquired (timeout=${if (wifiLockTimeoutMs > 0) "${wifiLockTimeoutMs / 1000}s" else "permanent"})")
-            scheduleWifiLockTimeout()
+        lockController.acquireWifiLock(wifiLockTimeoutMs) {
+            onWifiLockAutoReleased()
         }
-    }
-
-    private fun scheduleWakeLockTimeout() {
-        wakeLockTimeoutFuture?.cancel(false)
-        wakeLockTimeoutFuture = null
-        if (wakeLockTimeoutMs <= 0) return
-        wakeLockTimeoutFuture = appScheduler.schedule({
-            if (wakeLock?.isHeld == true) {
-                releaseWakeLock()
-                isWakeLockEnabled = false
-                saveStatus()
-                lastNotificationStats = null
-                updateNotification()
-                onStatsChanged?.invoke()
-                LogManager.log("SERVICE", "WakeLock auto-released after ${wakeLockTimeoutMs / 1000}s timeout")
-            }
-        }, wakeLockTimeoutMs, TimeUnit.MILLISECONDS)
-    }
-
-    private fun scheduleWifiLockTimeout() {
-        wifiLockTimeoutFuture?.cancel(false)
-        wifiLockTimeoutFuture = null
-        if (wifiLockTimeoutMs <= 0) return
-        wifiLockTimeoutFuture = appScheduler.schedule({
-            if (wifiLock?.isHeld == true) {
-                releaseWifiLock()
-                isWifiLockEnabled = false
-                saveStatus()
-                lastNotificationStats = null
-                updateNotification()
-                onStatsChanged?.invoke()
-                LogManager.log("SERVICE", "WifiLock auto-released after ${wifiLockTimeoutMs / 1000}s timeout")
-            }
-        }, wifiLockTimeoutMs, TimeUnit.MILLISECONDS)
     }
 
     private fun releaseWifiLock() {
-        wifiLockTimeoutFuture?.cancel(false)
-        wifiLockTimeoutFuture = null
-        wifiLock?.let {
-            if (it.isHeld) {
-                it.release()
-                LogManager.log("SERVICE", "WifiLock released")
-            }
-        }
-        wifiLock = null
+        lockController.releaseWifiLock()
     }
 
     private fun releaseWakeLock() {
-        wakeLockTimeoutFuture?.cancel(false)
-        wakeLockTimeoutFuture = null
-        wakeLock?.let {
-            if (it.isHeld) {
-                it.release()
-                LogManager.log("SERVICE", "WakeLock released")
-            }
-        }
-        wakeLock = null
+        lockController.releaseWakeLock()
     }
 
     private fun releaseLocks() {
-        releaseWakeLock()
-        releaseWifiLock()
+        lockController.releaseAll()
+    }
+
+    private fun onWakeLockAutoReleased() {
+        isWakeLockEnabled = false
+        saveStatus()
+        notificationDelegate.invalidateStatsCache()
+        updateNotification()
+        onStatsChanged?.invoke()
+        LogManager.log("SERVICE", "WakeLock auto-released after ${wakeLockTimeoutMs / 1000}s timeout")
+    }
+
+    private fun onWifiLockAutoReleased() {
+        isWifiLockEnabled = false
+        saveStatus()
+        notificationDelegate.invalidateStatsCache()
+        updateNotification()
+        onStatsChanged?.invoke()
+        LogManager.log("SERVICE", "WifiLock auto-released after ${wifiLockTimeoutMs / 1000}s timeout")
     }
 }
