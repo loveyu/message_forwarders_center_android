@@ -70,11 +70,12 @@ class NotifyOutput(
         val channelName = config.channel ?: "默认通知"
 
         val importance = NotificationManager.IMPORTANCE_DEFAULT
-        val channel = NotificationChannel(channelId, channelName, importance).apply {
-            description = "Message Forwarder 通知渠道: $channelName"
+        val channel = NotificationChannel("channel_$channelId", channelName, importance).apply {
+            description = "Forwarder通知: $channelName"
             enableLights(true)
             enableVibration(true)
             setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC)
+            setSound(null, null)
         }
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
