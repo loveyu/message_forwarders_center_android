@@ -4,37 +4,40 @@ import java.util.Date
 import java.util.Properties
 import java.util.TimeZone
 
-val buildTime: String = SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z (z)").apply {
-    timeZone = TimeZone.getDefault()
-}.format(Date())
+val buildTime: String =
+    SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z (z)").apply {
+        timeZone = TimeZone.getDefault()
+    }.format(Date())
 
-val gitBranch: String = try {
-    // Check if HEAD is on a tag
-    val tagProcess = Runtime.getRuntime().exec(arrayOf("git", "describe", "--tags", "--exact-match", "HEAD"))
-    tagProcess.waitFor()
-    if (tagProcess.exitValue() == 0) {
-        val tagName = tagProcess.inputStream.bufferedReader().readText().trim()
-        "tag-$tagName"
-    } else {
-        val process = Runtime.getRuntime().exec(arrayOf("git", "rev-parse", "--abbrev-ref", "HEAD"))
-        process.waitFor()
-        val ref = process.inputStream.bufferedReader().readText().trim()
-        if (ref == "HEAD") {
-            // Detached HEAD, use short commit hash
-            val hashProcess = Runtime.getRuntime().exec(arrayOf("git", "rev-parse", "--short", "HEAD"))
-            hashProcess.waitFor()
-            hashProcess.inputStream.bufferedReader().readText().trim()
+val gitBranch: String =
+    try {
+        // Check if HEAD is on a tag
+        val tagProcess = Runtime.getRuntime().exec(arrayOf("git", "describe", "--tags", "--exact-match", "HEAD"))
+        tagProcess.waitFor()
+        if (tagProcess.exitValue() == 0) {
+            val tagName = tagProcess.inputStream.bufferedReader().readText().trim()
+            "tag-$tagName"
         } else {
-            ref
+            val process = Runtime.getRuntime().exec(arrayOf("git", "rev-parse", "--abbrev-ref", "HEAD"))
+            process.waitFor()
+            val ref = process.inputStream.bufferedReader().readText().trim()
+            if (ref == "HEAD") {
+                // Detached HEAD, use short commit hash
+                val hashProcess = Runtime.getRuntime().exec(arrayOf("git", "rev-parse", "--short", "HEAD"))
+                hashProcess.waitFor()
+                hashProcess.inputStream.bufferedReader().readText().trim()
+            } else {
+                ref
+            }
         }
+    } catch (e: Exception) {
+        "unknown"
     }
-} catch (e: Exception) {
-    "unknown"
-}
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.spotless)
 }
 
 android {
@@ -90,7 +93,7 @@ android {
             isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
 
             val keystorePropertiesFile = rootProject.file("keystore.properties")
@@ -112,7 +115,12 @@ android {
         compose = true
         buildConfig = true
     }
+}
 
+spotless {
+    kotlin {
+        ktfmt().kotlinlangStyle()
+    }
 }
 
 dependencies {

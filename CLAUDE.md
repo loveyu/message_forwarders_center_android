@@ -9,11 +9,25 @@ Message Forwarders Center Android - Android 消息转发中心，基于 Android 
 ## 常用命令
 
 ```bash
+./gradlew spotlessApply        # 格式化所有 Kotlin 代码
+./gradlew spotlessCheck        # 检查代码风格违规
 ./gradlew assembleDebug        # 调试构建
 ./gradlew assembleRelease      # 发布构建（需配置 keystore.properties）
 ./gradlew clean                # 清理构建产物
 ./gradlew build                # 完整构建
 ```
+
+## 代码风格
+
+项目使用 Spotless + ktfmt 规范 Kotlin 代码风格（kotlinlangStyle）。
+
+**提交前必须执行**：
+1. `./gradlew spotlessApply` — 格式化所有 Kotlin 文件
+2. `./gradlew assembleDebug` — 验证编译通过
+
+禁止提交存在 ktlint/ktfmt 违规的代码。CI 会拒绝违规的 PR。
+
+详细规范见 `.editorconfig` 和 `app/build.gradle.kts` 中的 spotless 配置。
 
 ## 架构概览
 
