@@ -66,6 +66,7 @@ class ForwardService : Service() {
 
         /** 事件触发 tick 的最小间隔：5 秒，防止事件风暴 */
         private const val MIN_TICK_INTERVAL_MS = 5_000L
+        private const val NOTIFICATION_PRESENCE_CHECK_INTERVAL_MS = 10 * 60 * 1000L
 
         /**
          * 由外部事件触发一次提前 tick（网络变更、前后台切换等）。
@@ -219,6 +220,8 @@ class ForwardService : Service() {
     // 上次 tick 执行时间，用于事件触发时的最小间隔判断
     @Volatile
     private var lastTickTime: Long = 0L
+    @Volatile
+    private var lastNotificationPresenceCheckMs: Long = 0L
 
     // 屏幕亮起广播接收器（动态注册，SCREEN_ON 无法静态注册）
     private var screenOnReceiver: BroadcastReceiver? = null
@@ -268,7 +271,8 @@ class ForwardService : Service() {
      */
     private fun onTick() {
         if (!isRunning) return
-        lastTickTime = System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        lastTickTime = now
         tickCount++
         LogManager.logDebug("SERVICE", "Tick #$tickCount start")
 
@@ -297,6 +301,11 @@ class ForwardService : Service() {
 
         // 7. 批量 flush 文件输出缓冲
         OutputManager.flushAllFileOutputs()
+
+        // 8. 每 10 分钟兜底检查一次前台通知是否仍在
+        if (now - lastNotificationPresenceCheckMs >= NOTIFICATION_PRESENCE_CHECK_INTERVAL_MS) {
+            checkNotificationPresenceNow("periodic_10m")
+        }
     }
 
     /**
@@ -331,12 +340,14 @@ class ForwardService : Service() {
                     Intent.ACTION_SCREEN_ON -> {
                         LogManager.logDebug("SERVICE", "Screen on, triggering tick and flushing clipboard")
                         ClipboardOutput.notifyScreenOn()
+                        checkNotificationPresenceNow("screen_on")
                         doTriggerTick()
                         flushClipboardOutputs()
                     }
                     Intent.ACTION_USER_PRESENT -> {
                         LogManager.logDebug("SERVICE", "User present (unlocked), triggering tick and flushing clipboard")
                         ClipboardOutput.notifyScreenOn()
+                        checkNotificationPresenceNow("user_present")
                         doTriggerTick()
                         flushClipboardOutputs()
                     }
@@ -475,6 +486,7 @@ class ForwardService : Service() {
             ACTION_RELOAD_CONFIG -> {
                 stopAll()
                 start()
+                checkNotificationPresenceNow("reload_config")
                 return START_STICKY
             }
             "OPEN_NOTIFICATION" -> {
@@ -501,6 +513,7 @@ class ForwardService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+        checkNotificationPresenceNow("start_command")
 
         if (intent?.action == ACTION_START) {
             start()
@@ -877,10 +890,19 @@ class ForwardService : Service() {
         } else {
             "已停止"
         }
-        if (statsText == lastNotificationStats) return
-        lastNotificationStats = statsText
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val isNotificationPresent = manager.activeNotifications.any { statusBarNotification ->
+            statusBarNotification.id == NOTIFICATION_ID && statusBarNotification.tag == null
+        }
+        if (statsText == lastNotificationStats && isNotificationPresent) return
+        lastNotificationStats = statsText
         manager.notify(NOTIFICATION_ID, createNotification())
+    }
+
+    private fun checkNotificationPresenceNow(reason: String) {
+        lastNotificationPresenceCheckMs = System.currentTimeMillis()
+        LogManager.logDebug("SERVICE", "Checking foreground notification presence: $reason")
+        updateNotification()
     }
 
     private fun acquireLocks() {
