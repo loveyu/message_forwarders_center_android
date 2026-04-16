@@ -170,6 +170,7 @@ class TcpLink(override val config: LinkConfig, private val context: Context) : L
             }
 
             connected.set(true)
+            LinkManager.notifyLinkStateChanged(id, connected = true)
             val shouldNotify = hadMaxFailure && consecutiveFailures > 0
             consecutiveFailures = 0
             hadMaxFailure = false
@@ -202,6 +203,7 @@ class TcpLink(override val config: LinkConfig, private val context: Context) : L
             connected.set(false)
             socket?.close()
             socket = null
+            LinkManager.notifyLinkStateChanged(id, connected = false)
             LogManager.log("TCP", "Disconnected: $id")
         } catch (e: Exception) {
             LogManager.logWarn("TCP", "Disconnect error: ${e.message}")

@@ -189,6 +189,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
                     if (shouldNotifyRecovered) {
                         recoveredCallback?.invoke()
                     }
+                    LinkManager.notifyLinkStateChanged(id, connected = true)
                     LogManager.log("WS", "Connected: $id")
                 }
 
@@ -212,6 +213,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
                         connected = false
                         connecting = false
                     }
+                    LinkManager.notifyLinkStateChanged(id, connected = false)
                     LogManager.log("WS", "Closed: $code $reason")
                 }
 
@@ -228,6 +230,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
                     if (shouldNotify) {
                         maxFailureCallback?.invoke()
                     }
+                    LinkManager.notifyLinkStateChanged(id, connected = false)
                     errorListener?.invoke(t as? Exception ?: Exception(t.message))
                 }
             })
@@ -281,6 +284,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
             webSocket = null
             connected = false
         }
+        LinkManager.notifyLinkStateChanged(id, connected = false)
         LogManager.log("WS", "Disconnected: $id")
     }
 

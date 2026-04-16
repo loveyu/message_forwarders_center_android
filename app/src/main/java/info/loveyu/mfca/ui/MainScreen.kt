@@ -52,7 +52,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -92,24 +91,16 @@ import info.loveyu.mfca.ui.theme.LinkInputChipBorderDark
 import info.loveyu.mfca.ui.theme.LinkInputChipBorderLight
 import info.loveyu.mfca.ui.theme.LinkInputChipTextDark
 import info.loveyu.mfca.ui.theme.LinkInputChipTextLight
-import info.loveyu.mfca.ui.theme.LogDebugColor
-import info.loveyu.mfca.ui.theme.LogErrorColor
-import info.loveyu.mfca.ui.theme.LogInfoColor
-import info.loveyu.mfca.ui.theme.LogWarnColor
 import info.loveyu.mfca.ui.theme.StatusDisabledDark
 import info.loveyu.mfca.ui.theme.StatusDisabledLight
 import info.loveyu.mfca.ui.theme.StatusRunningDark
 import info.loveyu.mfca.ui.theme.StatusRunningLight
-import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.Preferences
 
-/** LogLevel 到 Compose Color 的映射（替代原来的字符串解析） */
-private fun LogLevel.toColor(): Color = when (this) {
-    LogLevel.ERROR -> LogErrorColor
-    LogLevel.WARN -> LogWarnColor
-    LogLevel.INFO -> LogInfoColor
-    LogLevel.DEBUG -> LogDebugColor
-}
+private data class ComponentSelectionKey(
+    val id: String,
+    val type: ComponentType
+)
 
 @Composable
 fun MainTopBar() {
@@ -174,7 +165,7 @@ fun MainScreen(
 
     val detailSheetState = rememberModalBottomSheetState()
     var showComponentSheet by remember { mutableStateOf(false) }
-    var selectedComponent by remember { mutableStateOf<ComponentStatus?>(null) }
+    var selectedComponentKey by remember { mutableStateOf<ComponentSelectionKey?>(null) }
 
     val listState = rememberLazyListState()
 
@@ -200,12 +191,20 @@ fun MainScreen(
     LaunchedEffect(isRunning) {
         if (!isRunning) {
             showComponentSheet = false
-            selectedComponent = null
+            selectedComponentKey = null
         }
     }
 
-    @Suppress("UNUSED")
     val networkStateVersion by LinkManager.networkStateVersion.collectAsState()
+    val allComponents = remember(isRunning, networkStateVersion) {
+        if (!isRunning) emptyList() else getAllComponentStatuses(context)
+    }
+    val enabledComponents = remember(allComponents) { allComponents.filter { it.isEnabled } }
+    val disabledComponents = remember(allComponents) { allComponents.filter { !it.isEnabled } }
+    val selectedComponent = remember(selectedComponentKey, allComponents) {
+        val key = selectedComponentKey ?: return@remember null
+        allComponents.find { it.id == key.id && it.type == key.type }
+    }
 
     Column(
         modifier = Modifier
@@ -273,7 +272,6 @@ fun MainScreen(
 
         // 组件状态卡片
         if (isRunning) {
-            val (enabledComponents, disabledComponents) = getEnabledAndDisabledComponents(context)
             val totalCount = enabledComponents.size + disabledComponents.size
 
             Card(
@@ -322,13 +320,13 @@ fun MainScreen(
                         ) {
                             enabledComponents.take(5).forEach { component ->
                                 ComponentChip(component = component, isEnabled = true, onClick = {
-                                    selectedComponent = component
+                                    selectedComponentKey = ComponentSelectionKey(component.id, component.type)
                                     showComponentSheet = true
                                 })
                             }
                             disabledComponents.take(5).forEach { component ->
                                 ComponentChip(component = component, isEnabled = false, onClick = {
-                                    selectedComponent = component
+                                    selectedComponentKey = ComponentSelectionKey(component.id, component.type)
                                     showComponentSheet = true
                                 })
                             }
@@ -362,7 +360,7 @@ fun MainScreen(
             sheetState = detailSheetState,
             onDismiss = {
                 showComponentSheet = false
-                selectedComponent = null
+                selectedComponentKey = null
             }
         )
     }

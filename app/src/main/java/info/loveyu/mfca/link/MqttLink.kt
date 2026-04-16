@@ -157,6 +157,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                 override fun connectionLost(cause: Throwable?) {
                     val uptime = if (connectedAt > 0) (System.currentTimeMillis() - connectedAt) / 1000 else -1
                     connected = false
+                    LinkManager.notifyLinkStateChanged(id, connected = false)
                     LogManager.logWarn("MQTT", "Connection lost after ${uptime}s (keepAlive=${keepAliveSeconds}s): ${cause?.javaClass?.simpleName}: ${cause?.message}")
                     if (cause != null) {
                         val trace = cause.stackTraceToString().lines().take(5).joinToString(" | ")
@@ -186,6 +187,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
 
             if (client?.isConnected == true) {
                 connected = true
+                LinkManager.notifyLinkStateChanged(id, connected = true)
                 val shouldNotify = hadMaxFailure && consecutiveFailures > 0
                 consecutiveFailures = 0
                 hadMaxFailure = false
@@ -242,6 +244,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         connecting = false
         consecutiveFailures = 0
         cleanupClient()
+        LinkManager.notifyLinkStateChanged(id, connected = false)
         LogManager.log("MQTT", "Disconnected: $id")
     }
 

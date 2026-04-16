@@ -541,6 +541,15 @@ object LinkManager {
     fun getCurrentNetworkType(): NetworkType = currentNetworkType
 
     /**
+     * 通知 UI 链路连接状态已变化（connected/disconnected）。
+     * 用于触发组件状态面板及时刷新，不必等待网络回调或下一次 tick。
+     */
+    fun notifyLinkStateChanged(linkId: String, connected: Boolean) {
+        LogManager.logDebug("LINK", "Link state changed: $linkId connected=$connected")
+        _networkStateVersion.value++
+    }
+
+    /**
      * 获取已连接的链路数量
      */
     fun getConnectedCount(): Int = links.values.count { it.isConnected() }
