@@ -120,6 +120,7 @@ android {
 spotless {
     kotlin {
         ktfmt().kotlinlangStyle()
+        ktlint()
     }
 }
 
