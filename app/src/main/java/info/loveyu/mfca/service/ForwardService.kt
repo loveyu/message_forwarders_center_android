@@ -30,7 +30,7 @@ import java.util.concurrent.ScheduledExecutorService
 class ForwardService : Service() {
 
     companion object {
-        const val CHANNEL_ID = "forward_service_channel"
+        const val CHANNEL_ID = "forward_service_status_channel_v2"
         const val LINK_ERROR_CHANNEL_ID = "link_error_channel"
         const val LINK_ERROR_GROUP_ID = "link_error_group"
         const val NOTIFICATION_ID = 1

@@ -28,8 +28,11 @@ internal class ForwardServiceNotificationDelegate(
         val channel = NotificationChannel(
             ForwardService.CHANNEL_ID,
             service.getString(R.string.service_notification_channel),
-            NotificationManager.IMPORTANCE_LOW
+            NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
+            description = "前台服务状态通知"
+            enableVibration(false)
+            setSound(null, null)
             setLockscreenVisibility(Notification.VISIBILITY_PUBLIC)
         }
         manager.createNotificationChannel(channel)
@@ -59,11 +62,13 @@ internal class ForwardServiceNotificationDelegate(
         )
 
         val builder = Notification.Builder(service, ForwardService.CHANNEL_ID)
-            .setContentTitle(service.getString(R.string.service_notification_title))
-            .setContentText(buildStatsText())
+            .setContentTitle(buildStatsText())
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .setOnlyAlertOnce(true)
             .setOngoing(true)
+            .setShowWhen(false)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
 
         if (ForwardService.isRunning) {
