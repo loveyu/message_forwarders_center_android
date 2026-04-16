@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -98,41 +99,59 @@ fun LogSection(
                         text = stringResource(R.string.log_section),
                         style = MaterialTheme.typography.titleMedium
                     )
-                    ExposedDropdownMenuBox(
-                        expanded = expandedLogLevel,
-                        onExpandedChange = { expandedLogLevel = it }
-                    ) {
-                        OutlinedTextField(
-                            value = currentLogLevel.name,
-                            onValueChange = {},
-                            readOnly = true,
-                            trailingIcon = {
-                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedLogLevel)
-                            },
-                            modifier = Modifier
-                                .width(120.dp)
-                                .height(40.dp)
-                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                        )
-                        ExposedDropdownMenu(
-                            expanded = expandedLogLevel,
-                            onDismissRequest = { expandedLogLevel = false }
-                        ) {
-                            LogLevel.entries.forEach { level ->
-                                DropdownMenuItem(
-                                    text = { Text(level.name) },
-                                    onClick = {
-                                        LogManager.setLogLevel(level, preferences)
-                                        LogManager.appendLog(
-                                            LogLevel.INFO,
-                                            "UI",
-                                            "日志等级已切换为 ${level.name}"
-                                        )
-                                        expandedLogLevel = false
+                    Text(
+                        text = currentLogLevel.name,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable { expandedLogLevel = true }
+                    )
+                    if (expandedLogLevel) {
+                        AlertDialog(
+                            onDismissRequest = { expandedLogLevel = false },
+                            title = { Text("选择日志等级") },
+                            text = {
+                                Column {
+                                    LogLevel.entries.forEach { level ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    LogManager.setLogLevel(level, preferences)
+                                                    LogManager.appendLog(
+                                                        LogLevel.INFO,
+                                                        "UI",
+                                                        "日志等级已切换为 ${level.name}"
+                                                    )
+                                                    expandedLogLevel = false
+                                                }
+                                                .padding(vertical = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = level.name,
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = if (level == currentLogLevel)
+                                                    MaterialTheme.colorScheme.primary
+                                                else
+                                                    MaterialTheme.colorScheme.onSurface
+                                            )
+                                            if (level == currentLogLevel) {
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(
+                                                    text = "✓",
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
                                     }
-                                )
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { expandedLogLevel = false }) {
+                                    Text("取消")
+                                }
                             }
-                        }
+                        )
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
