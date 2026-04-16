@@ -40,7 +40,7 @@ internal class ForwardServiceNotificationDelegate(
         val linkErrorChannel = NotificationChannel(
             ForwardService.LINK_ERROR_CHANNEL_ID,
             service.getString(R.string.link_error_channel_name),
-            NotificationManager.IMPORTANCE_LOW
+            NotificationManager.IMPORTANCE_HIGH
         ).apply {
             group = ForwardService.LINK_ERROR_GROUP_ID
             setLockscreenVisibility(Notification.VISIBILITY_PUBLIC)
