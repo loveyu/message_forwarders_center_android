@@ -33,6 +33,11 @@ class WebSocketOutput(
                 callback?.invoke(false)
                 return
             }
+            if (link.isConnecting()) {
+                LogManager.logDebug("WS", "Skipping send via $name: link is connecting")
+                callback?.invoke(false)
+                return
+            }
             link.connect()
         }
 

@@ -40,6 +40,11 @@ class MqttOutput(
                 callback?.invoke(false)
                 return
             }
+            if (link.isConnecting()) {
+                LogManager.logDebug("MQTT", "Skipping send via $name: link is connecting")
+                callback?.invoke(false)
+                return
+            }
             link.connect()
         }
 

@@ -212,6 +212,11 @@ class ForwardService : Service() {
     private val appScheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
     private var tickFuture: ScheduledFuture<*>? = null
     private var tickCount = 0
+    private val tickLock = Any()
+    @Volatile
+    private var tickInProgress = false
+    @Volatile
+    private var tickPending = false
 
     // tick 间隔，从 config.scheduler 读取，默认 30s
     @Volatile
@@ -262,8 +267,43 @@ class ForwardService : Service() {
     private fun startTick() {
         tickFuture?.cancel(false)
         tickFuture = appScheduler.scheduleAtFixedRate({
-            onTick()
+            requestTick()
         }, tickIntervalMs, tickIntervalMs, TimeUnit.MILLISECONDS)
+    }
+
+    /**
+     * 请求执行一次 tick。
+     * - 若当前有 tick 正在执行，则仅标记 pending（合并多个请求）
+     * - 若空闲，则提交 worker 执行
+     */
+    private fun requestTick() {
+        synchronized(tickLock) {
+            if (tickInProgress) {
+                tickPending = true
+                return
+            }
+            tickInProgress = true
+        }
+        appScheduler.execute { runTickWorker() }
+    }
+
+    private fun runTickWorker() {
+        while (true) {
+            try {
+                onTick()
+            } catch (e: Exception) {
+                LogManager.logError("SERVICE", "Tick execution error: ${e.message}")
+            }
+
+            synchronized(tickLock) {
+                if (!tickPending) {
+                    tickInProgress = false
+                    return
+                }
+                // 合并多个等待请求：无论排队了多少次，只额外执行一次
+                tickPending = false
+            }
+        }
     }
 
     /**
@@ -310,7 +350,7 @@ class ForwardService : Service() {
 
     /**
      * 由外部事件触发一次提前 tick。
-     * 检查最小触发间隔，满足则立即执行并重置周期定时器。
+     * 检查最小触发间隔，满足则请求执行一次 tick（与周期 tick 合并调度）。
      */
     private fun doTriggerTick() {
         val now = System.currentTimeMillis()
@@ -320,11 +360,7 @@ class ForwardService : Service() {
             return
         }
         LogManager.logDebug("SERVICE", "TriggerTick: event-driven early tick (last was ${elapsed}ms ago)")
-        appScheduler.execute {
-            onTick()
-            // 重置周期定时器：从现在开始重新计时
-            startTick()
-        }
+        requestTick()
     }
 
     /**

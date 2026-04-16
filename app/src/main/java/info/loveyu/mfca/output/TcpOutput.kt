@@ -33,6 +33,11 @@ class TcpOutput(
                 callback?.invoke(false)
                 return
             }
+            if (link.isConnecting()) {
+                LogManager.logDebug("TCP", "Skipping send via $name: link is connecting")
+                callback?.invoke(false)
+                return
+            }
             link.connect()
         }
 

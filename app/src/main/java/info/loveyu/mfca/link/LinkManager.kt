@@ -60,11 +60,6 @@ object LinkManager {
 
     private const val LINK_ERROR_NOTIFICATION_BASE = 2000
 
-    // 独立重连线程池，避免阻塞 tick 线程
-    private val reconnectExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
-        Thread(r, "mfca-reconnect").apply { isDaemon = true }
-    }
-
     // Network state version for UI refresh
     private val _networkStateVersion = MutableStateFlow(0)
     val networkStateVersion: StateFlow<Int> = _networkStateVersion.asStateFlow()
@@ -261,7 +256,6 @@ object LinkManager {
 
     /**
      * 检查所有链路的网络条件，不符合的断开，符合但断开的重新连接。
-     * 重连操作提交到独立线程池，避免阻塞 tick 线程。
      */
     private fun checkAllLinkConditions() {
         val ctx = applicationContext ?: return
@@ -282,16 +276,19 @@ object LinkManager {
             // Skip if auto-reconnect is disabled
             if (!link.shouldAutoReconnect()) return@forEach
 
-            // Submit reconnect to dedicated executor (non-blocking for tick thread)
+            // Async links (e.g. WebSocket) may still be handshaking.
+            // Skip reconnect while a connect attempt is already in progress.
+            if (link.isConnecting()) return@forEach
+
+            // Try to reconnect if disconnected
             if (!link.isConnected()) {
-                val linkId = link.id
-                reconnectExecutor.execute {
-                    try {
-                        LogManager.log("LINK", "Reconnecting $linkId...")
-                        link.connect()
-                    } catch (e: Exception) {
-                        LogManager.logWarn("LINK", "Reconnect failed for $linkId: ${e.message}")
+                try {
+                    val attempted = link.connect()
+                    if (attempted) {
+                        LogManager.log("LINK", "Reconnecting ${link.id}...")
                     }
+                } catch (e: Exception) {
+                    LogManager.logWarn("LINK", "Reconnect failed for ${link.id}: ${e.message}")
                 }
             }
         }
@@ -335,6 +332,9 @@ object LinkManager {
             }
 
             try {
+                if (link.isConnecting()) {
+                    return@forEach
+                }
                 if (!link.isConnected()) {
                     link.connect()
                 }
@@ -367,6 +367,9 @@ object LinkManager {
             }
 
             try {
+                if (link.isConnecting()) {
+                    return@forEach
+                }
                 if (!link.isConnected()) {
                     if (link.connect()) {
                         LogManager.log("LINK", "Reconnected ${link.id}")
