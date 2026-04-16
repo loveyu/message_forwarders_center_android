@@ -180,25 +180,12 @@ fun MainScreen(
 
     var isRunning by remember { mutableStateOf(ForwardService.isRunning) }
     var isStarting by remember { mutableStateOf(ForwardService.isStarting) }
-    var isPaused by remember { mutableStateOf(LogManager.isPaused()) }
-    var isFileLogging by remember { mutableStateOf(LogManager.isFileLoggingEnabled()) }
-    var isAllLogcatEnabled by remember { mutableStateOf(LogManager.isAllLogcatEnabled()) }
 
     val detailSheetState = rememberModalBottomSheetState()
     var showComponentSheet by remember { mutableStateOf(false) }
     var selectedComponent by remember { mutableStateOf<ComponentStatus?>(null) }
 
-    val logs by LogManager.logs.collectAsState()
-    val currentLogLevel by LogManager.logLevelFlow.collectAsState()
-    // 过滤在写入时进行，UI 直接引用全部日志
-    val displayLogs = logs
     val listState = rememberLazyListState()
-
-    LaunchedEffect(displayLogs.size) {
-        if (displayLogs.isNotEmpty()) {
-            listState.animateScrollToItem(displayLogs.size - 1)
-        }
-    }
 
     LaunchedEffect(Unit) {
         isRunning = ForwardService.isRunning
@@ -368,85 +355,14 @@ fun MainScreen(
         }
 
         // 日志卡片
-        Card(
+        LogSection(
+            preferences = preferences,
+            listState = listState,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
                 .padding(bottom = 8.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(10.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(text = stringResource(R.string.log_section), style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            text = currentLogLevel.name,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        TextButton(onClick = {
-                            if (isPaused) LogManager.resumeLogs() else LogManager.pauseLogs()
-                            isPaused = LogManager.isPaused()
-                        }) { Text(if (isPaused) "继续" else "暂停", style = MaterialTheme.typography.labelSmall) }
-                        TextButton(onClick = { LogManager.clearLogs() }) { Text("清空", style = MaterialTheme.typography.labelSmall) }
-                        TextButton(onClick = {
-                            if (isFileLogging) {
-                                LogManager.setFileLoggingEnabled(false, preferences)
-                                isFileLogging = false
-                                Toast.makeText(context, "已停止保存日志", Toast.LENGTH_SHORT).show()
-                            } else {
-                                LogManager.setFileLoggingEnabled(true, preferences)
-                                isFileLogging = true
-                                Toast.makeText(context, "已开始保存日志到文件", Toast.LENGTH_SHORT).show()
-                            }
-                        }) { Text(if (isFileLogging) "停存" else "存日志", style = MaterialTheme.typography.labelSmall) }
-                        TextButton(onClick = {
-                            val newState = !isAllLogcatEnabled
-                            LogManager.logWarn("UI", "Toggle logcat all: $isAllLogcatEnabled -> $newState")
-                            LogManager.setAllLogcatEnabled(newState, preferences)
-                            isAllLogcatEnabled = LogManager.isAllLogcatEnabled()
-                        }) { Text(if (isAllLogcatEnabled) "全Log" else "Logcat", style = MaterialTheme.typography.labelSmall) }
-                    }
-                }
-
-                HorizontalDivider()
-
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    state = listState
-                ) {
-                    items(displayLogs, key = { it.id }) { entry ->
-                        Text(
-                            text = entry.formatted,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = entry.level.toColor(),
-                            softWrap = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 2.dp)
-                                .clickable {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("log", entry.formatted))
-                                    Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
-                                }
-                        )
-                    }
-                }
-            }
-        }
+        )
     }
 
     if (showComponentSheet) {
