@@ -34,7 +34,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.gestures.detectTapGestures
 import info.loveyu.mfca.R
 import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
@@ -186,10 +188,24 @@ fun LogSection(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 2.dp)
-                            .clickable {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(ClipData.newPlainText("log", entry.formatted))
-                                Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+                            .pointerInput(logs) {
+                                detectTapGestures(
+                                    onTap = {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("log", entry.formatted))
+                                        Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+                                    },
+                                    onDoubleTap = {
+                                        if (logs.isEmpty()) {
+                                            Toast.makeText(context, "暂无日志", Toast.LENGTH_SHORT).show()
+                                            return@detectTapGestures
+                                        }
+                                        val allLogs = logs.joinToString(separator = "\n") { it.formatted }
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("logs_all", allLogs))
+                                        Toast.makeText(context, "已复制全部日志", Toast.LENGTH_SHORT).show()
+                                    }
+                                )
                             }
                     )
                 }
