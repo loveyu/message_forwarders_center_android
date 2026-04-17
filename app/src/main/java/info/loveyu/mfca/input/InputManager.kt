@@ -274,6 +274,24 @@ object InputManager {
         }
     }
 
+    /**
+     * 仅停止 link-based 输入源（MQTT/WS/TCP 订阅类）。
+     * 网络真正断开时调用，HTTP Server 类输入不受影响。
+     */
+    fun stopAllLinkBased() {
+        entries.forEach { entry ->
+            if (!entry.config.isLinkBased) return@forEach
+            try {
+                if (entry.input.isRunning()) {
+                    LogManager.logDebug("INPUT", "Stopping link-based input on network loss: ${entry.config.name}")
+                    entry.input.stop()
+                }
+            } catch (e: Exception) {
+                LogManager.logError("INPUT", "Error stopping ${entry.config.name}: ${e.message}")
+            }
+        }
+    }
+
     fun clear() {
         stopAll()
         entries.clear()

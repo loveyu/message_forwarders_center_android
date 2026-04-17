@@ -119,9 +119,21 @@ object LinkManager {
 
             override fun onLost(network: Network) {
                 LogManager.logWarn("LINK", "Network lost")
-                isNetworkAvailable = false
-                resetAllFailureCounts()
                 NetworkChecker.invalidateCache()
+                resetAllFailureCounts()
+
+                // 基于 activeNetwork 真实状态更新 isNetworkAvailable，
+                // 避免 WiFi→Mobile 切换时因 onLost(wifi) 将 isNetworkAvailable 错误置 false
+                val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                val hasNetwork = cm.activeNetwork != null
+                isNetworkAvailable = hasNetwork
+
+                // 真正无网时立即断开所有链路，绕过 updateNetworkType 的 1s 节流
+                if (!hasNetwork && initialized) {
+                    disconnectAll()
+                    InputManager.stopAllLinkBased()
+                }
+
                 updateNetworkType()
                 // 网络丢失也触发 tick，及时更新状态
                 ForwardService.triggerTick()
@@ -208,7 +220,6 @@ object LinkManager {
         // Disconnect all links when network is lost
         if (network == null) {
             disconnectAll()
-            InputManager.checkAllInputConditions()
             return
         }
 
