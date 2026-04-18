@@ -5,13 +5,13 @@ on:
     branches:
       - main
       - dev
-  release:
-    types: [published]
+    tags:
+      - 'v*'
 
 jobs:
   debug:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
     permissions:
       contents: read
 
@@ -66,6 +66,7 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
 
@@ -102,12 +103,7 @@ jobs:
     - name: Determine version name
       id: build_info
       run: |
-        if [[ $GITHUB_REF == refs/tags/* ]]; then
-          VERSION="${GITHUB_REF#refs/tags/}"
-          echo "version_name=${VERSION}" >> $GITHUB_OUTPUT
-        else
-          echo "version_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-        fi
+        echo "version_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
 
     - name: Create keystore
       env:
@@ -136,8 +132,7 @@ jobs:
         echo "apk_path=$APK_NAME" >> $GITHUB_OUTPUT
         echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
 
-    - name: Build Raw Release APK (Tag only)
-      if: github.event_name == 'release'
+    - name: Build Raw Release APK
       run: |
         # Disable minification and resource shrinking using sed
         sed -i 's/isMinifyEnabled = true/isMinifyEnabled = false/' app/build.gradle.kts
@@ -148,7 +143,6 @@ jobs:
         sed -i 's/isShrinkResources = false/isShrinkResources = true/' app/build.gradle.kts
 
     - name: Find Raw Release APK
-      if: github.event_name == 'release'
       id: find_raw_apk
       run: |
         APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
@@ -165,21 +159,22 @@ jobs:
         retention-days: 30
 
     - name: Upload Raw Release APK artifact
-      if: github.event_name == 'release'
       uses: actions/upload-artifact@v4
       with:
         name: MFCenter-${{ steps.build_info.outputs.version_name }}-release-raw-apk
         path: ${{ steps.find_raw_apk.outputs.apk_path }}
         retention-days: 30
 
-    - name: Upload to GitHub Release
-      if: github.event_name == 'release'
+    - name: Create or update GitHub Release
       uses: softprops/action-gh-release@v2
       with:
+        tag_name: ${{ github.ref_name }}
         files: |
           ${{ steps.find_apk.outputs.apk_name }}
           ${{ steps.find_raw_apk.outputs.apk_name }}
         name: ${{ github.ref_name }}
+        overwrite_files: true
+        generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
