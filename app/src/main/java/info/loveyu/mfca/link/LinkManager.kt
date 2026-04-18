@@ -231,18 +231,25 @@ object LinkManager {
     /**
      * 统一 Ticker 调用：执行链路健康检查 + MQTT 心跳日志
      */
-    fun onTick() {
-        val ctx = applicationContext ?: return
-        if (!isNetworkAvailable) return
+    fun onTick(): Long? {
+        applicationContext ?: return null
+        if (!isNetworkAvailable) return null
 
         checkAllLinkConditions()
+
+        val now = System.currentTimeMillis()
+        var nextDelayMs: Long? = null
 
         // MQTT 心跳日志
         links.values.forEach { link ->
             if (link is MqttLink) {
+                link.onTick(now)?.let { delayMs ->
+                    nextDelayMs = nextDelayMs?.let { minOf(it, delayMs) } ?: delayMs
+                }
                 link.collectHeartbeatStatus()?.let { LogManager.logDebug("MQTT", it) }
             }
         }
+        return nextDelayMs
     }
 
     /**

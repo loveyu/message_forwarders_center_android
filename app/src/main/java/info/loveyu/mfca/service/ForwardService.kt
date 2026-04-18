@@ -24,8 +24,10 @@ import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.NetworkChecker
 import info.loveyu.mfca.util.Preferences
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 
 class ForwardService : Service() {
 
@@ -189,6 +191,7 @@ class ForwardService : Service() {
         onTick = { onTick() },
         onError = { e -> LogManager.logError("SERVICE", "Tick execution error: ${e.message}") }
     )
+    private var earlyTickFuture: ScheduledFuture<*>? = null
     private var tickCount = 0
 
     // tick 间隔，从 config.scheduler 读取，默认 40s
@@ -236,6 +239,7 @@ class ForwardService : Service() {
      * 启动统一 Ticker
      */
     private fun startTick() {
+        cancelEarlyTick()
         tickScheduler.start(tickIntervalMs)
     }
 
@@ -243,14 +247,15 @@ class ForwardService : Service() {
      * 统一 Ticker 回调：所有定时检查集中执行
      */
     private fun onTick() {
+        cancelEarlyTick()
         if (!isRunning) return
         val now = System.currentTimeMillis()
         lastTickTime = now
         tickCount++
         LogManager.logDebug("SERVICE", "Tick #$tickCount start")
 
-        // 1. Link 健康检查 + MQTT 心跳日志
-        LinkManager.onTick()
+        // 1. Link 健康检查 + MQTT 心跳
+        val nextLinkTickDelayMs = LinkManager.onTick()
 
         // 2. Input 健康检查
         InputManager.onTick()
@@ -279,6 +284,8 @@ class ForwardService : Service() {
         if (now - lastNotificationPresenceCheckMs >= NOTIFICATION_PRESENCE_CHECK_INTERVAL_MS) {
             checkNotificationPresenceNow("periodic_10m")
         }
+
+        scheduleEarlyTick(nextLinkTickDelayMs)
     }
 
     /**
@@ -294,6 +301,21 @@ class ForwardService : Service() {
         }
         LogManager.logDebug("SERVICE", "TriggerTick: event-driven early tick (last was ${elapsed}ms ago)")
         tickScheduler.request()
+    }
+
+    private fun scheduleEarlyTick(delayMs: Long?) {
+        cancelEarlyTick()
+        if (!isRunning || delayMs == null) return
+        val boundedDelayMs = delayMs.coerceAtLeast(1L)
+        if (boundedDelayMs >= tickIntervalMs) return
+        earlyTickFuture = appScheduler.schedule({
+            tickScheduler.request()
+        }, boundedDelayMs, TimeUnit.MILLISECONDS)
+    }
+
+    private fun cancelEarlyTick() {
+        earlyTickFuture?.cancel(false)
+        earlyTickFuture = null
     }
 
     /**
@@ -455,6 +477,7 @@ class ForwardService : Service() {
     override fun onDestroy() {
         stopForeground(STOP_FOREGROUND_REMOVE)
         tickScheduler.stop()
+        cancelEarlyTick()
         appScheduler.shutdown()
         unregisterScreenEvents()
         serviceInstance = null
@@ -639,6 +662,7 @@ class ForwardService : Service() {
         LinkManager.disconnectAll()
         OutputManager.clear()
         releaseLocks()
+        cancelEarlyTick()
         isRunning = false
         receivedCount = 0
         forwardedCount = 0

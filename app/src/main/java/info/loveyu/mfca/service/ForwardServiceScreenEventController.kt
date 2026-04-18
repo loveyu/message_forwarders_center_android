@@ -5,9 +5,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
+import android.os.PowerManager
 import info.loveyu.mfca.output.ClipboardOutput
 import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.util.LogManager
+import info.loveyu.mfca.util.ScreenStateTracker
 import java.util.concurrent.ScheduledExecutorService
 
 internal class ForwardServiceScreenEventController(
@@ -28,6 +30,7 @@ internal class ForwardServiceScreenEventController(
                 when (intent?.action) {
                     Intent.ACTION_SCREEN_ON -> {
                         LogManager.logDebug("SERVICE", "Screen on, triggering tick and flushing clipboard")
+                        ScreenStateTracker.markScreenOn()
                         ClipboardOutput.notifyScreenOn()
                         onNotificationCheck("screen_on")
                         onTriggerTick()
@@ -35,6 +38,7 @@ internal class ForwardServiceScreenEventController(
                     }
                     Intent.ACTION_USER_PRESENT -> {
                         LogManager.logDebug("SERVICE", "User present (unlocked), triggering tick and flushing clipboard")
+                        ScreenStateTracker.markScreenOn()
                         ClipboardOutput.notifyScreenOn()
                         onNotificationCheck("user_present")
                         onTriggerTick()
@@ -42,7 +46,9 @@ internal class ForwardServiceScreenEventController(
                     }
                     Intent.ACTION_SCREEN_OFF -> {
                         LogManager.logDebug("SERVICE", "Screen off, clipboard outputs will buffer")
+                        ScreenStateTracker.markScreenOff()
                         ClipboardOutput.notifyScreenOff()
+                        onTriggerTick()
                     }
                     Intent.ACTION_POWER_CONNECTED -> {
                         LogManager.logDebug("SERVICE", "Power connected, switching to charging interval")
@@ -65,6 +71,14 @@ internal class ForwardServiceScreenEventController(
         service.registerReceiver(screenOnReceiver, filter)
 
         val bm = service.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        val powerManager = service.getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (powerManager.isInteractive) {
+            ScreenStateTracker.markScreenOn()
+            ClipboardOutput.notifyScreenOn()
+        } else {
+            ScreenStateTracker.markScreenOff()
+            ClipboardOutput.notifyScreenOff()
+        }
         onInitialChargingDetected(bm.isCharging)
     }
 

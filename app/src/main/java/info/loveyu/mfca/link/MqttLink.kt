@@ -7,11 +7,15 @@ import info.loveyu.mfca.config.LinkType
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.CertResolver
 import info.loveyu.mfca.util.LogManager
+import info.loveyu.mfca.util.ScreenStateTracker
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
 import org.eclipse.paho.client.mqttv3.MqttAsyncClient
 import org.eclipse.paho.client.mqttv3.MqttCallback
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions
 import org.eclipse.paho.client.mqttv3.MqttMessage
+import org.eclipse.paho.client.mqttv3.MqttPingSender
+import org.eclipse.paho.client.mqttv3.MqttToken
+import org.eclipse.paho.client.mqttv3.internal.ClientComms
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import java.net.InetAddress
 import java.net.URI
@@ -46,7 +50,10 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
     @Volatile private var resolvedIp: String? = null
 
     // Heartbeat monitoring
-    private var keepAliveSeconds = 60
+    private var baseKeepAliveSeconds = 60
+    private var screenOffKeepAliveSeconds = 120
+    private var negotiatedKeepAliveSeconds = 120
+    private var effectiveKeepAliveSeconds = 60
     private var connectedAt = 0L
     @Volatile private var lastOutboundActivity = 0L
 
@@ -91,8 +98,11 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         // Parse DSN first to extract params
         val (rawBroker, params) = parseBrokerUrl(broker)
 
-        // Store keepAlive for heartbeat monitoring
-        keepAliveSeconds = params["keepAliveInterval"]?.toIntOrNull() ?: 60
+        baseKeepAliveSeconds = params["keepAliveInterval"]?.toIntOrNull()?.takeIf { it > 0 } ?: 60
+        screenOffKeepAliveSeconds = params["screenOffKeepAliveInterval"]?.toIntOrNull()?.takeIf { it > 0 }
+            ?: (baseKeepAliveSeconds * 2)
+        negotiatedKeepAliveSeconds = maxOf(baseKeepAliveSeconds, screenOffKeepAliveSeconds)
+        effectiveKeepAliveSeconds = resolveKeepAliveSeconds()
 
         // Resolve retry interval: DSN param > config.reconnect > default
         retryIntervalMs = params["reconnectInterval"]?.toLongOrNull()?.let { it * 1000 }
@@ -122,7 +132,8 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
             LogManager.logDebug("MQTT", "Connecting to $parsedBroker as $resolvedClientId")
 
             val persistence = MemoryPersistence()
-            client = MqttAsyncClient(parsedBroker, resolvedClientId, persistence)
+            val tickPingSender = TickDrivenMqttPingSender()
+            client = TickDrivenMqttAsyncClient(parsedBroker, resolvedClientId, persistence, tickPingSender)
 
             val options = MqttConnectOptions().apply {
                 isCleanSession = params["cleanSession"]?.toBoolean() ?: true
@@ -131,7 +142,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                 isAutomaticReconnect = false
 
                 connectionTimeout = params["connectTimeout"]?.toIntOrNull() ?: 10
-                keepAliveInterval = params["keepAliveInterval"]?.toIntOrNull() ?: 60
+                keepAliveInterval = negotiatedKeepAliveSeconds
 
                 // User credentials: priority to URL params, then URL userinfo
                 val user = params["username"]
@@ -158,7 +169,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                     val uptime = if (connectedAt > 0) (System.currentTimeMillis() - connectedAt) / 1000 else -1
                     connected = false
                     LinkManager.notifyLinkStateChanged(id, connected = false)
-                    LogManager.logWarn("MQTT", "Connection lost after ${uptime}s (keepAlive=${keepAliveSeconds}s): ${cause?.javaClass?.simpleName}: ${cause?.message}")
+                    LogManager.logWarn("MQTT", "Connection lost after ${uptime}s (keepAlive=${effectiveKeepAliveSeconds}s): ${cause?.javaClass?.simpleName}: ${cause?.message}")
                     if (cause != null) {
                         val trace = cause.stackTraceToString().lines().take(5).joinToString(" | ")
                         LogManager.logDebug("MQTT", "Connection lost trace: $trace")
@@ -198,9 +209,11 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                         resolvedIp = InetAddress.getByName(h).hostAddress
                     }
                 } catch (_: Exception) {}
-                LogManager.logInfo("MQTT", "Connected successfully (keepAlive=${keepAliveSeconds}s)")
+                (client as? TickDrivenMqttAsyncClient)?.applyKeepAliveSeconds(effectiveKeepAliveSeconds)
+                LogManager.logInfo("MQTT", "Connected successfully (keepAlive=${effectiveKeepAliveSeconds}s, screenOffKeepAlive=${screenOffKeepAliveSeconds}s)")
                 connectedAt = System.currentTimeMillis()
                 lastOutboundActivity = connectedAt
+                ForwardService.triggerTick()
 
                 if (shouldNotify) {
                     recoveredCallback?.invoke()
@@ -272,7 +285,25 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         val now = System.currentTimeMillis()
         val uptimeSec = (now - connectedAt) / 1000
         val idleSec = (now - lastOutboundActivity) / 1000
-        return "Heartbeat[$id]: uptime=${uptimeSec}s, idle=${idleSec}s, keepAlive=${keepAliveSeconds}s, pingExpected=${idleSec >= keepAliveSeconds}"
+        return "Heartbeat[$id]: uptime=${uptimeSec}s, idle=${idleSec}s, keepAlive=${effectiveKeepAliveSeconds}s, screenOn=${ScreenStateTracker.isScreenOn}, pingExpected=${idleSec >= effectiveKeepAliveSeconds}"
+    }
+
+    fun onTick(now: Long = System.currentTimeMillis()): Long? {
+        if (!connected) return null
+        val mqttClient = client as? TickDrivenMqttAsyncClient ?: return null
+        val desiredKeepAliveSeconds = resolveKeepAliveSeconds()
+        if (desiredKeepAliveSeconds != effectiveKeepAliveSeconds) {
+            effectiveKeepAliveSeconds = desiredKeepAliveSeconds
+            mqttClient.applyKeepAliveSeconds(effectiveKeepAliveSeconds)
+            LogManager.logInfo("MQTT", "Adjusted keepAlive for $id: ${effectiveKeepAliveSeconds}s (screenOn=${ScreenStateTracker.isScreenOn})")
+        }
+        return try {
+            mqttClient.onTick(now)
+            mqttClient.getDelayUntilNextCheck(now)
+        } catch (e: Exception) {
+            LogManager.logWarn("MQTT", "KeepAlive tick failed for $id: ${e.message}")
+            null
+        }
     }
 
     override fun isConnected(): Boolean = connected
@@ -453,5 +484,76 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
      */
     private fun getDeviceId(): String {
         return "mfca_${Build.BOARD}_${Build.BRAND}_${Build.DEVICE}_${Build.MODEL}_${Build.PRODUCT}".hashCode().toString(16)
+    }
+
+    private fun resolveKeepAliveSeconds(): Int {
+        return if (ScreenStateTracker.isScreenOn) {
+            baseKeepAliveSeconds
+        } else {
+            screenOffKeepAliveSeconds
+        }
+    }
+}
+
+private class TickDrivenMqttAsyncClient(
+    serverUri: String,
+    clientId: String,
+    persistence: MemoryPersistence,
+    private val tickPingSender: TickDrivenMqttPingSender
+) : MqttAsyncClient(serverUri, clientId, persistence, tickPingSender) {
+    fun onTick(now: Long) {
+        tickPingSender.onTick(now)
+    }
+
+    fun getDelayUntilNextCheck(now: Long): Long? = tickPingSender.getDelayUntilNextCheck(now)
+
+    fun applyKeepAliveSeconds(seconds: Int) {
+        comms.getClientState().setKeepAliveInterval(seconds * 1000L)
+        tickPingSender.forceCheckSoon()
+    }
+}
+
+private class TickDrivenMqttPingSender : MqttPingSender {
+    private var comms: ClientComms? = null
+
+    @Volatile
+    private var started = false
+
+    @Volatile
+    private var nextCheckAtMs: Long? = null
+
+    override fun init(comms: ClientComms) {
+        this.comms = comms
+    }
+
+    override fun start() {
+        started = true
+        schedule(comms?.keepAlive ?: 0L)
+    }
+
+    override fun stop() {
+        started = false
+        nextCheckAtMs = null
+    }
+
+    override fun schedule(delayInMilliseconds: Long) {
+        if (!started) return
+        nextCheckAtMs = System.currentTimeMillis() + delayInMilliseconds.coerceAtLeast(1L)
+    }
+
+    fun forceCheckSoon() {
+        if (!started) return
+        nextCheckAtMs = System.currentTimeMillis()
+    }
+
+    fun onTick(now: Long) {
+        val dueAt = nextCheckAtMs ?: return
+        if (!started || now < dueAt) return
+        comms?.checkForActivity()
+    }
+
+    fun getDelayUntilNextCheck(now: Long): Long? {
+        val dueAt = nextCheckAtMs ?: return null
+        return (dueAt - now).coerceAtLeast(0L)
     }
 }
