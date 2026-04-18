@@ -14,6 +14,8 @@ interface InputSource {
     fun setOnMessageListener(listener: (InputMessage) -> Unit)
 
     fun getError(): String? = null
+
+    fun hasFatalError(): Boolean = false
 }
 
 enum class InputType {

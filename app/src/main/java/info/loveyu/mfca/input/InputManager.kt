@@ -178,7 +178,7 @@ object InputManager {
                             LogManager.logDebug("INPUT", "Stopping shared HTTP server ${config.name}: network conditions not met")
                             input.stop()
                         }
-                    } else if (!input.isRunning() && input.getError() == null) {
+                    } else if (!input.isRunning() && !input.hasFatalError()) {
                         LogManager.logDebug("INPUT", "Restarting shared HTTP server: ${config.name}")
                         try {
                             input.start()
@@ -223,8 +223,8 @@ object InputManager {
 
             // Try to restart if not running (skip inputs with permanent errors)
             if (!input.isRunning()) {
-                // Skip inputs with permanent errors (e.g. port conflict, DSN parse failure)
-                if (input.getError() != null) {
+                // Skip inputs with permanent errors (e.g. DSN parse failure)
+                if (input.hasFatalError()) {
                     return@forEach
                 }
                 LogManager.logDebug("INPUT", "Restarting ${config.name} (link: ${config.linkId})...")

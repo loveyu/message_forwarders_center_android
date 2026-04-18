@@ -25,14 +25,15 @@ class HttpInput(
     override val inputType: InputType = InputType.http
 
     private var running = false
-    @Volatile private var error: String? = null
+    @Volatile private var fatalError: String? = null
+    @Volatile private var lastError: String? = null
     private var messageListener: ((InputMessage) -> Unit)? = null
 
     init {
         parsedConfig = try {
             HttpInputDsnParser.parse(httpConfig.dsn)
         } catch (e: Exception) {
-            error = "DSN 解析失败: ${e.message}"
+            fatalError = "DSN 解析失败: ${e.message}"
             LogManager.logError("HTTP", "DSN parse error for $inputName: ${e.message}")
             // Fallback config so NanoHTTPD doesn't crash
             HttpInputParsedConfig(listen = "0.0.0.0", port = 0)
@@ -40,19 +41,22 @@ class HttpInput(
     }
 
     override fun start() {
-        if (error != null) {
-            LogManager.logWarn("HTTP", "HTTP input $inputName skipped: $error")
+        if (fatalError != null) {
+            LogManager.logWarn("HTTP", "HTTP input $inputName skipped: $fatalError")
             return
         }
         try {
             start(SOCKET_READ_TIMEOUT, false)
             running = true
+            lastError = null
             LogManager.logDebug("HTTP", "HTTP input started: $inputName on ${parsedConfig.listen}:${parsedConfig.port} paths=${httpConfig.paths}")
         } catch (e: BindException) {
-            error = "端口 ${parsedConfig.port} 已被占用"
-            LogManager.logError("HTTP", "HTTP input $inputName port conflict: ${parsedConfig.port} - ${e.message}")
+            running = false
+            lastError = "端口 ${parsedConfig.port} 暂时被占用，将自动重试"
+            LogManager.logWarn("HTTP", "HTTP input $inputName bind conflict on ${parsedConfig.listen}:${parsedConfig.port}, will retry: ${e.message}")
         } catch (e: Exception) {
-            error = "启动失败: ${e.message}"
+            running = false
+            lastError = "启动失败: ${e.message}"
             LogManager.logError("HTTP", "Failed to start HTTP input: $inputName - ${e.message}")
         }
     }
@@ -61,6 +65,9 @@ class HttpInput(
         running = false
         try {
             super.stop()
+            if (fatalError == null) {
+                lastError = null
+            }
             LogManager.logDebug("HTTP", "HTTP input stopped: $inputName")
         } catch (e: Exception) {
             LogManager.logError("HTTP", "Error stopping HTTP input: $inputName - ${e.message}")
@@ -69,7 +76,9 @@ class HttpInput(
 
     override fun isRunning(): Boolean = running
 
-    override fun getError(): String? = error
+    override fun getError(): String? = fatalError ?: lastError
+
+    override fun hasFatalError(): Boolean = fatalError != null
 
     fun getParsedConfig(): HttpInputParsedConfig = parsedConfig
 
@@ -327,6 +336,8 @@ class HttpVirtualInput(
     override fun isRunning(): Boolean = true
 
     override fun getError(): String? = error
+
+    override fun hasFatalError(): Boolean = error != null
 
     override fun setOnMessageListener(listener: (InputMessage) -> Unit) {
         messageListener = listener

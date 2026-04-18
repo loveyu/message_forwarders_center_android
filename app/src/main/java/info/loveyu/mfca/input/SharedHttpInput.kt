@@ -15,9 +15,12 @@ class SharedHttpInput(
     linkConfig: LinkConfig
 ) : NanoHTTPD(parseListenFromLink(linkConfig), parsePortFromLink(linkConfig)), InputSource {
 
+    private val configuredListen = parseListenFromLink(linkConfig)
+    private val configuredPort = parsePortFromLink(linkConfig)
     private val virtualInputs = mutableListOf<HttpVirtualInput>()
     private var running = false
-    @Volatile private var error: String? = null
+    @Volatile private var fatalError: String? = null
+    @Volatile private var lastError: String? = null
 
     override val inputName: String = "__shared_http_${linkConfig.id}"
     override val inputType: InputType = InputType.http
@@ -31,19 +34,22 @@ class SharedHttpInput(
     fun getVirtualInputs(): List<HttpVirtualInput> = virtualInputs.toList()
 
     override fun start() {
-        if (error != null) {
-            LogManager.logWarn("HTTP", "Shared HTTP server skipped: $error")
+        if (fatalError != null) {
+            LogManager.logWarn("HTTP", "Shared HTTP server skipped: $fatalError")
             return
         }
         try {
             start(SOCKET_READ_TIMEOUT, false)
             running = true
-            LogManager.logDebug("HTTP", "Shared HTTP server started with ${virtualInputs.size} virtual inputs on port ${listeningPort}")
+            lastError = null
+            LogManager.logDebug("HTTP", "Shared HTTP server started with ${virtualInputs.size} virtual inputs on ${configuredListen}:${configuredPort}")
         } catch (e: BindException) {
-            error = "端口 ${listeningPort} 已被占用"
-            LogManager.logError("HTTP", "Shared HTTP server port conflict: ${listeningPort} - ${e.message}")
+            running = false
+            lastError = "端口 ${configuredPort} 暂时被占用，将自动重试"
+            LogManager.logWarn("HTTP", "Shared HTTP server bind conflict on ${configuredListen}:${configuredPort}, will retry: ${e.message}")
         } catch (e: Exception) {
-            error = "启动失败: ${e.message}"
+            running = false
+            lastError = "启动失败: ${e.message}"
             LogManager.logError("HTTP", "Failed to start shared HTTP server: ${e.message}")
         }
     }
@@ -52,6 +58,9 @@ class SharedHttpInput(
         running = false
         try {
             super.stop()
+            if (fatalError == null) {
+                lastError = null
+            }
             LogManager.logDebug("HTTP", "Shared HTTP server stopped")
         } catch (e: Exception) {
             LogManager.logError("HTTP", "Error stopping shared HTTP server: ${e.message}")
@@ -60,7 +69,9 @@ class SharedHttpInput(
 
     override fun isRunning(): Boolean = running
 
-    override fun getError(): String? = error
+    override fun getError(): String? = fatalError ?: lastError
+
+    override fun hasFatalError(): Boolean = fatalError != null
 
     override fun setOnMessageListener(listener: (InputMessage) -> Unit) {
         messageListener = listener
