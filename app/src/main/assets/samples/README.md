@@ -9,18 +9,18 @@
 | `01_basic_mqtt.yaml` | MQTT 基础连接 - DSN 格式、TLS 支持 |
 | `02_websocket_link.yaml` | WebSocket 连接 - WS/WSS 配置 |
 | `03_tcp_link.yaml` | TCP 连接 - Socket 配置 |
-| `04_network_conditions.yaml` | **网络条件控制** - when/deny 条件 |
+| `04_network_conditions.yaml` | 网络条件控制 - when/deny 条件 |
 | `05_http_input.yaml` | HTTP 输入 - NanoHTTPD、认证方式 |
 | `06_link_input_output.yaml` | Link 输入输出 - 订阅/发布示例 |
 | `07_memory_queue.yaml` | 内存队列 - 高性能临时缓冲 |
 | `08_sqlite_queue.yaml` | SQLite 持久化队列 - 重试、清理 |
 | `09_outputs.yaml` | 输出模块 - HTTP/Link/Internal |
-| `10_rules.yaml` | 规则引擎 - 提取、过滤、检测 |
-| `11_full_demo.yaml` | **完整演示** - 智能家居场景 |
-| `12_clipboard_forward.yaml` | 剪贴板转发 - MQTT 到本地剪贴板 |
-| `13_http_shared_input.yaml` | HTTP 共享端口 - 多输入共用端口 |
-| `14_quick_settings.yaml` | **快捷设置** - 通知栏按钮开关 |
-| `15_scheduler.yaml` | **调度器** - 定时检查间隔、充电间隔、事件驱动 |
+| `10_rules.yaml` | 规则引擎 - 提取、过滤、检测、富化、格式化 |
+| `11_clipboard_forward.yaml` | 剪贴板转发 - 本地剪贴板与 Link 的示例 |
+| `12_http_shared_input.yaml` | HTTP 共享端口 - 多输入共用端口示例 |
+| `13_quick_settings.yaml` | 快捷设置 - quickSettings 通知栏按钮、快捷开关 |
+| `14_scheduler.yaml` | 调度器 - tickInterval / 事件触发 配置 |
+| `99_full_demo.yaml` | 完整演示 - 将多个模块组合的演示配置 |
 
 ## 链接配置说明
 
@@ -56,6 +56,7 @@ tls:
   ca: data://certs/ca.pem                # 应用私有目录
   cert: file:///path/to/cert.pem         # 客户端证书 (可选)
   key: file:///path/to/key.pem           # 客户端私钥 (可选)
+  insecure: false                        # 跳过证书验证 (不推荐，默认 false)
 ```
 
 证书下载后存储在外部扩展目录，以 hash 值命名，仅下载一次，更新时重复覆盖。
@@ -152,11 +153,34 @@ rules:
 - `"path != value"` - 不等比较
 - `"path > N"` - 数值比较
 - `"$headers.mqtt_topic == topic"` - Headers 访问（MQTT Topic 等）
+- `"$headers.mqtt_topic startsWith topic/prefix"` - 前缀匹配
 
 ### 检测 (detect)
 - `"image"` - PNG/JPEG/GIF/BMP/WebP
 - `"json"` - JSON 格式
 - `"text"` - 文本内容
+
+### 格式化 (format)
+- `"{data}"` - 原始数据
+- `"{headers}"` - 所有 Headers（JSON 格式）
+- `"{headers.X}"` - 特定 Header 值
+- `"{data.field}"` - GJSON 路径提取
+- `"{base64Decode(content)}"` - 内置函数调用
+- `"{{"` - 转义为字面量 `{`
+
+### 富化 (enrich)
+- `"gotifyIcon:<linkId>"` - 从 Gotify REST API 获取应用图标并注入 `icon` 字段
+
+### 错误处理 (onError)
+```yaml
+rules:
+  - name: example
+    from: some_input
+    pipeline:
+      - to: [output]
+    onError:                # 主管道执行失败时的备用管道
+      - to: [error_output]
+```
 
 ## 输入配置
 
@@ -221,8 +245,10 @@ inputs:
 
 ```yaml
 scheduler:
-  tickInterval: "30s"              # 定时检查间隔，默认 30s，最小 15s
-  chargingTickInterval: "15s"      # 充电时更短的间隔（可选）
+  tickInterval: "40s"              # 定时检查间隔，默认 40s，最小 20s
+  chargingTickInterval: "20s"      # 充电时更短的间隔（可选）
+  wakeLockTimeout: "1h"            # WakeLock 超时，默认 1h，"0" 表示永久（可选）
+  wifiLockTimeout: "1h"            # WiFi Lock 超时，默认 1h，"0" 表示永久（可选）
 ```
 
 ### 事件驱动

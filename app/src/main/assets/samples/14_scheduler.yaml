@@ -16,13 +16,13 @@
 # 调度器配置
 # ============================================
 scheduler:
-  # 定时检查间隔（默认 30s，最小 15s）
+  # 定时检查间隔（默认 40s，最小 20s）
   # 所有健康检查、队列处理由此间隔驱动
-  tickInterval: "30s"
+  tickInterval: "40s"
 
   # 充电时的定时检查间隔（可选，默认与 tickInterval 一致）
   # 充电时可以使用更短的间隔以获得更快的响应
-  # chargingTickInterval: "15s"
+  # chargingTickInterval: "20s"
 
   # WakeLock 超时（默认 1h，设为 "0" 永久持有）
   # 用户启用 WakeLock 后，超时自动释放以防止耗电

@@ -64,7 +64,7 @@ rules:
     pipeline:
       - transform:
           extract: "$raw"                # $raw 表示整个 JSON 对象
-          filter: "data.status == active"  # 只处理 active 状态
+          filter: "data.status == 'active'"  # 只处理 active 状态
         to: [api_server]
 
   # 示例4：数值比较过滤
@@ -122,7 +122,7 @@ rules:
     pipeline:
       - transform:
           extract: "data.payload"
-          filter: "data.type == sensor"
+          filter: "data.type == 'sensor'"
           detect: "json"
         to: [api_server, clipboard_out]
 
@@ -134,7 +134,7 @@ rules:
     pipeline:
       - transform:
           extract: "base64Decode(content)"
-          filter: "type == text"
+          filter: "type == 'text'"
         to: [clipboard_out]
 
   # 示例12：直接从 content 字段提取（不解码）
@@ -143,7 +143,7 @@ rules:
     pipeline:
       - transform:
           extract: "content"
-          filter: "type == text"
+          filter: "type == 'text'"
         to: [clipboard_out]
 
   # 示例13：错误处理链

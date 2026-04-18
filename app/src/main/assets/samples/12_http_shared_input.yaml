@@ -39,7 +39,7 @@ outputs:
   internal:
     - name: log_all
       type: file
-      basePath: sdcard:///mfca/logs/http_shared
+      basePath: sdcard://mfca/logs/http_shared
       fileName: "{yyyy}-{MM}-{dd}.log"
       options:
         append: true
