@@ -54,6 +54,8 @@ object LinkManager {
     // 上次记录的 transport 类型，用于 onCapabilitiesChanged 变化检测
     @Volatile
     private var lastTransportType: NetworkType = NetworkType.UNKNOWN
+    @Volatile
+    private var lastWifiBssid: String? = null
 
     // Notification state for link errors
     private val notifiedErrorLinks = mutableSetOf<String>()
@@ -112,6 +114,7 @@ object LinkManager {
                 isNetworkAvailable = true
                 resetAllFailureCounts()
                 NetworkChecker.invalidateCache()
+                lastWifiBssid = NetworkChecker.getCurrentBssid(ctx)
                 updateNetworkType()
                 // 事件触发提前 tick，加速重连
                 ForwardService.triggerTick()
@@ -134,6 +137,9 @@ object LinkManager {
                     InputManager.stopAllLinkBased()
                 }
 
+                if (!hasNetwork) {
+                    lastWifiBssid = null
+                }
                 updateNetworkType()
                 // 网络丢失也触发 tick，及时更新状态
                 ForwardService.triggerTick()
@@ -143,16 +149,32 @@ object LinkManager {
                 network: Network,
                 networkCapabilities: NetworkCapabilities
             ) {
+                val previousBssid = lastWifiBssid
+                val previousSsid = if (previousBssid != null) NetworkChecker.getCurrentSsid(ctx) else null
+
                 // 无条件刷新网络快照（WiFi AP 漫游时 transport 不变但 SSID/BSSID 可能变）
                 NetworkChecker.invalidateCache()
 
-                // 仅在 transport 类型实际变化时触发重连
                 val newType = when {
                     networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> NetworkType.WIFI
                     networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> NetworkType.MOBILE
                     networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> NetworkType.ETHERNET
                     else -> NetworkType.UNKNOWN
                 }
+                val newBssid = if (newType == NetworkType.WIFI) NetworkChecker.getCurrentBssid(ctx) else null
+                val newSsid = if (newType == NetworkType.WIFI) NetworkChecker.getCurrentSsid(ctx) else null
+                val bssidChanged = newType == NetworkType.WIFI &&
+                    previousBssid != null &&
+                    newBssid != null &&
+                    previousBssid != newBssid
+                lastWifiBssid = newBssid
+
+                if (bssidChanged) {
+                    LogManager.logInfo("LINK", "WiFi BSSID changed: ${previousBssid} -> ${newBssid} (ssid=${newSsid ?: previousSsid ?: "unknown"})")
+                    triggerImmediateMqttKeepAliveProbe("bssid_changed")
+                    ForwardService.triggerTick()
+                }
+
                 if (newType == lastTransportType) return
                 LogManager.logDebug("LINK", "Transport changed: $lastTransportType -> $newType")
                 lastTransportType = newType
@@ -177,6 +199,7 @@ object LinkManager {
             // Check initial state
             val activeNetwork = connectivityManager.activeNetwork
             isNetworkAvailable = activeNetwork != null
+            lastWifiBssid = NetworkChecker.getCurrentBssid(ctx)
             updateNetworkType()
         } catch (e: Exception) {
             LogManager.logError("LINK", "Failed to register network callback: ${e.message}")
@@ -204,6 +227,7 @@ object LinkManager {
             currentNetworkType = NetworkType.UNKNOWN
         }
         lastTransportType = currentNetworkType
+        lastWifiBssid = if (currentNetworkType == NetworkType.WIFI) NetworkChecker.getCurrentBssid(ctx) else null
 
         LogManager.logDebug("LINK", "Network type: $currentNetworkType")
         LogManager.logDebug("NETWORK", NetworkChecker.getDetailedNetworkInfo(ctx))
@@ -428,6 +452,7 @@ object LinkManager {
         cancelAllLinkErrorNotifications()
         links.clear()
         configs.clear()
+        lastWifiBssid = null
     }
 
     private fun unregisterNetworkCallback() {
@@ -565,6 +590,14 @@ object LinkManager {
     fun notifyLinkStateChanged(linkId: String, connected: Boolean) {
         LogManager.logDebug("LINK", "Link state changed: $linkId connected=$connected")
         _networkStateVersion.value++
+    }
+
+    private fun triggerImmediateMqttKeepAliveProbe(reason: String) {
+        links.values.forEach { link ->
+            if (link is MqttLink) {
+                link.triggerImmediateKeepAliveProbe(reason)
+            }
+        }
     }
 
     /**

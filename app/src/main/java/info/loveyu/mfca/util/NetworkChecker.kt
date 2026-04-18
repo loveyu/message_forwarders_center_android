@@ -58,6 +58,13 @@ object NetworkChecker {
         cachedSnapshot = null
     }
 
+    fun getCurrentSsid(context: Context): String? = getSnapshot(context).ssid
+
+    fun getCurrentBssid(context: Context): String? {
+        val bssid = getSnapshot(context).bssid ?: return null
+        return if (bssid == "02:00:00:00:00:00" || bssid.isBlank()) null else bssid
+    }
+
     private fun querySnapshot(context: Context): NetworkSnapshot {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = connectivityManager.activeNetwork

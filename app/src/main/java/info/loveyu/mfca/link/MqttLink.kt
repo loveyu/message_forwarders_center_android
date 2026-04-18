@@ -306,6 +306,19 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         }
     }
 
+    fun triggerImmediateKeepAliveProbe(reason: String): Boolean {
+        if (!connected) return false
+        val mqttClient = client as? TickDrivenMqttAsyncClient ?: return false
+        return try {
+            mqttClient.triggerImmediateProbe()
+            LogManager.logInfo("MQTT", "Triggered immediate keepAlive probe for $id: $reason")
+            true
+        } catch (e: Exception) {
+            LogManager.logWarn("MQTT", "Immediate keepAlive probe failed for $id: ${e.message}")
+            false
+        }
+    }
+
     override fun isConnected(): Boolean = connected
     override fun isConnecting(): Boolean = connecting
 
@@ -510,6 +523,11 @@ private class TickDrivenMqttAsyncClient(
     fun applyKeepAliveSeconds(seconds: Int) {
         comms.getClientState().setKeepAliveInterval(seconds * 1000L)
         tickPingSender.forceCheckSoon()
+    }
+
+    fun triggerImmediateProbe() {
+        tickPingSender.forceCheckSoon()
+        onTick(System.currentTimeMillis())
     }
 }
 
