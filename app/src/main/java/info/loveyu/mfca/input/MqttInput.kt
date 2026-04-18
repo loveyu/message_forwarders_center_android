@@ -16,6 +16,7 @@ class MqttInput(
 
     private var running = false
     private var messageListener: ((InputMessage) -> Unit)? = null
+    private var replaySupport: GotifyReplaySupport? = null
 
     private val mqttLink: info.loveyu.mfca.link.MqttLink?
         get() = LinkManager.getLink(config.linkId) as? info.loveyu.mfca.link.MqttLink
@@ -43,10 +44,6 @@ class MqttInput(
 
         val qos = config.qos ?: 1
 
-        if (!link.isConnected()) {
-            link.connect()
-        }
-
         link.setOnMqttMessageListener { topic, msg ->
             // Check exclude_topics filter
             if (config.excludeTopics?.contains(topic) == true) {
@@ -54,21 +51,36 @@ class MqttInput(
                 return@setOnMqttMessageListener
             }
 
-            val message = InputMessage(
-                source = inputName,
-                data = msg.payload.copyOf(),
-                headers = mapOf(
-                    "mqtt_topic" to topic,
-                    "mqtt_qos" to msg.qos.toString(),
-                    "mqtt_retained" to msg.isRetained.toString()
-                )
+            val headers = mapOf(
+                "mqtt_topic" to topic,
+                "mqtt_qos" to msg.qos.toString(),
+                "mqtt_retained" to msg.isRetained.toString()
             )
-            LogManager.logDebug("MQTT", "Message received on topic=$topic for $inputName (${msg.payload.size} bytes)")
-            if (messageListener != null) {
-                messageListener!!.invoke(message)
+            val replay = getReplaySupport()
+            if (replay != null) {
+                replay.handleRealtimeMessage(
+                    data = msg.payload.copyOf(),
+                    headers = headers
+                )
             } else {
-                LogManager.logWarn("MQTT", "No message listener for $inputName, message dropped (topic=$topic)")
+                val message = InputMessage(
+                    source = inputName,
+                    data = msg.payload.copyOf(),
+                    headers = headers
+                )
+                LogManager.logDebug("MQTT", "Message received on topic=$topic for $inputName (${msg.payload.size} bytes)")
+                if (messageListener != null) {
+                    messageListener!!.invoke(message)
+                } else {
+                    LogManager.logWarn("MQTT", "No message listener for $inputName, message dropped (topic=$topic)")
+                }
             }
+        }
+
+        getReplaySupport()?.start()
+
+        if (!link.isConnected()) {
+            link.connect()
         }
 
         topicsToSubscribe.forEach { topic ->
@@ -79,6 +91,7 @@ class MqttInput(
     }
 
     override fun stop() {
+        replaySupport?.stop()
         running = false
         LogManager.logDebug("MQTT", "MQTT input stopped: $inputName")
     }
@@ -87,5 +100,20 @@ class MqttInput(
 
     override fun setOnMessageListener(listener: (InputMessage) -> Unit) {
         messageListener = listener
+    }
+
+    private fun getReplaySupport(): GotifyReplaySupport? {
+        if (!GotifyReplaySupport.isEnabled(config)) return null
+        val context = LinkManager.getContext() ?: return null
+        if (replaySupport == null) {
+            replaySupport = GotifyReplaySupport(context, config) { message ->
+                if (messageListener != null) {
+                    messageListener!!.invoke(message)
+                } else {
+                    LogManager.logWarn("MQTT", "No message listener for $inputName, replayed message dropped")
+                }
+            }
+        }
+        return replaySupport
     }
 }

@@ -61,6 +61,21 @@ inputs:
       linkId: ws_server
       role: consumer
 
+    # Gotify WebSocket 补洞示例
+    # replay.provider=gotifyApi 时，baseUrl/token 默认从 gotify_server 的 DSN 推导
+    # 首次启动会记录当前最新消息 ID 作为基线；后续重连后自动补拉缺失消息
+    # - name: gotify_input
+    #   linkId: gotify_server
+    #   role: consumer
+    #   replay:
+    #     enabled: true
+    #     provider: gotifyApi
+    #     messageIdPath: id
+    #     pageSize: 50
+    #     maxPages: 20
+    #     maxMessages: 500
+    #     persistState: true
+
 outputs:
   link:
     - name: ws_output

@@ -65,6 +65,7 @@ object LinkManager {
     // Network state version for UI refresh
     private val _networkStateVersion = MutableStateFlow(0)
     val networkStateVersion: StateFlow<Int> = _networkStateVersion.asStateFlow()
+    private val linkStateListeners = mutableSetOf<(String, Boolean) -> Unit>()
 
     enum class NetworkType {
         WIFI, MOBILE, ETHERNET, UNKNOWN
@@ -73,6 +74,8 @@ object LinkManager {
     fun setContext(context: Context) {
         applicationContext = context.applicationContext
     }
+
+    fun getContext(): Context? = applicationContext
 
     fun initialize(config: AppConfig) {
         initialized = false
@@ -590,6 +593,26 @@ object LinkManager {
     fun notifyLinkStateChanged(linkId: String, connected: Boolean) {
         LogManager.logDebug("LINK", "Link state changed: $linkId connected=$connected")
         _networkStateVersion.value++
+        val listeners = synchronized(linkStateListeners) { linkStateListeners.toList() }
+        listeners.forEach { listener ->
+            try {
+                listener(linkId, connected)
+            } catch (e: Exception) {
+                LogManager.logWarn("LINK", "Link state listener failed for $linkId: ${e.message}")
+            }
+        }
+    }
+
+    fun addLinkStateListener(listener: (String, Boolean) -> Unit) {
+        synchronized(linkStateListeners) {
+            linkStateListeners.add(listener)
+        }
+    }
+
+    fun removeLinkStateListener(listener: (String, Boolean) -> Unit) {
+        synchronized(linkStateListeners) {
+            linkStateListeners.remove(listener)
+        }
     }
 
     private fun triggerImmediateMqttKeepAliveProbe(reason: String) {

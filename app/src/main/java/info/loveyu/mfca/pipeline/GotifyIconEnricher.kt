@@ -2,6 +2,7 @@ package info.loveyu.mfca.pipeline
 
 import android.content.Context
 import info.loveyu.mfca.link.LinkManager
+import info.loveyu.mfca.util.GotifyApiSupport
 import info.loveyu.mfca.util.LogManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -87,27 +88,18 @@ class GotifyIconEnricher(private val context: Context?) : Enricher {
             return null
         }
 
-        val dsn = linkConfig.dsn
-        if (dsn == null) {
-            LogManager.logWarn("ENRICH", "Link $linkId has no DSN")
-            return null
-        }
-
-        // Derive REST API base URL and token from WebSocket DSN
-        // wss://gotify.example.com?token=xxx -> https://gotify.example.com
-        val (baseUrl, token) = parseGotifyRestConfig(dsn)
-
-        if (token == null) {
-            LogManager.logWarn("ENRICH", "No token found in DSN for link $linkId")
+        val apiConfig = GotifyApiSupport.resolveApiConfig(linkId)
+        if (apiConfig == null) {
+            LogManager.logWarn("ENRICH", "No Gotify API config found for link $linkId")
             return null
         }
 
         return try {
             val result = withContext(Dispatchers.IO) {
-                val url = "$baseUrl/application"
+                val url = "${apiConfig.baseUrl}/application"
                 val request = Request.Builder()
                     .url(url)
-                    .addHeader("X-Gotify-Key", token)
+                    .addHeader("X-Gotify-Key", apiConfig.token)
                     .get()
                     .build()
 
@@ -118,7 +110,7 @@ class GotifyIconEnricher(private val context: Context?) : Enricher {
                 }
 
                 val body = response.body?.string() ?: return@withContext null
-                parseAppList(baseUrl, body)
+                parseAppList(apiConfig.baseUrl, body)
             }
 
             if (result != null) {
@@ -130,42 +122,6 @@ class GotifyIconEnricher(private val context: Context?) : Enricher {
             LogManager.logWarn("ENRICH", "Failed to fetch Gotify apps: ${e.message}")
             null
         }
-    }
-
-    /**
-     * 从 WebSocket DSN 推导 REST API base URL 和 token
-     * wss://gotify.example.com?token=xxx -> ("https://gotify.example.com", "xxx")
-     */
-    private fun parseGotifyRestConfig(dsn: String): Pair<String, String?> {
-        var url = dsn
-
-        // Replace protocol
-        url = when {
-            url.startsWith("wss://") -> "https://" + url.removePrefix("wss://")
-            url.startsWith("ws://") -> "http://" + url.removePrefix("ws://")
-            else -> url
-        }
-
-        // Remove /stream path if present
-        url = url.replace("/stream", "")
-
-        // Parse out token from query params
-        var token: String? = null
-        val queryStart = url.indexOf('?')
-        val baseUrl = if (queryStart != -1) {
-            val queryString = url.substring(queryStart + 1)
-            queryString.split('&').forEach { param ->
-                val kv = param.split('=', limit = 2)
-                if (kv.size == 2 && kv[0] == "token") {
-                    token = java.net.URLDecoder.decode(kv[1], "UTF-8")
-                }
-            }
-            url.substring(0, queryStart)
-        } else {
-            url
-        }
-
-        return baseUrl.trimEnd('/') to token
     }
 
     /**

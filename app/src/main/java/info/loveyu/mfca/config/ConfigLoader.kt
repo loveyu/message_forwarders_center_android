@@ -136,7 +136,10 @@ object ConfigLoader {
                     linkIds = linkIds,
                     role = parseLinkRole(map["role"] as? String),
                     topic = map["topic"] as? String,
+                    topics = (map["topics"] as? List<*>)?.mapNotNull { it as? String },
+                    excludeTopics = (map["excludeTopics"] as? List<*>)?.mapNotNull { it as? String },
                     qos = (map["qos"] as? Number)?.toInt(),
+                    replay = parseReplay(map["replay"]),
                     whenCondition = map["when"] as? String,
                     deny = map["deny"] as? String
                 )
@@ -149,6 +152,30 @@ object ConfigLoader {
             "consumer" -> LinkRole.consumer
             "producer" -> LinkRole.producer
             else -> LinkRole.consumer
+        }
+    }
+
+    private fun parseReplay(replay: Any?): ReplayConfig? {
+        if (replay == null) return null
+        val map = replay as? Map<String, Any> ?: return null
+        return ReplayConfig(
+            enabled = map["enabled"] as? Boolean ?: false,
+            provider = parseReplayProvider(map["provider"] as? String),
+            messageIdPath = map["messageIdPath"] as? String ?: "id",
+            pageSize = (map["pageSize"] as? Number)?.toInt() ?: 50,
+            maxPages = (map["maxPages"] as? Number)?.toInt() ?: 20,
+            maxMessages = (map["maxMessages"] as? Number)?.toInt() ?: 500,
+            persistState = map["persistState"] as? Boolean ?: true,
+            baseUrl = map["baseUrl"] as? String,
+            token = map["token"] as? String,
+            applicationId = (map["applicationId"] as? Number)?.toInt()
+        )
+    }
+
+    private fun parseReplayProvider(provider: String?): ReplayProvider {
+        return when (provider?.lowercase()) {
+            "gotifyapi", "gotify_api", "gotify-api" -> ReplayProvider.gotifyApi
+            else -> ReplayProvider.gotifyApi
         }
     }
 

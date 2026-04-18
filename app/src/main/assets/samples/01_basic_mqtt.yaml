@@ -49,6 +49,24 @@ inputs:
       topic: sensor/data
       qos: 1
 
+    # 使用 MQTT 承载 Gotify 消息时，可继续使用 gotifyApi 补洞。
+    # 注意：MQTT DSN 无法推导 Gotify REST 地址，因此需要显式提供 baseUrl/token。
+    # - name: gotify_mqtt_input
+    #   linkId: local_mqtt
+    #   role: consumer
+    #   topic: gotify/messages
+    #   qos: 1
+    #   replay:
+    #     enabled: true
+    #     provider: gotifyApi
+    #     baseUrl: https://gotify.example.com
+    #     token: YOUR_CLIENT_TOKEN
+    #     messageIdPath: id
+    #     pageSize: 50
+    #     maxPages: 20
+    #     maxMessages: 500
+    #     persistState: true
+
 outputs:
   link:
     - name: mqtt_producer

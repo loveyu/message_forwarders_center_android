@@ -154,12 +154,30 @@ data class LinkInputConfig(
     val topics: List<String>? = null,
     val excludeTopics: List<String>? = null,
     val qos: Int? = null,
+    val replay: ReplayConfig? = null,
     val whenCondition: String? = null,
     val deny: String? = null
 )
 
 enum class LinkRole {
     consumer, producer
+}
+
+data class ReplayConfig(
+    val enabled: Boolean = false,
+    val provider: ReplayProvider = ReplayProvider.gotifyApi,
+    val messageIdPath: String = "id",
+    val pageSize: Int = 50,
+    val maxPages: Int = 20,
+    val maxMessages: Int = 500,
+    val persistState: Boolean = true,
+    val baseUrl: String? = null,
+    val token: String? = null,
+    val applicationId: Int? = null
+)
+
+enum class ReplayProvider {
+    gotifyApi
 }
 
 /**
