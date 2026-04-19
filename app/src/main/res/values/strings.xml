@@ -84,5 +84,6 @@
     <string name="notify_history">通知管理</string>
     <string name="tab_home">主页</string>
     <string name="tab_notify_history">通知</string>
+    <string name="tab_clipboard_history">剪贴板</string>
     <string name="show_tab_label">显示底部导航标签</string>
 </resources>

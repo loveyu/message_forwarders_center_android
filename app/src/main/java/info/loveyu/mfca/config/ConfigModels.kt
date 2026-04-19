@@ -270,7 +270,7 @@ data class InternalOutputConfig(
 )
 
 enum class InternalOutputType {
-    clipboard, file, broadcast, notify
+    clipboard, file, broadcast, notify, clipboardHistory
 }
 
 /**

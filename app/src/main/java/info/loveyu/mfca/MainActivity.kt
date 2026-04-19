@@ -14,6 +14,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Icon
@@ -36,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.service.ForwardService
+import info.loveyu.mfca.ui.ClipboardHistoryContent
+import info.loveyu.mfca.ui.ClipboardHistoryTopBar
 import info.loveyu.mfca.ui.MainScreen
 import info.loveyu.mfca.ui.MainTopBar
 import info.loveyu.mfca.ui.NotifyHistoryContent
@@ -51,7 +54,8 @@ enum class BottomTab(
     val labelResId: Int
 ) {
     HOME(Icons.Default.Home, R.string.tab_home),
-    NOTIFY_HISTORY(Icons.Default.Notifications, R.string.tab_notify_history)
+    NOTIFY_HISTORY(Icons.Default.Notifications, R.string.tab_notify_history),
+    CLIPBOARD_HISTORY(Icons.Default.ContentPaste, R.string.tab_clipboard_history)
 }
 
 class MainActivity : ComponentActivity() {
@@ -239,6 +243,7 @@ private fun MainContent(
                         notifyScope.launch { notifyDrawerState.open() }
                     }
                 )
+                BottomTab.CLIPBOARD_HISTORY -> ClipboardHistoryTopBar()
             }
         },
         bottomBar = {
@@ -280,6 +285,10 @@ private fun MainContent(
                 onBack = { selectedTab = BottomTab.HOME },
                 highlightNotifyId = highlightNotifyId,
                 drawerState = notifyDrawerState,
+                contentPadding = innerPadding
+            )
+
+            BottomTab.CLIPBOARD_HISTORY -> ClipboardHistoryContent(
                 contentPadding = innerPadding
             )
         }

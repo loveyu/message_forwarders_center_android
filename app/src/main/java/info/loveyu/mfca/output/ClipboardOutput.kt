@@ -3,11 +3,11 @@ package info.loveyu.mfca.output
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import info.loveyu.mfca.clipboard.ClipboardHistoryDbHelper
 import info.loveyu.mfca.config.Duration
 import info.loveyu.mfca.config.InternalOutputConfig
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.util.LogManager
-import java.security.MessageDigest
 
 /**
  * 剪贴板输出
@@ -24,6 +24,8 @@ class ClipboardOutput(
 
     private val clipboardManager: ClipboardManager? =
         context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+
+    private val historyDbHelper = ClipboardHistoryDbHelper(context)
 
     // 熄屏延迟写入配置
     private val deferOnScreenOff: Boolean
@@ -79,16 +81,8 @@ class ClipboardOutput(
         private val logHistory = mutableMapOf<String, ArrayDeque<String>>()
         private const val MAX_LOG_ENTRIES = 3
 
-        // 预分配 MessageDigest，避免每次 send 都 getInstance
-        private val sha1Digest by lazy { MessageDigest.getInstance("SHA-1") }
-
         @Synchronized
-        private fun sha1(text: String): String {
-            val digest = sha1Digest
-            digest.reset()
-            val hashBytes = digest.digest(text.toByteArray())
-            return hashBytes.joinToString("") { "%02x".format(it) }
-        }
+        private fun sha1(text: String): String = ClipboardHistoryDbHelper.sha1(text)
     }
 
     override fun send(item: QueueItem, callback: ((Boolean) -> Unit)?) {
@@ -185,5 +179,17 @@ class ClipboardOutput(
         clipboardManager?.setPrimaryClip(clip)
         lastWrite[name] = text to System.currentTimeMillis()
         LogManager.logDebug("INTERNAL", "Written to clipboard: $name (hash=$contentHash, len=${text.length})")
+
+        // Sync to clipboard history
+        recordToHistory(text)
+    }
+
+    private fun recordToHistory(text: String) {
+        try {
+            val contentType = ClipboardHistoryDbHelper.detectContentType(text)
+            historyDbHelper.insertOrUpdate(text, contentType)
+        } catch (e: Exception) {
+            LogManager.logError("INTERNAL", "Failed to record clipboard history: ${e.message}")
+        }
     }
 }

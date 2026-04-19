@@ -54,6 +54,8 @@ object OutputManager {
 
     fun getClipboardOutput(name: String): ClipboardOutput? = outputs[name] as? ClipboardOutput
 
+    fun getClipboardHistoryOutput(name: String): ClipboardHistoryOutput? = outputs[name] as? ClipboardHistoryOutput
+
     fun getFileOutput(name: String): FileOutput? = outputs[name] as? FileOutput
 
     fun getBroadcastOutput(name: String): BroadcastOutput? = outputs[name] as? BroadcastOutput
@@ -107,6 +109,7 @@ object OutputManager {
             InternalOutputType.file -> FileOutput(ctx, config.name, config)
             InternalOutputType.broadcast -> BroadcastOutput(ctx, config.name, config)
             InternalOutputType.notify -> NotifyOutput(ctx, config.name, config)
+            InternalOutputType.clipboardHistory -> ClipboardHistoryOutput(ctx, config.name, config)
         }
     }
 }
