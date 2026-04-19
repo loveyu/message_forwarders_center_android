@@ -14,7 +14,7 @@ Android 消息转发中心 - Service 常驻架构
 | 类型 | 库 | 特性 |
 |------|-----|------|
 | MQTT | Eclipse Paho | TLS支持、连续失败退避 |
-| WebSocket | OkHttp | WSS/TLS支持、Basic Auth、Gotify协议 |
+| WebSocket | OkHttp | WSS/TLS支持、Basic Auth、Gotify协议、消息回放 |
 | TCP | Kotlin Socket | Keep-Alive、帧协议(lb/tlv/split) |
 
 #### Link 配置
@@ -54,7 +54,7 @@ protocol://[username:password@]host:port[?param1=value1&param2=value2...]
 | `reconnectMaxInterval` | long | 60 | 重连最大间隔(秒, 预留) |
 
 所有 Link 类型采用统一的重连模型：
-- 无内部定时器重连，由统一 Ticker 健康检查驱动（默认 30s，可配置）
+- 无内部定时器重连，由统一 Ticker 健康检查驱动（默认 40s，可配置）
 - 连续失败计数器（最大5次），超过后等待下一健康检查周期重置
 - 最小重试间隔防止高频重连
 - 支持 YAML `reconnect` 配置块或 DSN 查询参数两种方式配置
@@ -110,6 +110,7 @@ tls:
   ca: file:///data/certs/ca.pem       # CA 证书
   cert: file:///path/to/cert.pem      # 客户端证书(可选)
   key: file:///path/to/key.pem        # 客户端私钥(可选)
+  insecure: false                     # 跳过证书验证(不推荐，默认 false)
 ```
 
 证书路径支持协议前缀：
@@ -157,21 +158,51 @@ tls:
 
 ### 规则引擎 (RuleEngine)
 ```yaml
-pipeline:
-  - transform:
-      extract: "data.temperature"    # GJSON 路径提取
-      filter: "len(data.items) > 0"   # 表达式过滤
-      detect: "image"                 # image/json/text 检测
-    to: ["mqtt_output", "http_output"]
+rules:
+  - name: example
+    from: ["input1", "input2"]        # 支持数组，从多个输入源接收
+    pipeline:
+      - transform:
+          enrich: "gotifyIcon:ws_link"  # Gotify 图标富化
+          extract: "data.temperature"    # GJSON 路径提取
+          filter: "len(data.items) > 0"  # 表达式过滤
+          detect: "image"                # image/json/text 检测
+          format: "{headers}\n{data}"    # 模板格式化输出
+        to: ["mqtt_output", "http_output"]
+    onError:                            # 错误处理管道（可选）
+      - to: ["error_output"]
+    when: "network=wifi"                # 网络条件（可选）
 ```
+
+#### Transform 选项
+
+| 选项 | 说明 | 示例 |
+|------|------|------|
+| `extract` | GJSON 路径提取 | `"data.temperature"`, `"$raw"`, `"base64Decode(content)"` |
+| `filter` | 表达式过滤 | `"len(data.items) > 0"`, `"path == value"` |
+| `detect` | 类型检测 | `"image"`, `"json"`, `"text"` |
+| `format` | 模板格式化 | `"{headers}\n{data}"`, `"{data.field}"`, `"base64Decode(content)"` |
+| `enrich` | 数据富化 | `"gotifyIcon:<linkId>"` |
+
+#### Filter 支持的操作符
+
+| 操作符 | 示例 |
+|--------|------|
+| `==` / `!=` | `"path == value"` |
+| `>` / `<` / `>=` / `<=` | `"path > 10"` |
+| `startsWith` | `"$headers.mqtt_topic startsWith topic/prefix"` |
+| `len()` | `"len(data.items) > 0"` |
+| `$headers` | `"$headers.mqtt_topic == topic"` |
 
 ### 调度器配置
 
 所有定时检查由统一 Ticker 驱动，支持配置检查间隔和事件触发：
 ```yaml
 scheduler:
-  tickInterval: "30s"              # 定时检查间隔，默认 30s，最小 15s
-  chargingTickInterval: "15s"      # 充电时更短的间隔（可选）
+  tickInterval: "40s"              # 定时检查间隔，默认 40s，最小 20s
+  chargingTickInterval: "20s"      # 充电时更短的间隔（可选）
+  wakeLockTimeout: "1h"            # WakeLock 超时，默认 1h，"0" 表示永久（可选）
+  wifiLockTimeout: "1h"            # WiFi Lock 超时，默认 1h，"0" 表示永久（可选）
 ```
 
 事件触发（受 5 秒最小间隔防抖保护）：
@@ -199,6 +230,45 @@ links:
 | `ssid` | 名称或 `~正则` | WiFi SSID匹配 |
 | `bssid` | MAC地址 | WiFi BSSID匹配 |
 | `ipRanges` | CIDR或IP | IP地址范围匹配 |
+
+### 死信队列 (DeadLetter)
+消息重试达到上限后进入死信队列，支持转发到指定输出：
+```yaml
+deadLetter:
+  enabled: true
+  maxRetry: 10              # 最大重试次数，默认 10
+  action:                   # 死信处理管道
+    - to: ["error_output"]
+```
+
+### 快捷设置 (QuickSettings)
+控制通知栏快捷按钮的显示：
+```yaml
+quickSettings:
+  inputMethodSwitcher: true  # 输入法切换按钮，默认 true
+```
+
+### Gotify 消息回放 (Replay)
+Gotify WebSocket 链接断线重连后，自动通过 Gotify REST API 回放离线期间的消息：
+```yaml
+inputs:
+  link:
+    - name: gotify_input
+      linkId: gotify_ws
+      role: consumer
+      topic: "sensors/#"
+      replay:
+        enabled: true
+        provider: gotifyApi            # 目前仅支持 gotifyApi
+        messageIdPath: "id"            # 消息 ID 的 JSON 路径
+        pageSize: 50                   # 每页拉取数量
+        maxPages: 20                   # 最大拉取页数
+        maxMessages: 500               # 最大回放消息数
+        persistState: true             # 持久化已处理的消息 ID
+        baseUrl: "https://gotify.example.com"  # Gotify API 地址（可选，默认从 link DSN 推导）
+        token: "your-token"            # Gotify API Token（可选，默认从 link DSN 推导）
+        applicationId: 1               # Gotify 应用 ID（可选）
+```
 
 ## 技术栈
 
@@ -228,25 +298,52 @@ links:
 | [`08_sqlite_queue.yaml`](app/src/main/assets/samples/08_sqlite_queue.yaml) | SQLite 持久化队列 |
 | [`09_outputs.yaml`](app/src/main/assets/samples/09_outputs.yaml) | 输出模块 |
 | [`10_rules.yaml`](app/src/main/assets/samples/10_rules.yaml) | 规则引擎 |
-| [`11_full_demo.yaml`](app/src/main/assets/samples/11_full_demo.yaml) | 完整演示 |
-| [`15_scheduler.yaml`](app/src/main/assets/samples/15_scheduler.yaml) | 调度器配置 |
+| [`11_clipboard_forward.yaml`](app/src/main/assets/samples/11_clipboard_forward.yaml) | 剪贴板转发示例 |
+| [`12_http_shared_input.yaml`](app/src/main/assets/samples/12_http_shared_input.yaml) | HTTP 共享端口示例 |
+| [`13_quick_settings.yaml`](app/src/main/assets/samples/13_quick_settings.yaml) | 通知栏快捷设置示例 |
+| [`14_scheduler.yaml`](app/src/main/assets/samples/14_scheduler.yaml) | 调度器配置 |
+| [`99_full_demo.yaml`](app/src/main/assets/samples/99_full_demo.yaml) | 完整演示 (组合示例) |
 
-## 状态栏显示
+## 状态栏 / 服务状态显示
 
-服务运行时通知栏显示（由统一 Ticker 驱动，默认 30s 刷新）：
+服务运行时通知栏（由统一 Ticker 驱动，默认 40s 刷新），用于展示运行时统计与简要状态提示。
+
+显示格式（简写说明）：
+- L：链路数 (Links)
+- I：输入数 (Inputs)
+- O：输出数 (Outputs)
+
+示例显示：
 ```
-L链路数 I输入数 O输出数 · R接收数 S发送数
+L链路数 I输入数 O输出数
 ```
 
-例如：`L3 I2 O4 · R156 S143`
+例如：`L3 I2 O4`
+
+状态标志（以 `|` 分隔，按需显示）：
+- `暂停接收` - 接收已暂停
+- `暂停转发` - 转发已暂停
+- `W锁` - WakeLock 已启用
+- `WiFi锁` - WiFi Lock 已启用
+
+例如：`L3 I2 O4 | 暂停转发 | W锁`
 
 ## 权限需求
 
 - `INTERNET` - 网络通信
 - `ACCESS_NETWORK_STATE` - 网络状态监听
+- `ACCESS_WIFI_STATE` - WiFi 状态监听
+- `NEARBY_WIFI_DEVICES` - WiFi 信息访问（Android 13+ 获取 SSID/BSSID）
+- `ACCESS_FINE_LOCATION` - 定位权限（部分设备获取 WiFi 信息需要）
+- `ACCESS_BACKGROUND_LOCATION` - 后台定位权限（Android 10+ 后台获取 WiFi SSID/BSSID）
 - `FOREGROUND_SERVICE` - 前台服务
 - `FOREGROUND_SERVICE_DATA_SYNC` - 数据同步服务类型
 - `POST_NOTIFICATIONS` - Android 13+ 通知权限
+- `WAKE_LOCK` - 唤醒锁（保持 CPU 在熄屏后运行）
+- `RECEIVE_BOOT_COMPLETED` - 开机自启动
+- `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` - 电池优化豁免
+- `READ_MEDIA_IMAGES` - 读取媒体图片（Android 13+）
+- `MANAGE_EXTERNAL_STORAGE` - 管理所有文件（Android 11+，用于 sdcard:// 路径写入）
 
 ## 构建
 

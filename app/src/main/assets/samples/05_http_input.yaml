@@ -48,7 +48,7 @@ outputs:
   internal:
     - name: log_to_file
       type: file
-      basePath: sdcard:///mfca/logs/http_input
+      basePath: sdcard://mfca/logs/http_input
       # fileName 支持变量: 时间 {yyyy} {MM} {dd} {HH} {mm} {ss} {SSS} {timestamp}, QueueItem {id} {meta.xxx}
       fileName: "{yyyy}-{MM}-{dd}.log"
       options:

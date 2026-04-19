@@ -46,7 +46,7 @@ rules:
     pipeline:
       - transform:
           extract: "base64Decode(content)"
-          filter: "type == text"
+          filter: "type == 'text'"
         to:
           - clipboard_write
 

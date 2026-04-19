@@ -153,8 +153,9 @@ fun SampleDetailScreen(
     val isDarkTheme = isSystemInDarkTheme()
     val context = LocalContext.current
 
-    val htmlContent = remember(sampleFile.content) {
-        buildHtmlContent(sampleFile.content, sampleFile.name)
+    val htmlTemplate = remember { context.assets.open("sample_viewer.html").bufferedReader().use { it.readText() } }
+    val htmlContent = remember(sampleFile.content, isDarkTheme) {
+        buildHtmlContent(htmlTemplate, sampleFile.content, sampleFile.name, isDarkTheme)
     }
 
     Scaffold(
@@ -197,7 +198,7 @@ fun SampleDetailScreen(
     }
 }
 
-private fun buildHtmlContent(content: String, fileName: String): String {
+private fun buildHtmlContent(template: String, content: String, fileName: String, isDarkTheme: Boolean): String {
     val escapedContent = content
         .replace("&", "&amp;")
         .replace("<", "&lt;")
@@ -206,8 +207,15 @@ private fun buildHtmlContent(content: String, fileName: String): String {
     val isMarkdown = fileName.endsWith(".md", ignoreCase = true)
     val languageClass = if (isMarkdown) "" else " class=\"language-yaml\""
     val viewClass = if (isMarkdown) "md-view" else "yaml-view"
+    val themeClass = if (isDarkTheme) "dark" else "light"
+    val highlightStyle = if (isDarkTheme) {
+        "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css"
+    } else {
+        "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"
+    }
 
-    val markdownScript = if (isMarkdown) """
+    val markdownScript = if (isMarkdown) {
+        """
             var md = window.markdownit({ linkify: false, breaks: true });
             md.renderer.rules.link_open = function() { return ''; };
             md.renderer.rules.link_close = function() { return ''; };
@@ -216,320 +224,21 @@ private fun buildHtmlContent(content: String, fileName: String): String {
                 hljs.highlightElement(block);
             });
             addCopyButtons();
-    """ else """
+        """
+    } else {
+        """
             hljs.highlightElement(document.getElementById('content'));
-    """
+        """
+    }
 
-    return """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css" media="(prefers-color-scheme: dark)">
-    <style>
-        :root {
-            --bg-color: #ffffff;
-            --text-color: #333333;
-            --code-bg: #f6f8fa;
-            --border-color: #d0d7de;
-            --link-color: #0969da;
-            --blockquote-color: #656d76;
-            --copy-btn-bg: #e8e8e8;
-            --copy-btn-hover: #d4d4d4;
-            --copy-success-color: #28a745;
-        }
-
-        [data-theme="dark"] {
-            --bg-color: #0d1117;
-            --text-color: #c9d1d9;
-            --code-bg: #161b22;
-            --border-color: #30363d;
-            --link-color: #58a6ff;
-            --blockquote-color: #8b949e;
-            --copy-btn-bg: #2d333b;
-            --copy-btn-hover: #3d444d;
-            --copy-success-color: #3fb950;
-        }
-
-        * {
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        html, body {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            overflow: hidden;
-            -webkit-user-select: text;
-            user-select: text;
-        }
-
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-
-        .content {
-            height: 100%;
-            overflow-y: auto;
-            padding: 8px;
-            -webkit-overflow-scrolling: touch;
-        }
-
-        /* YAML 文件：顶级代码块无装饰 */
-        .yaml-view pre {
-            background-color: transparent !important;
-            border: none;
-            border-radius: 0;
-            padding: 0 !important;
-            overflow-x: auto;
-            margin: 0;
-        }
-
-        /* MD 文件：内部代码块有边框背景 */
-        .md-view .code-wrapper {
-            position: relative;
-            margin: 4px 0;
-        }
-
-        .md-view pre {
-            background-color: var(--code-bg) !important;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            padding: 8px !important;
-            padding-right: 48px !important;
-            overflow-x: auto;
-            margin: 0;
-        }
-
-        code {
-            font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace;
-            font-size: 12px;
-        }
-
-        pre code {
-            background-color: transparent !important;
-            padding: 0 !important;
-        }
-
-        :not(pre) > code {
-            background-color: var(--code-bg);
-            padding: 0.2em 0.4em;
-            border-radius: 4px;
-        }
-
-        .copy-btn {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: var(--copy-btn-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            cursor: pointer;
-            color: var(--text-color);
-            font-size: 14px;
-            transition: all 0.15s;
-            opacity: 0.4;
-        }
-
-        .code-wrapper:hover .copy-btn,
-        .copy-btn:focus {
-            opacity: 1;
-        }
-
-        .copy-btn:active {
-            background-color: var(--copy-btn-hover);
-        }
-
-        .copy-btn.copied {
-            color: var(--copy-success-color);
-            border-color: var(--copy-success-color);
-        }
-
-        .copy-btn.copied::after {
-            content: "✓";
-        }
-
-        .copy-btn:not(.copied)::after {
-            content: "📋";
-        }
-
-        a {
-            color: var(--text-color);
-            text-decoration: none;
-            pointer-events: none;
-        }
-
-        blockquote {
-            margin: 0;
-            padding: 0 1em;
-            color: var(--blockquote-color);
-            border-left: 0.25em solid var(--border-color);
-        }
-
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            min-width: 800px;
-        }
-
-        table th, table td {
-            border: 1px solid var(--border-color);
-            padding: 4px 8px;
-        }
-
-        table tr:nth-child(2n) {
-            background-color: var(--code-bg);
-        }
-
-        hr {
-            border: none;
-            border-top: 1px solid var(--border-color);
-            margin: 12px 0;
-        }
-
-        h1, h2, h3, h4, h5, h6 {
-            margin-top: 16px;
-            margin-bottom: 8px;
-            font-weight: 600;
-            line-height: 1.25;
-        }
-
-        h1 { font-size: 2em; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3em; }
-        h2 { font-size: 1.5em; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3em; }
-        h3 { font-size: 1.25em; }
-        h4 { font-size: 1em; }
-        h5 { font-size: 0.875em; }
-        h6 { font-size: 0.85em; color: var(--blockquote-color); }
-
-        ul, ol {
-            padding-left: 2em;
-            margin: 4px 0;
-        }
-
-        li + li {
-            margin-top: 4px;
-        }
-
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: var(--bg-color);
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--blockquote-color);
-        }
-    </style>
-</head>
-<body>
-    <div class="content $viewClass" id="content-area">
-        <pre><code id="content"$languageClass>${escapedContent}</code></pre>
-    </div>
-    <script>
-        (function() {
-            var isDarkTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-            if (isDarkTheme) {
-                document.documentElement.setAttribute('data-theme', 'dark');
-            } else {
-                document.documentElement.setAttribute('data-theme', 'light');
-            }
-
-            function addCopyButtons() {
-                document.querySelectorAll('pre code').forEach(function(codeBlock) {
-                    var pre = codeBlock.parentElement;
-                    if (pre.parentElement && pre.parentElement.classList.contains('code-wrapper')) {
-                        return;
-                    }
-
-                    var wrapper = document.createElement('div');
-                    wrapper.className = 'code-wrapper';
-                    pre.parentNode.insertBefore(wrapper, pre);
-                    wrapper.appendChild(pre);
-
-                    var btn = document.createElement('button');
-                    btn.className = 'copy-btn';
-                    btn.setAttribute('aria-label', '复制代码');
-                    btn.setAttribute('tabindex', '0');
-                    wrapper.appendChild(btn);
-
-                    btn.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-
-                        var code = codeBlock.textContent || codeBlock.innerText;
-                        var textarea = document.createElement('textarea');
-                        textarea.value = code;
-                        textarea.style.position = 'fixed';
-                        textarea.style.left = '-9999px';
-                        textarea.style.top = '0';
-                        document.body.appendChild(textarea);
-                        textarea.select();
-                        textarea.setSelectionRange(0, 99999);
-
-                        try {
-                            document.execCommand('copy');
-                            btn.classList.add('copied');
-                            setTimeout(function() {
-                                btn.classList.remove('copied');
-                            }, 2000);
-                        } catch (err) {
-                            navigator.clipboard.writeText(code).then(function() {
-                                btn.classList.add('copied');
-                                setTimeout(function() {
-                                    btn.classList.remove('copied');
-                                }, 2000);
-                            });
-                        }
-
-                        document.body.removeChild(textarea);
-                    });
-                });
-            }
-
-            function loadScript(url, onload) {
-                var script = document.createElement('script');
-                script.src = url;
-                script.onload = onload;
-                document.head.appendChild(script);
-            }
-
-            var isMarkdown = $isMarkdown;
-            var content = document.getElementById('content').textContent;
-
-            loadScript('https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js', function() {
-                if (isMarkdown) {
-                    loadScript('https://cdn.jsdelivr.net/npm/markdown-it@14/dist/markdown-it.min.js', function() {
-                        $markdownScript
-                    });
-                } else {
-                    $markdownScript
-                }
-            });
-        })();
-    </script>
-</body>
-</html>
-    """.trimIndent()
+    return template
+        .replace("{{THEME_CLASS}}", themeClass)
+        .replace("{{HIGHLIGHT_STYLE}}", highlightStyle)
+        .replace("{{VIEW_CLASS}}", viewClass)
+        .replace("{{LANGUAGE_CLASS}}", languageClass)
+        .replace("{{CONTENT}}", escapedContent)
+        .replace("{{IS_MARKDOWN}}", isMarkdown.toString())
+        .replace("{{MARKDOWN_SCRIPT}}", markdownScript)
 }
 
 private fun loadSampleFiles(context: Context): List<SampleFile> {

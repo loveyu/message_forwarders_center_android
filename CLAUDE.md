@@ -55,9 +55,10 @@ Message Forwarders Center Android - Android 消息转发中心，基于 Android 
 | 服务入口 | `service/ForwardService.kt` | Foreground Service，统一 Ticker 调度 |
 | 链接层 | `link/` | MQTT (Paho)、WebSocket (OkHttp)、TCP (Socket) |
 | 输入层 | `input/` | HTTP Server (NanoHTTPD)、Link 订阅 |
-| 输出层 | `output/` | HTTP、Link 发布、Internal (Clipboard/File) |
+| 输出层 | `output/` | HTTP、Link 发布、Internal (Clipboard/File/Broadcast/Notify) |
 | 队列层 | `queue/` | MemoryQueue (Channel 驱动)、SqliteQueue (tick 驱动) |
-| 规则引擎 | `pipeline/` | GJSON 提取、表达式过滤、类型检测 |
+| 规则引擎 | `pipeline/` | GJSON 提取、表达式过滤、类型检测、格式化、富化 |
+| 死信队列 | `deadletter/DeadLetterHandler.kt` | 消息重试失败后的死信处理 |
 | 配置 | `config/` | YAML 配置加载器 |
 | HTTP 服务器 | `server/` | NanoHTTPD 实现 |
 
@@ -100,8 +101,11 @@ protocol://[username:password@]host:port[?param1=value1&param2=value2...]
 ## 规则引擎语法
 
 - extract: GJSON 路径提取（`"data.temperature"`, `"$raw"`, `"base64Decode(content)"`）
-- filter: 表达式过滤（`"len(data.items) > 0"`, `"path == value"`）
+- filter: 表达式过滤（`"len(data.items) > 0"`, `"path == value"`, `"startsWith"`, `"$headers.X"`）
 - detect: 类型检测（`image`, `json`, `text`）
+- format: 模板格式化（`"{headers}\n{data}"`, `"{data.field}"`）
+- enrich: 数据富化（`"gotifyIcon:<linkId>"`）
+- onError: 错误处理管道（每条规则可选）
 
 ## 提交规范
 
@@ -118,3 +122,8 @@ protocol://[username:password@]host:port[?param1=value1&param2=value2...]
 | YAML | SnakeYAML Engine 2.9 |
 | Min SDK | 33 (Android 13) |
 | Target SDK | 36 |
+
+## 示例配置
+
+示例配置与演示文件位于 `app/src/main/assets/samples/`，详见该目录下的 README.md（仓库内）。
+

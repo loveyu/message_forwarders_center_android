@@ -38,9 +38,9 @@ links:
 inputs:
   http:
     - name: http_in
-      listen: "0.0.0.0"
-      port: 8080
-      path: /webhook
+      dsn: "http://0.0.0.0:8080"
+      paths:
+        - /webhook
 
 outputs:
   # HTTP 输出

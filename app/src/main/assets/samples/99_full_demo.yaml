@@ -27,7 +27,7 @@ links:
 
   # 局域网 TCP 设备
   - id: tcp_device
-    dsn: tcp://192.168.1.50:9000?connectTimeout=5&soTimeout=30&keepAlive=true&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60
+    dsn: tcp://192.168.1.50:9000?connectTimeout=5&readTimeout=30&keepAlive=true&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60
 
 # ============================================
 # 输入配置
@@ -204,7 +204,7 @@ deadLetter:
 # ============================================
 # 快捷设置配置（通知栏按钮开关）
 # ============================================
-quick_settings:
+quickSettings:
   # 输入法切换按钮：在服务通知栏显示"输入"按钮，点击弹出输入法选择器
   # 设为 false 可隐藏该按钮
   inputMethodSwitcher: true
