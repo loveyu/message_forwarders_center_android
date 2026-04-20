@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.clipboard.ClipboardHistoryDbHelper
 import info.loveyu.mfca.clipboard.ClipboardNotificationHelper
 import info.loveyu.mfca.clipboard.ClipboardRecord
+import androidx.compose.foundation.clickable
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -96,6 +97,7 @@ private fun ClipboardDetailScreen(recordId: Long, onBack: () -> Unit) {
     val dbHelper = remember { ClipboardHistoryDbHelper(context) }
     var record by remember { mutableStateOf<ClipboardRecord?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showMetaExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(recordId) {
         if (recordId > 0) {
@@ -151,7 +153,7 @@ private fun ClipboardDetailScreen(recordId: Long, onBack: () -> Unit) {
                     }
                 },
                 actions = {
-                    if (r.contentType == "html" || r.contentType == "markdown") {
+                    if (ClipboardPreviewActivity.hasPreview(r.contentType)) {
                         IconButton(
                             onClick = {
                                 ClipboardPreviewActivity.start(context, r.id)
@@ -179,23 +181,21 @@ private fun ClipboardDetailScreen(recordId: Long, onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (r.contentType != "text") {
+                val (bgColor, fgColor) = when (r.contentType) {
+                    "html" -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+                    "json" -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+                    "yaml" -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+                    else -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+                }
                 Surface(
                     shape = RoundedCornerShape(4.dp),
-                    color = if (r.contentType == "html") {
-                        MaterialTheme.colorScheme.tertiaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    }
+                    color = bgColor
                 ) {
                     Text(
                         text = r.contentType.uppercase(),
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                        color = if (r.contentType == "html") {
-                            MaterialTheme.colorScheme.onTertiaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        }
+                        color = fgColor
                     )
                 }
             }
@@ -210,17 +210,41 @@ private fun ClipboardDetailScreen(recordId: Long, onBack: () -> Unit) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                DetailInfoRow("创建时间", formatAbsoluteTime(r.createdAt))
-                DetailInfoRow("更新时间", formatAbsoluteTime(r.updatedAt))
-                DetailInfoRow(
-                    "哈希值",
-                    r.contentHash.take(16) + "..."
-                )
-                if (r.pinned) {
-                    DetailInfoRow("置顶", "是")
+                val timeLabel = buildString {
+                    append("时间: ")
+                    append(formatAbsoluteTime(r.updatedAt))
+                    if (r.createdAt != r.updatedAt) append(" (已更新)")
                 }
-                if (r.notificationPinned) {
-                    DetailInfoRow("通知栏置顶", "是")
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showMetaExpanded = !showMetaExpanded },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = timeLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${r.content.length}字",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (showMetaExpanded) {
+                    DetailInfoRow("创建时间", formatAbsoluteTime(r.createdAt))
+                    if (r.createdAt != r.updatedAt) {
+                        DetailInfoRow("更新时间", formatAbsoluteTime(r.updatedAt))
+                    }
+                    DetailInfoRow("哈希值", r.contentHash.take(16) + "...")
+                    if (r.pinned) {
+                        DetailInfoRow("置顶", "是")
+                    }
+                    if (r.notificationPinned) {
+                        DetailInfoRow("通知栏置顶", "是")
+                    }
                 }
             }
 

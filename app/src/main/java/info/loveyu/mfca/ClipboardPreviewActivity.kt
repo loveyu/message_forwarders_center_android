@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -53,6 +52,10 @@ class ClipboardPreviewActivity : ComponentActivity() {
                     putExtra("record_id", recordId)
                 }
             )
+        }
+
+        fun hasPreview(contentType: String): Boolean {
+            return contentType in setOf("html", "markdown", "json", "yaml")
         }
     }
 }
@@ -94,18 +97,26 @@ private fun ClipboardPreviewScreen(recordId: Long, onBack: () -> Unit) {
     }
 
     val isDark = isSystemInDarkTheme()
-    val previewHtml = if (r.contentType == "html") {
-        r.content
-    } else {
-        markdownToHtml(r.content, isDark)
+    val previewHtml = when (r.contentType) {
+        "html" -> r.content
+        "json" -> codeToHtml(prettifyJson(r.content), "json", isDark)
+        "yaml" -> codeToHtml(r.content, "yaml", isDark)
+        else -> markdownToHtml(r.content, isDark)
     }
+
+    val enableJs = r.contentType in setOf("json", "yaml")
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        if (r.contentType == "html") "HTML 预览" else "Markdown 预览",
+                        when (r.contentType) {
+                            "html" -> "HTML 预览"
+                            "json" -> "JSON 预览"
+                            "yaml" -> "YAML 预览"
+                            else -> "Markdown 预览"
+                        },
                         maxLines = 1
                     )
                 },
@@ -122,7 +133,7 @@ private fun ClipboardPreviewScreen(recordId: Long, onBack: () -> Unit) {
     ) { padding ->
         AndroidView(
             factory = { ctx ->
-                createPreviewWebView(ctx, previewHtml)
+                createPreviewWebView(ctx, previewHtml, enableJs)
             },
             modifier = Modifier
                 .fillMaxSize()
@@ -131,21 +142,91 @@ private fun ClipboardPreviewScreen(recordId: Long, onBack: () -> Unit) {
     }
 }
 
+// --- WebView factory ---
+
 @SuppressLint("SetJavaScriptEnabled")
-private fun createPreviewWebView(context: android.content.Context, htmlContent: String): WebView {
+private fun createPreviewWebView(
+    context: Context,
+    htmlContent: String,
+    enableJs: Boolean = false
+): WebView {
     return WebView(context).apply {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
         settings.apply {
-            javaScriptEnabled = false
+            javaScriptEnabled = enableJs
             domStorageEnabled = false
         }
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
         loadDataWithBaseURL(null, htmlContent, "text/html", "UTF-8", null)
     }
 }
+
+// --- JSON prettify ---
+
+private fun prettifyJson(content: String): String {
+    return try {
+        val trimmed = content.trim()
+        if (trimmed.startsWith('{')) {
+            org.json.JSONObject(trimmed).toString(2)
+        } else {
+            org.json.JSONArray(trimmed).toString(2)
+        }
+    } catch (_: Exception) {
+        content
+    }
+}
+
+// --- Code (JSON/YAML) to highlighted HTML ---
+
+private const val HLJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0"
+
+private fun codeToHtml(code: String, language: String, isDark: Boolean): String {
+    val theme = if (isDark) "github-dark-dimmed" else "github"
+    val bgColor = if (isDark) "#0d1117" else "#ffffff"
+    val textColor = if (isDark) "#c9d1d9" else "#333333"
+    val escaped = code.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <link rel="stylesheet" href="$HLJS_CDN/styles/$theme.min.css">
+            <style>
+                body {
+                    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+                    font-size: 13px;
+                    line-height: 1.5;
+                    background-color: $bgColor;
+                    color: $textColor;
+                    margin: 0;
+                    padding: 0;
+                }
+                pre {
+                    margin: 0;
+                    padding: 12px;
+                    background-color: transparent;
+                }
+                code {
+                    font-family: inherit;
+                    font-size: inherit;
+                }
+            </style>
+        </head>
+        <body>
+            <pre><code class="language-$language">$escaped</code></pre>
+            <script src="$HLJS_CDN/highlight.min.js"></script>
+            <script>hljs.highlightAll();</script>
+        </body>
+        </html>
+    """.trimIndent()
+}
+
+// --- Markdown to HTML ---
 
 private fun markdownToHtml(markdown: String, isDark: Boolean): String {
     val bgColor = if (isDark) "#0d1117" else "#ffffff"
