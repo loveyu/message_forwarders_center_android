@@ -169,10 +169,10 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                     val uptime = if (connectedAt > 0) (System.currentTimeMillis() - connectedAt) / 1000 else -1
                     connected = false
                     LinkManager.notifyLinkStateChanged(id, connected = false)
-                    LogManager.logWarn("MQTT", "Connection lost after ${uptime}s (keepAlive=${effectiveKeepAliveSeconds}s): ${cause?.javaClass?.simpleName}: ${cause?.message}")
+                    LogManager.logWarn("MQTT", "Connection lost for $id after ${uptime}s (keepAlive=${effectiveKeepAliveSeconds}s): ${cause?.javaClass?.simpleName}: ${cause?.message}")
                     if (cause != null) {
                         val trace = cause.stackTraceToString().lines().take(5).joinToString(" | ")
-                        LogManager.logDebug("MQTT", "Connection lost trace: $trace")
+                        LogManager.logDebug("MQTT", "Connection lost trace for $id: $trace")
                     }
                     cause?.let { errorListener?.invoke(it as? Exception ?: Exception(it.message)) }
                     // 触发立即重连，避免等待下一个周期 tick（最多 30s）
