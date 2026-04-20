@@ -15,9 +15,9 @@ import java.net.URL
  * 图标缓存管理器
  * 负责下载、缓存和清理图标
  */
-class IconCacheManager(private val context: Context) {
+class IconCacheManager private constructor(private val context: Context) {
 
-    private val dbHelper = IconCacheDbHelper(context)
+    private val dbHelper = IconCacheDbHelper(context.applicationContext)
     private val cacheDir: File by lazy {
         File(context.cacheDir, "icons").apply { mkdirs() }
     }
@@ -26,6 +26,15 @@ class IconCacheManager(private val context: Context) {
         private const val CONNECT_TIMEOUT_MS = 5000
         private const val READ_TIMEOUT_MS = 10000
         private const val MAX_ICON_SIZE = 100 * 1024 // 100KB
+
+        @Volatile
+        private var instance: IconCacheManager? = null
+
+        fun getInstance(context: Context): IconCacheManager {
+            return instance ?: synchronized(this) {
+                instance ?: IconCacheManager(context.applicationContext).also { instance = it }
+            }
+        }
     }
 
     /**

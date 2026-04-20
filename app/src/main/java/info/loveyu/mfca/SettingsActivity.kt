@@ -137,7 +137,7 @@ fun SettingsScreenContent(
         val status = AppStatusManager.loadStatus(context)
         autoStart = status.autoStart
         // Load icon cache stats
-        val iconCacheManager = IconCacheManager(context)
+        val iconCacheManager = IconCacheManager.getInstance(context)
         val (count, size) = iconCacheManager.getCacheStats()
         iconCacheCount = count
         iconCacheSize = size
@@ -720,7 +720,7 @@ fun SettingsScreenContent(
                         isClearingIconCache = true
                         scope.launch {
                             withContext(Dispatchers.IO) {
-                                IconCacheManager(context).clearAll()
+                                IconCacheManager.getInstance(context).clearAll()
                                 ForwardService.clearIconCaches()
                             }
                             iconCacheCount = 0

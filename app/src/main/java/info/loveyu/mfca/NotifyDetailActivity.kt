@@ -346,7 +346,7 @@ private fun NotifyIcon(record: NotifyRecord, size: androidx.compose.ui.unit.Dp) 
     var iconBitmap by remember(record.iconUrl) { mutableStateOf<android.graphics.Bitmap?>(null) }
     LaunchedEffect(record.iconUrl) {
         if (!record.iconUrl.isNullOrBlank()) {
-            iconBitmap = IconCacheManager(context).getIcon(record.iconUrl, null)
+            iconBitmap = IconCacheManager.getInstance(context).getIcon(record.iconUrl, null)
         }
     }
     if (iconBitmap != null) {

@@ -42,7 +42,7 @@ class NotifyOutput(
     override val type: OutputType = OutputType.internal
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val iconCacheManager = IconCacheManager(context)
+    private val iconCacheManager = IconCacheManager.getInstance(context)
     private val historyDbHelper = NotifyHistoryDbHelper(context)
 
     // 每个 output name 对应最后通知的内容和时间（用于去重）
