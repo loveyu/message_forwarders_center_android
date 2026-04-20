@@ -207,6 +207,7 @@ private fun MainContent(
     val preferences = remember { Preferences(activity) }
     var selectedTab by remember { mutableStateOf(BottomTab.HOME) }
     var highlightNotifyId by remember { mutableStateOf<Int?>(null) }
+    var refreshTrigger by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(pendingHighlight.value) {
         if (pendingHighlight.value && pendingNotifyId.intValue != -1) {
@@ -258,6 +259,7 @@ private fun MainContent(
                         } else null,
                         selected = selectedTab == tab,
                         onClick = {
+                            if (selectedTab == tab) refreshTrigger++
                             selectedTab = tab
                             if (tab != BottomTab.NOTIFY_HISTORY) highlightNotifyId = null
                         }
@@ -285,11 +287,13 @@ private fun MainContent(
                 onBack = { selectedTab = BottomTab.HOME },
                 highlightNotifyId = highlightNotifyId,
                 drawerState = notifyDrawerState,
-                contentPadding = innerPadding
+                contentPadding = innerPadding,
+                refreshTrigger = refreshTrigger
             )
 
             BottomTab.CLIPBOARD_HISTORY -> ClipboardHistoryContent(
-                contentPadding = innerPadding
+                contentPadding = innerPadding,
+                refreshTrigger = refreshTrigger
             )
         }
     }

@@ -210,7 +210,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                     }
                 } catch (_: Exception) {}
                 (client as? TickDrivenMqttAsyncClient)?.applyKeepAliveSeconds(effectiveKeepAliveSeconds)
-                LogManager.logInfo("MQTT", "Connected successfully (keepAlive=${effectiveKeepAliveSeconds}s, screenOffKeepAlive=${screenOffKeepAliveSeconds}s)")
+                LogManager.logInfo("MQTT", "Connected successfully for $id (keepAlive=${effectiveKeepAliveSeconds}s, screenOffKeepAlive=${screenOffKeepAliveSeconds}s)")
                 connectedAt = System.currentTimeMillis()
                 lastOutboundActivity = connectedAt
                 ForwardService.triggerTick()

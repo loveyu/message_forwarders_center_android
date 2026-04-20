@@ -6,6 +6,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -27,19 +28,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -95,6 +100,7 @@ private fun NotifyDetailScreen(recordId: Long, onBack: () -> Unit) {
     val dbHelper = remember { NotifyHistoryDbHelper(context) }
     var record by remember { mutableStateOf<NotifyRecord?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var linkPickerUrls by remember { mutableStateOf<List<String>>(emptyList()) }
 
     LaunchedEffect(recordId) {
         if (recordId > 0) {
@@ -228,14 +234,86 @@ private fun NotifyDetailScreen(recordId: Long, onBack: () -> Unit) {
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            OutlinedButton(
-                onClick = {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText("通知内容", r.content))
-                    Toast.makeText(context, "已复制内容", Toast.LENGTH_SHORT).show()
-                },
-                modifier = Modifier.padding(horizontal = 0.dp)
-            ) { Text("复制内容") }
+            val urls = remember(r.content) { extractUrls(r.content) }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("通知内容", r.content))
+                        Toast.makeText(context, "已复制内容", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        Icons.Default.ContentCopy,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 4.dp).size(16.dp)
+                    )
+                    Text("复制")
+                }
+                if (urls.isNotEmpty()) {
+                    OutlinedButton(
+                        onClick = {
+                            if (urls.size == 1) {
+                                openUrl(context, urls.first())
+                            } else {
+                                linkPickerUrls = urls
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            Icons.Default.Link,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 4.dp).size(16.dp)
+                        )
+                        Text(if (urls.size == 1) "打开链接" else "链接 (${urls.size})")
+                    }
+                }
+            }
+        }
+    }
+
+    // Link picker
+    if (linkPickerUrls.isNotEmpty()) {
+        val sheetState = rememberModalBottomSheetState()
+        ModalBottomSheet(
+            onDismissRequest = { linkPickerUrls = emptyList() },
+            sheetState = sheetState
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 32.dp)
+            ) {
+                Text(
+                    text = "选择链接",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                linkPickerUrls.forEach { url ->
+                    TextButton(
+                        onClick = {
+                            linkPickerUrls = emptyList()
+                            openUrl(context, url)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = url,
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                            maxLines = 2,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -311,4 +389,19 @@ private fun formatRawData(rawData: String): String {
         else if (trimmed.startsWith("[")) org.json.JSONArray(rawData).toString(2)
         else rawData
     } catch (e: Exception) { rawData }
+}
+
+private val URL_REGEX = Regex("""https?://[^\s<>"{}|\\^`\[\]]+""")
+
+private fun extractUrls(content: String): List<String> {
+    return URL_REGEX.findAll(content).map { it.value.trimEnd(',', '.', ';', '!', '?', ':', ')') }
+        .distinct().toList()
+}
+
+private fun openUrl(context: Context, url: String) {
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    } catch (_: Exception) {
+        Toast.makeText(context, "无法打开链接", Toast.LENGTH_SHORT).show()
+    }
 }
