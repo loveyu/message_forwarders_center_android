@@ -1,6 +1,7 @@
 package info.loveyu.mfca.pipeline
 
 import android.content.Context
+import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.util.GotifyApiSupport
 import info.loveyu.mfca.util.LogManager
@@ -88,7 +89,9 @@ class GotifyIconEnricher(private val context: Context?) : Enricher {
             return null
         }
 
-        val apiConfig = GotifyApiSupport.resolveApiConfig(linkId)
+        // Try to resolve API config from link DSN first, then fall back to replay config
+        val replayConfig = InputManager.getLinkInputReplayConfig(linkId)
+        val apiConfig = GotifyApiSupport.resolveApiConfig(linkId, replayConfig)
         if (apiConfig == null) {
             LogManager.logWarn("ENRICH", "No Gotify API config found for link $linkId")
             return null
