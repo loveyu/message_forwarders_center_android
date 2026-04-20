@@ -35,22 +35,22 @@ class SharedHttpInput(
 
     override fun start() {
         if (fatalError != null) {
-            LogManager.logWarn("HTTP", "Shared HTTP server skipped: $fatalError")
+            LogManager.logWarn("HTTP", "Shared HTTP server $inputName skipped: $fatalError")
             return
         }
         try {
             start(SOCKET_READ_TIMEOUT, false)
             running = true
             lastError = null
-            LogManager.logDebug("HTTP", "Shared HTTP server started with ${virtualInputs.size} virtual inputs on ${configuredListen}:${configuredPort}")
+            LogManager.logDebug("HTTP", "Shared HTTP server $inputName started with ${virtualInputs.size} virtual inputs on ${configuredListen}:${configuredPort}")
         } catch (e: BindException) {
             running = false
             lastError = "端口 ${configuredPort} 暂时被占用，将自动重试"
-            LogManager.logWarn("HTTP", "Shared HTTP server bind conflict on ${configuredListen}:${configuredPort}, will retry: ${e.message}")
+            LogManager.logWarn("HTTP", "Shared HTTP server $inputName bind conflict on ${configuredListen}:${configuredPort}, will retry: ${e.message}")
         } catch (e: Exception) {
             running = false
             lastError = "启动失败: ${e.message}"
-            LogManager.logError("HTTP", "Failed to start shared HTTP server: ${e.message}")
+            LogManager.logError("HTTP", "Failed to start shared HTTP server $inputName: ${e.message}")
         }
     }
 
@@ -61,9 +61,9 @@ class SharedHttpInput(
             if (fatalError == null) {
                 lastError = null
             }
-            LogManager.logDebug("HTTP", "Shared HTTP server stopped")
+            LogManager.logDebug("HTTP", "Shared HTTP server $inputName stopped")
         } catch (e: Exception) {
-            LogManager.logError("HTTP", "Error stopping shared HTTP server: ${e.message}")
+            LogManager.logError("HTTP", "Error stopping shared HTTP server $inputName: ${e.message}")
         }
     }
 
@@ -89,7 +89,7 @@ class SharedHttpInput(
 
         // No virtual input matched
         if (LogManager.isDebugEnabled()) {
-            LogManager.logDebug("HTTP", "No virtual input matched: $uri from ${session.remoteIpAddress}")
+            LogManager.logDebug("HTTP", "No virtual input matched in $inputName: $uri from ${session.remoteIpAddress}")
         }
         return newFixedLengthResponse(
             Response.Status.NOT_FOUND,

@@ -42,7 +42,7 @@ class WebSocketOutput(
         }
 
         if (LogManager.isDebugEnabled()) {
-            LogManager.logDebug("WS", "Sending data: dataLen=${item.data.size}")
+            LogManager.logDebug("WS", "Sending data via $name: dataLen=${item.data.size}")
         }
 
         val success = link.send(item.data)

@@ -189,7 +189,7 @@ class ClipboardOutput(
             val contentType = ClipboardHistoryDbHelper.detectContentType(text)
             historyDbHelper.insertOrUpdate(text, contentType)
         } catch (e: Exception) {
-            LogManager.logError("INTERNAL", "Failed to record clipboard history: ${e.message}")
+            LogManager.logError("INTERNAL", "Failed to record clipboard history via $name: ${e.message}")
         }
     }
 }

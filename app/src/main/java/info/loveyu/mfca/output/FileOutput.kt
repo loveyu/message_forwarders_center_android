@@ -93,7 +93,7 @@ class FileOutput(
             }
 
             if (LogManager.isDebugEnabled()) {
-                LogManager.logDebug("FILE", "writeMode=$writeMode, file=${file.name}, dataLen=${dataToWrite.size}, useLock=$useLock")
+                LogManager.logDebug("FILE", "[$name] writeMode=$writeMode, file=${file.name}, dataLen=${dataToWrite.size}, useLock=$useLock")
             }
 
             if (writeMode == WriteMode.CREATE && file.exists()) {
@@ -116,10 +116,10 @@ class FileOutput(
 
                 val resolvedPath = file.absolutePath
                 val handle = handles.getOrPut(resolvedPath) {
-                    BufferedFileHandle(resolvedPath, effectiveBufferSize)
+                    BufferedFileHandle(resolvedPath, effectiveBufferSize, name)
                 }
                 handle.write(dataToWrite)
-                LogManager.logDebug("FILE", "Buffered write: $resolvedPath (buffered ${dataToWrite.size} bytes)")
+                LogManager.logDebug("FILE", "Buffered write via $name: $resolvedPath (buffered ${dataToWrite.size} bytes)")
                 callback?.invoke(true)
                 return
             }
@@ -131,7 +131,7 @@ class FileOutput(
                 else -> file.writeBytes(dataToWrite)
             }
 
-            LogManager.logDebug("INTERNAL", "Written to file: ${file.absolutePath} (${writeMode.name.lowercase()}, ${dataToWrite.size} bytes)")
+            LogManager.logDebug("INTERNAL", "Written to file via $name: ${file.absolutePath} (${writeMode.name.lowercase()}, ${dataToWrite.size} bytes)")
             callback?.invoke(true)
         } catch (e: Exception) {
             LogManager.logError("INTERNAL", "File write failed: $name - ${e.message}")
@@ -229,7 +229,8 @@ class FileOutput(
      */
     private class BufferedFileHandle(
         private val resolvedPath: String,
-        private val bufferSize: Int
+        private val bufferSize: Int,
+        private val outputName: String
     ) {
         private var writer: BufferedWriter? = null
         private var file: File? = null
@@ -268,9 +269,9 @@ class FileOutput(
                 try {
                     writer?.flush()
                     isDirty = false
-                    LogManager.logDebug("FILE", "Flushed buffer to: $resolvedPath")
+                    LogManager.logDebug("FILE", "Flushed buffer via $outputName to: $resolvedPath")
                 } catch (e: Exception) {
-                    LogManager.logWarn("FILE", "Failed to flush buffer: $resolvedPath - ${e.message}")
+                    LogManager.logWarn("FILE", "Failed to flush buffer via $outputName: $resolvedPath - ${e.message}")
                 }
             }
         }
@@ -281,7 +282,7 @@ class FileOutput(
                 try {
                     writer?.close()
                 } catch (e: Exception) {
-                    LogManager.logDebug("FILE", "Error closing writer: $resolvedPath - ${e.message}")
+                    LogManager.logDebug("FILE", "Error closing writer via $outputName: $resolvedPath - ${e.message}")
                 }
                 writer = null
                 file = null
@@ -300,7 +301,7 @@ class FileOutput(
             val idle = System.currentTimeMillis() - handle.lastAccessMs
             if (idle > maxIdle) {
                 handle.close()
-                LogManager.logDebug("FILE", "Closed idle handle: $path, idle=${idle}ms")
+                LogManager.logDebug("FILE", "Closed idle handle for $name: $path, idle=${idle}ms")
                 true
             } else false
         }

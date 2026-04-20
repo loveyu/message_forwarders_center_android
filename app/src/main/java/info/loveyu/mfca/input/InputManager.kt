@@ -185,7 +185,7 @@ object InputManager {
                         try {
                             input.start()
                         } catch (e: Exception) {
-                            LogManager.logError("INPUT", "Restart failed for shared HTTP server: ${e.message}")
+                            LogManager.logError("INPUT", "Restart failed for shared HTTP server ${config.name}: ${e.message}")
                         }
                     }
                 }

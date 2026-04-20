@@ -129,7 +129,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                 else -> rawBroker
             }
 
-            LogManager.logDebug("MQTT", "Connecting to $parsedBroker as $resolvedClientId")
+            LogManager.logDebug("MQTT", "Connecting to $parsedBroker as $resolvedClientId for $id")
 
             val persistence = MemoryPersistence()
             val tickPingSender = TickDrivenMqttPingSender()
@@ -183,13 +183,13 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                     topic?.let { t ->
                         message?.let { msg ->
                             messageListener?.invoke(t, msg)
-                            LogManager.logDebug("MQTT", "Message received on $t: ${msg.payload.size} bytes")
+                            LogManager.logDebug("MQTT", "Message received on $t for $id: ${msg.payload.size} bytes")
                         }
                     }
                 }
 
                 override fun deliveryComplete(token: IMqttDeliveryToken?) {
-                    LogManager.logDebug("MQTT", "Delivery complete")
+                    LogManager.logDebug("MQTT", "Delivery complete for $id")
                 }
             })
 
@@ -221,7 +221,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
 
                 // Re-subscribe to topics
                 if (topics.isNotEmpty()) {
-                    LogManager.logDebug("MQTT", "Re-subscribing to ${topics.size} topics")
+                    LogManager.logDebug("MQTT", "Re-subscribing to ${topics.size} topics for $id")
                     topics.forEach { (topic, qos) ->
                         client?.subscribe(topic, qos)
                     }
@@ -230,7 +230,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
             } else {
                 consecutiveFailures++
                 if (consecutiveFailures == MAX_CONSECUTIVE_FAILURES) hadMaxFailure = true
-                LogManager.logWarn("MQTT", "Connection failed ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): ${result?.exception?.message}")
+                LogManager.logWarn("MQTT", "Connection failed for $id ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): ${result?.exception?.message}")
                 if (consecutiveFailures == MAX_CONSECUTIVE_FAILURES) {
                     maxFailureCallback?.invoke()
                 }
@@ -240,7 +240,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         } catch (e: Exception) {
             consecutiveFailures++
             if (consecutiveFailures == MAX_CONSECUTIVE_FAILURES) hadMaxFailure = true
-            LogManager.logError("MQTT", "Connection error ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): ${e.message}")
+            LogManager.logError("MQTT", "Connection error for $id ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): ${e.message}")
             if (consecutiveFailures == MAX_CONSECUTIVE_FAILURES) {
                 maxFailureCallback?.invoke()
             }
@@ -265,12 +265,12 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         try {
             client?.disconnect(0)
         } catch (e: Exception) {
-            LogManager.logDebug("MQTT", "Error during disconnect cleanup: ${e.message}")
+            LogManager.logDebug("MQTT", "Error during disconnect cleanup for $id: ${e.message}")
         }
         try {
             client?.close()
         } catch (e: Exception) {
-            LogManager.logDebug("MQTT", "Error closing client: ${e.message}")
+            LogManager.logDebug("MQTT", "Error closing client for $id: ${e.message}")
         }
         client = null
         connected = false
@@ -333,7 +333,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
 
     override fun send(data: ByteArray): Boolean {
         if (!connected) {
-            LogManager.logWarn("MQTT", "Cannot send: not connected")
+            LogManager.logWarn("MQTT", "Cannot send for $id: not connected")
             return false
         }
         return false // Need topic to send - use sendToTopic
@@ -341,7 +341,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
 
     fun sendToTopic(topic: String, data: ByteArray, qos: Int = 1): Boolean {
         if (!connected || client == null) {
-            LogManager.logWarn("MQTT", "Cannot send to topic: not connected")
+            LogManager.logWarn("MQTT", "Cannot send to topic for $id: not connected")
             return false
         }
 
@@ -352,10 +352,10 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
             val token = client?.publish(topic, message)
             // Fire-and-forget: 不再 waitForCompletion，避免阻塞 RuleEngine worker 线程
             // 发布失败通过 connectionLost 回调感知
-            LogManager.logDebug("MQTT", "Published to $topic: ${data.size} bytes")
+            LogManager.logDebug("MQTT", "Published to $topic for $id: ${data.size} bytes")
             token != null
         } catch (e: Exception) {
-            LogManager.logError("MQTT", "Publish error: ${e.message}")
+            LogManager.logError("MQTT", "Publish error for $id: ${e.message}")
             errorListener?.invoke(e)
             false
         }
@@ -364,7 +364,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
     fun subscribe(topic: String, qos: Int = 1): Boolean {
         if (!connected || client == null) {
             topics[topic] = qos
-            LogManager.logDebug("MQTT", "Deferred subscribe to $topic (not connected)")
+            LogManager.logDebug("MQTT", "Deferred subscribe to $topic for $id (not connected)")
             return false
         }
 
@@ -372,10 +372,10 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
             client?.subscribe(topic, qos)
             topics[topic] = qos
             lastOutboundActivity = System.currentTimeMillis()
-            LogManager.logDebug("MQTT", "Subscribed to $topic (QoS $qos)")
+            LogManager.logDebug("MQTT", "Subscribed to $topic for $id (QoS $qos)")
             true
         } catch (e: Exception) {
-            LogManager.logError("MQTT", "Subscribe error: ${e.message}")
+            LogManager.logError("MQTT", "Subscribe error for $id: ${e.message}")
             errorListener?.invoke(e)
             false
         }

@@ -42,7 +42,7 @@ class TcpOutput(
         }
 
         if (LogManager.isDebugEnabled()) {
-            LogManager.logDebug("TCP", "Sending data: dataLen=${item.data.size}")
+            LogManager.logDebug("TCP", "Sending data via $name: dataLen=${item.data.size}")
         }
 
         val success = link.send(item.data)

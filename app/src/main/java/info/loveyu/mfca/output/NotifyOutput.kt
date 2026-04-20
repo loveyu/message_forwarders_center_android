@@ -122,7 +122,7 @@ class NotifyOutput(
             }
 
             if (LogManager.isDebugEnabled()) {
-                LogManager.logDebug("NOTIFY", "sending - tag=$tag, group=$group, id=$id, title=$title, hasIcon=${iconUrl != null}, popup=$popup")
+                LogManager.logDebug("NOTIFY", "[$name] sending - tag=$tag, group=$group, id=$id, title=$title, hasIcon=${iconUrl != null}, popup=$popup")
             }
 
             // 异步获取图标并发送通知
@@ -207,7 +207,7 @@ class NotifyOutput(
             )
             historyDbHelper.insert(record)
         } catch (e: Exception) {
-            LogManager.logError("INTERNAL", "Failed to save notify history: ${e.message}")
+            LogManager.logError("INTERNAL", "Failed to save notify history via $name: ${e.message}")
         }
     }
 
@@ -429,6 +429,6 @@ class NotifyOutput(
         }
         nm.notify(group, summaryId, summaryBuilder.build())
 
-        LogManager.logDebug("INTERNAL", "Notification sent: $title (tag=$tag, group=$group, id=$id)")
+        LogManager.logDebug("INTERNAL", "Notification sent via $name: $title (tag=$tag, group=$group, id=$id)")
     }
 }

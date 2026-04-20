@@ -66,7 +66,7 @@ class HttpOutput(
                 if (attempt < maxAttempts) {
                     val interval = config.retry?.interval?.millis ?: 1000
                     if (LogManager.isDebugEnabled()) {
-                        LogManager.logDebug("HTTP", "Retry $attempt/$maxAttempts after ${interval}ms")
+                        LogManager.logDebug("HTTP", "[$name] Retry $attempt/$maxAttempts after ${interval}ms")
                     }
                     delay(interval)
                 }

@@ -95,7 +95,7 @@ class MemoryQueue(
                                 enqueue(item.copy(retryCount = item.retryCount + 1))
                             }
                         } catch (e: Exception) {
-                            LogManager.logWarn("QUEUE", "Worker $workerId error: ${e.message}")
+                            LogManager.logWarn("QUEUE", "Worker $workerId error in queue $name: ${e.message}")
                             enqueue(item.copy(retryCount = item.retryCount + 1))
                         }
                     } else {

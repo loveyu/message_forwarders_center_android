@@ -49,7 +49,7 @@ class MqttOutput(
         }
 
         if (LogManager.isDebugEnabled()) {
-            LogManager.logDebug("MQTT", "Sending to topic: $topic, qos=${config.qos ?: 1}, dataLen=${item.data.size}")
+            LogManager.logDebug("MQTT", "Sending to topic: $topic via $name, qos=${config.qos ?: 1}, dataLen=${item.data.size}")
         }
 
         val qos = config.qos ?: 1

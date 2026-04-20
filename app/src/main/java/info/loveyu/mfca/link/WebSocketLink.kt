@@ -141,7 +141,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
             maxReconnectDelay = params["reconnectMaxInterval"]?.toLongOrNull()
                 ?: (config.reconnect?.maxInterval?.millis?.let { it / 1000 } ?: 60L)
 
-            LogManager.logDebug("WS", "Connecting to $cleanUrl (gotify=$isGotifyProtocol)")
+            LogManager.logDebug("WS", "Connecting to $cleanUrl for $id (gotify=$isGotifyProtocol)")
 
             val client = buildOkHttpClient()
 
@@ -172,7 +172,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
                 }
             }
 
-            LogManager.logDebug("WS", "Final URL: $finalUrl")
+            LogManager.logDebug("WS", "Final URL for $id: $finalUrl")
 
             val request = requestBuilder.build()
             val ws = client.newWebSocket(request, object : WebSocketListener() {
@@ -195,16 +195,16 @@ class WebSocketLink(override val config: LinkConfig) : Link {
 
                 override fun onMessage(webSocket: WebSocket, text: String) {
                     messageListener?.invoke(text.toByteArray())
-                    LogManager.logDebug("WS", "Message received: ${text.take(100)}")
+                    LogManager.logDebug("WS", "Message received for $id: ${text.take(100)}")
                 }
 
                 override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
                     messageListener?.invoke(bytes.toByteArray())
-                    LogManager.logDebug("WS", "Message received: ${bytes.size} bytes")
+                    LogManager.logDebug("WS", "Message received for $id: ${bytes.size} bytes")
                 }
 
                 override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                    LogManager.logDebug("WS", "Closing: $code $reason")
+                    LogManager.logDebug("WS", "Closing for $id: $code $reason")
                     webSocket.close(1000, null)
                 }
 
@@ -214,7 +214,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
                         connecting = false
                     }
                     LinkManager.notifyLinkStateChanged(id, connected = false)
-                    LogManager.logDebug("WS", "Closed: $code $reason")
+                    LogManager.logDebug("WS", "Closed for $id: $code $reason")
                 }
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -226,7 +226,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
                         shouldNotify = consecutiveFailures == MAX_CONSECUTIVE_FAILURES
                         if (shouldNotify) hadMaxFailure = true
                     }
-                    LogManager.logError("WS", "Error ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): ${t.message}")
+                    LogManager.logError("WS", "Error for $id ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): ${t.message}")
                     if (shouldNotify) {
                         maxFailureCallback?.invoke()
                     }
@@ -263,7 +263,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
                         .build()
                 }
             } else {
-                LogManager.logWarn("WS", "No context available for TLS configuration, using system defaults")
+                LogManager.logWarn("WS", "No context available for TLS configuration for $id, using system defaults")
             }
         }
 
@@ -299,7 +299,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
 
     override fun send(data: ByteArray): Boolean {
         if (!connected) {
-            LogManager.logWarn("WS", "Cannot send: not connected")
+            LogManager.logWarn("WS", "Cannot send for $id: not connected")
             return false
         }
 
@@ -312,7 +312,7 @@ class WebSocketLink(override val config: LinkConfig) : Link {
 
     override fun send(text: String): Boolean {
         if (!connected) {
-            LogManager.logWarn("WS", "Cannot send: not connected")
+            LogManager.logWarn("WS", "Cannot send for $id: not connected")
             return false
         }
 

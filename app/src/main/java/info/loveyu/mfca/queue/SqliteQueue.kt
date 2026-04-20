@@ -211,7 +211,7 @@ class SqliteQueue(
                     handleRetry(item)
                 }
             } catch (e: Exception) {
-                LogManager.logWarn("QUEUE", "Error processing item: ${e.message}")
+                LogManager.logWarn("QUEUE", "Error processing item in queue $name: ${e.message}")
                 handleRetry(item)
             }
         }
@@ -227,7 +227,7 @@ class SqliteQueue(
                 )
             )
         } else {
-            LogManager.logWarn("QUEUE", "Item exceeded max retries, moving to dead letter")
+            LogManager.logWarn("QUEUE", "Item exceeded max retries in queue $name, moving to dead letter")
             // TODO: Move to dead letter queue
         }
     }
