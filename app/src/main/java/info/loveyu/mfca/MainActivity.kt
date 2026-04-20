@@ -208,6 +208,7 @@ private fun MainContent(
     var selectedTab by remember { mutableStateOf(BottomTab.HOME) }
     var highlightNotifyId by remember { mutableStateOf<Int?>(null) }
     var refreshTrigger by remember { mutableIntStateOf(0) }
+    var lastTabClickTime by remember { mutableStateOf(0L) }
 
     LaunchedEffect(pendingHighlight.value) {
         if (pendingHighlight.value && pendingNotifyId.intValue != -1) {
@@ -259,7 +260,15 @@ private fun MainContent(
                         } else null,
                         selected = selectedTab == tab,
                         onClick = {
-                            if (selectedTab == tab) refreshTrigger++
+                            if (selectedTab == tab) {
+                                val now = System.currentTimeMillis()
+                                if (now - lastTabClickTime < 500) {
+                                    refreshTrigger++
+                                    lastTabClickTime = 0L
+                                } else {
+                                    lastTabClickTime = now
+                                }
+                            }
                             selectedTab = tab
                             if (tab != BottomTab.NOTIFY_HISTORY) highlightNotifyId = null
                         }
