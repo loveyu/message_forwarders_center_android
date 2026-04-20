@@ -2,7 +2,6 @@
 
 package info.loveyu.mfca.ui
 
-import android.app.PendingIntent
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -26,11 +25,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.NotificationImportant
 import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -41,7 +38,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,7 +56,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import info.loveyu.mfca.ClipboardDetailActivity
 import info.loveyu.mfca.clipboard.ClipboardHistoryDbHelper
-import info.loveyu.mfca.clipboard.ClipboardNotificationHelper
 import info.loveyu.mfca.clipboard.ClipboardRecord
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -93,8 +88,6 @@ fun ClipboardHistoryContent(
     var isLoading by remember { mutableStateOf(true) }
     var totalCount by remember { mutableStateOf(0) }
     var searchKeyword by remember { mutableStateOf("") }
-
-    var deleteTargetRecord by remember { mutableStateOf<ClipboardRecord?>(null) }
 
     val dbHelper = remember { ClipboardHistoryDbHelper(context) }
 
@@ -180,8 +173,8 @@ fun ClipboardHistoryContent(
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
             ) {
                 itemsIndexed(
                     items = records,
@@ -202,79 +195,11 @@ fun ClipboardHistoryContent(
                             scope.launch(Dispatchers.IO) {
                                 dbHelper.insertOrUpdate(record.content, record.contentType)
                             }
-                        },
-                        onPinToggle = {
-                            scope.launch(Dispatchers.IO) {
-                                dbHelper.updatePinned(record.id, !record.pinned)
-                                loadRecords()
-                            }
-                        },
-                        onNotificationPinToggle = {
-                            scope.launch(Dispatchers.IO) {
-                                toggleNotificationPin(context, dbHelper, record)
-                                launch(Dispatchers.Main) { loadRecords() }
-                            }
-                        },
-                        onDelete = {
-                            deleteTargetRecord = record
                         }
                     )
                 }
             }
         }
-    }
-
-    deleteTargetRecord?.let { target ->
-        AlertDialog(
-            onDismissRequest = { deleteTargetRecord = null },
-            title = { Text("删除记录") },
-            text = { Text("确定要删除这条剪贴板记录吗？") },
-            confirmButton = {
-                TextButton(onClick = {
-                    scope.launch(Dispatchers.IO) {
-                        if (target.notificationPinned) {
-                            target.notificationId?.let { nid ->
-                                ClipboardNotificationHelper.unpinNotification(context, nid)
-                            }
-                        }
-                        dbHelper.deleteById(target.id)
-                        launch(Dispatchers.Main) {
-                            deleteTargetRecord = null
-                            loadRecords()
-                        }
-                    }
-                }) {
-                    Text("删除", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { deleteTargetRecord = null }) { Text("取消") }
-            }
-        )
-    }
-}
-
-private fun toggleNotificationPin(
-    context: Context,
-    dbHelper: ClipboardHistoryDbHelper,
-    record: ClipboardRecord
-) {
-    if (record.notificationPinned) {
-        record.notificationId?.let { nid ->
-            ClipboardNotificationHelper.unpinNotification(context, nid)
-        }
-        dbHelper.updateNotificationPinned(record.id, false, null)
-    } else {
-        val notificationId = ClipboardNotificationHelper.getNotificationId(record.id)
-        val intent = ClipboardDetailActivity.startIntent(context, record.id)
-        val pendingIntent = PendingIntent.getActivity(
-            context,
-            notificationId,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        ClipboardNotificationHelper.pinToNotification(context, record, pendingIntent)
-        dbHelper.updateNotificationPinned(record.id, true, notificationId)
     }
 }
 
@@ -282,17 +207,19 @@ private fun toggleNotificationPin(
 private fun ClipboardRecordCard(
     record: ClipboardRecord,
     onClick: () -> Unit,
-    onCopy: () -> Unit,
-    onPinToggle: () -> Unit,
-    onNotificationPinToggle: () -> Unit,
-    onDelete: () -> Unit
+    onCopy: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -341,14 +268,27 @@ private fun ClipboardRecordCard(
                         )
                     }
                 }
-                Text(
-                    text = formatRelativeTime(record.updatedAt),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = formatRelativeTime(record.updatedAt),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    IconButton(onClick = onCopy, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            Icons.Default.ContentCopy,
+                            contentDescription = "复制",
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             Text(
                 text = record.content,
@@ -357,55 +297,6 @@ private fun ClipboardRecordCard(
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis
             )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onCopy, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        Icons.Default.ContentCopy,
-                        contentDescription = "复制",
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(onClick = onPinToggle, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        Icons.Default.PushPin,
-                        contentDescription = if (record.pinned) "取消置顶" else "置顶",
-                        modifier = Modifier.size(16.dp),
-                        tint = if (record.pinned) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    )
-                }
-                IconButton(onClick = onNotificationPinToggle, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        Icons.Default.NotificationImportant,
-                        contentDescription = if (record.notificationPinned) "取消通知置顶" else "通知栏置顶",
-                        modifier = Modifier.size(16.dp),
-                        tint = if (record.notificationPinned) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    )
-                }
-                IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "删除",
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
         }
     }
 }
