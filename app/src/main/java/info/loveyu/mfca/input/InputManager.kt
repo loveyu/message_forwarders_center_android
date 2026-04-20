@@ -3,7 +3,6 @@ package info.loveyu.mfca.input
 import android.content.Context
 import info.loveyu.mfca.config.AppConfig
 import info.loveyu.mfca.config.HttpInputConfig
-import info.loveyu.mfca.config.ReplayConfig
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.NetworkChecker
@@ -312,11 +311,11 @@ object InputManager {
         entries.any { it.config.name == name && !it.config.isSharedServer && it.input.isRunning() }
 
     /**
-     * 查找绑定了指定 linkId 且包含 ReplayConfig 的第一个 link input 配置。
-     * 供 GotifyIconEnricher 在无法从链接 DSN 推导 Gotify REST API 配置时使用。
+     * 查找指定名称的 link input 配置。
+     * 供 GotifyIconEnricher 判断参数是 inputId 还是 linkId 时使用。
      */
-    fun getLinkInputReplayConfig(linkId: String): ReplayConfig? =
-        linkInputConfigs.firstOrNull { it.linkId == linkId && it.replay != null }?.replay
+    fun getLinkInputConfigByName(name: String): info.loveyu.mfca.config.LinkInputConfig? =
+        linkInputConfigs.firstOrNull { it.name == name }
 
     /**
      * 获取指定 linkId 对应的 SharedHttpInput 的运行状态

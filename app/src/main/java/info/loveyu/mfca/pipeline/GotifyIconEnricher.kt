@@ -40,7 +40,6 @@ class GotifyIconEnricher(private val context: Context?) : Enricher {
     }
 
     override suspend fun enrich(json: JSONObject, parameter: String): JSONObject? {
-        val linkId = parameter
         val appid = json.optInt("appid", -1)
         if (appid == -1) {
             LogManager.logDebug("ENRICH", "No appid found in message, skipping gotifyIcon enrich")
@@ -48,9 +47,9 @@ class GotifyIconEnricher(private val context: Context?) : Enricher {
         }
 
         // Get icon URL from cache or API
-        val iconUrl = getAppIconUrl(linkId, appid)
+        val iconUrl = getAppIconUrl(parameter, appid)
         if (iconUrl == null) {
-            LogManager.logDebug("ENRICH", "No icon URL found for appid=$appid on link=$linkId")
+            LogManager.logDebug("ENRICH", "No icon URL found for appid=$appid on parameter=$parameter")
             return null
         }
 
@@ -63,39 +62,31 @@ class GotifyIconEnricher(private val context: Context?) : Enricher {
     /**
      * 获取应用图标 URL，优先从缓存读取
      */
-    private suspend fun getAppIconUrl(linkId: String, appid: Int): String? {
+    private suspend fun getAppIconUrl(parameter: String, appid: Int): String? {
         // Check memory cache
-        val cached = appIconCache[linkId]
+        val cached = appIconCache[parameter]
         if (cached != null) {
             val (cachedAt, iconMap) = cached
             if (System.currentTimeMillis() - cachedAt < CACHE_TTL_MS) {
                 return iconMap[appid]
             }
-            appIconCache.remove(linkId)
+            appIconCache.remove(parameter)
         }
 
         // Fetch from API
-        val iconMap = fetchAppIcons(linkId) ?: return null
+        val iconMap = fetchAppIcons(parameter) ?: return null
         return iconMap[appid]
     }
 
     /**
-     * 调用 Gotify REST API 获取应用列表并构建 appid -> iconUrl 映射
+     * 调用 Gotify REST API 获取应用列表并构建 appid -> iconUrl 映射。
+     *
+     * 参数 [parameter] 可以是：
+     * - input 名称（inputId）：从该 input 的 replayConfig 中读取 baseUrl/token
+     * - link ID（linkId）：从 link DSN 中解析 baseUrl/token（适用于 WebSocket link）
      */
-    private suspend fun fetchAppIcons(linkId: String): Map<Int, String>? {
-        val linkConfig = LinkManager.getLinkConfig(linkId)
-        if (linkConfig == null) {
-            LogManager.logWarn("ENRICH", "Link not found: $linkId")
-            return null
-        }
-
-        // Try to resolve API config from link DSN first, then fall back to replay config
-        val replayConfig = InputManager.getLinkInputReplayConfig(linkId)
-        val apiConfig = GotifyApiSupport.resolveApiConfig(linkId, replayConfig)
-        if (apiConfig == null) {
-            LogManager.logWarn("ENRICH", "No Gotify API config found for link $linkId")
-            return null
-        }
+    private suspend fun fetchAppIcons(parameter: String): Map<Int, String>? {
+        val apiConfig = resolveApiConfig(parameter) ?: return null
 
         return try {
             val result = withContext(Dispatchers.IO) {
@@ -117,14 +108,40 @@ class GotifyIconEnricher(private val context: Context?) : Enricher {
             }
 
             if (result != null) {
-                appIconCache[linkId] = System.currentTimeMillis() to result
-                LogManager.logDebug("ENRICH", "Cached ${result.size} app icons for link $linkId")
+                appIconCache[parameter] = System.currentTimeMillis() to result
+                LogManager.logDebug("ENRICH", "Cached ${result.size} app icons for parameter=$parameter")
             }
             result
         } catch (e: Exception) {
             LogManager.logWarn("ENRICH", "Failed to fetch Gotify apps: ${e.message}")
             null
         }
+    }
+
+    /**
+     * 根据参数解析 Gotify API 配置：
+     * 1. 若 parameter 是 input 名称且该 input 有 replayConfig，从 replayConfig 读取
+     * 2. 否则将 parameter 视为 linkId，从 link DSN 解析（WebSocket link）
+     */
+    private fun resolveApiConfig(parameter: String): info.loveyu.mfca.util.GotifyApiConfig? {
+        val inputConfig = InputManager.getLinkInputConfigByName(parameter)
+        if (inputConfig?.replay != null) {
+            val apiConfig = GotifyApiSupport.resolveApiConfig(inputConfig.linkId, inputConfig.replay)
+            if (apiConfig == null) {
+                LogManager.logWarn("ENRICH", "No Gotify API config in replay config for input=$parameter")
+            }
+            return apiConfig
+        }
+
+        if (LinkManager.getLinkConfig(parameter) == null) {
+            LogManager.logWarn("ENRICH", "Neither input nor link found for parameter=$parameter")
+            return null
+        }
+        val apiConfig = GotifyApiSupport.resolveApiConfig(parameter)
+        if (apiConfig == null) {
+            LogManager.logWarn("ENRICH", "No Gotify API config found for link=$parameter")
+        }
+        return apiConfig
     }
 
     /**
