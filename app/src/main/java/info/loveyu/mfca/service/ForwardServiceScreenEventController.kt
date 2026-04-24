@@ -4,9 +4,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkRequest
 import android.os.BatteryManager
 import android.os.PowerManager
 import info.loveyu.mfca.output.ClipboardOutput
@@ -20,7 +17,6 @@ internal class ForwardServiceScreenEventController(
     private val scheduler: ScheduledExecutorService
 ) {
     private var screenOnReceiver: BroadcastReceiver? = null
-    private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     fun register(
         onInitialChargingDetected: (Boolean) -> Unit,
@@ -85,8 +81,6 @@ internal class ForwardServiceScreenEventController(
             ClipboardOutput.notifyScreenOff()
         }
         onInitialChargingDetected(bm.isCharging)
-
-        registerNetworkCallback(onTriggerTick)
     }
 
     fun unregister() {
@@ -95,38 +89,6 @@ internal class ForwardServiceScreenEventController(
                 service.unregisterReceiver(it)
             } catch (_: Exception) {}
             screenOnReceiver = null
-        }
-        unregisterNetworkCallback()
-    }
-
-    /**
-     * 监听网络可用 / 断开事件，在网络恢复时立即触发 tick，
-     * 使 MQTT / WebSocket / TCP 链路尽快重连。
-     */
-    private fun registerNetworkCallback(onTriggerTick: () -> Unit) {
-        try {
-            val cm = service.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-            val callback =
-                object : ConnectivityManager.NetworkCallback() {
-                    override fun onAvailable(network: Network) {
-                        LogManager.logDebug("SERVICE", "Network available, triggering tick for reconnect")
-                        onTriggerTick()
-                    }
-                }
-            cm.registerNetworkCallback(NetworkRequest.Builder().build(), callback)
-            networkCallback = callback
-        } catch (e: Exception) {
-            LogManager.logWarn("SERVICE", "Failed to register network callback: ${e.message}")
-        }
-    }
-
-    private fun unregisterNetworkCallback() {
-        networkCallback?.let { callback ->
-            try {
-                val cm = service.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-                cm.unregisterNetworkCallback(callback)
-            } catch (_: Exception) {}
-            networkCallback = null
         }
     }
 
