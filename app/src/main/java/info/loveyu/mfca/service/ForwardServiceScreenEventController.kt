@@ -112,11 +112,6 @@ internal class ForwardServiceScreenEventController(
                         LogManager.logDebug("SERVICE", "Network available, triggering tick for reconnect")
                         onTriggerTick()
                     }
-
-                    override fun onLost(network: Network) {
-                        LogManager.logDebug("SERVICE", "Network lost, triggering tick")
-                        onTriggerTick()
-                    }
                 }
             cm.registerNetworkCallback(NetworkRequest.Builder().build(), callback)
             networkCallback = callback

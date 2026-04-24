@@ -115,22 +115,18 @@
             android:noHistory="true"
             android:taskAffinity="" />
 
+        <service
+            android:name=".receiver.ServiceWatchdogJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
         <receiver
             android:name=".receiver.BootCompletedReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.USER_UNLOCKED" />
-            </intent-filter>
-        </receiver>
-
-        <receiver
-            android:name=".receiver.ServiceWatchdogReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="info.loveyu.mfca.action.WATCHDOG" />
             </intent-filter>
         </receiver>
 

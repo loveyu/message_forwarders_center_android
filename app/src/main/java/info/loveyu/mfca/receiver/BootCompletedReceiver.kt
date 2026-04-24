@@ -14,7 +14,6 @@ class BootCompletedReceiver : BroadcastReceiver() {
 
         when (action) {
             Intent.ACTION_BOOT_COMPLETED,
-            Intent.ACTION_LOCKED_BOOT_COMPLETED,
             "android.intent.action.USER_UNLOCKED" -> {
                 // 开机自启：仅当用户开启了 autoStart 时才启动
                 if (status.autoStart) {
