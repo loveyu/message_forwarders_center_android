@@ -232,6 +232,12 @@ class ForwardService : Service() {
         serviceInstance = this
         preferences = Preferences(this)
         createNotificationChannel()
+        val notification = createNotification()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
         startTick()
         registerScreenEvents()
         scheduleWatchdogJob()
@@ -275,17 +281,20 @@ class ForwardService : Service() {
         //     NotifyHistoryCleanup.onTick(this)
         // }
 
-        // 6. 批量 flush 日志文件缓冲
+
+        // 6. 每 10 分钟兜底检查通知是否仍在，并强制刷新使其保持在通知栏顶部附近
+        if (now - lastNotificationPresenceCheckMs >= NOTIFICATION_PRESENCE_CHECK_INTERVAL_MS) {
+            checkNotificationPresenceNow("periodic_10m")
+            notificationDelegate.invalidateStatsCache()
+            updateNotification()
+        }
+
+        // 7. 批量 flush 日志文件缓冲
         LogManager.logDebug("SERVICE", "Tick #$tickCount end, flushing logs")
         LogManager.flush()
 
-        // 7. 批量 flush 文件输出缓冲
+        // 8. 批量 flush 文件输出缓冲
         OutputManager.flushAllFileOutputs()
-
-        // 8. 每 10 分钟兜底检查一次前台通知是否仍在
-        if (now - lastNotificationPresenceCheckMs >= NOTIFICATION_PRESENCE_CHECK_INTERVAL_MS) {
-            checkNotificationPresenceNow("periodic_10m")
-        }
 
         scheduleEarlyTick(nextLinkTickDelayMs)
     }
@@ -442,13 +451,8 @@ class ForwardService : Service() {
         // Load status from YAML config
         loadStatus()
 
-        val notification = createNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
-        checkNotificationPresenceNow("start_command")
+        // startForeground 已在 onCreate 中调用，此处根据加载的状态刷新通知
+        updateNotification()
 
         if (intent?.action == ACTION_START) {
             start()
@@ -466,13 +470,12 @@ class ForwardService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // Keep service running when user swipes app from recents
         if (isRunning) {
             LogManager.logInfo("SERVICE", "Task removed, restarting service to keep running")
             val restartIntent = Intent(this, ForwardService::class.java).apply {
                 action = ACTION_START
             }
-            startService(restartIntent)
+            startForegroundService(restartIntent)
         }
         super.onTaskRemoved(rootIntent)
     }

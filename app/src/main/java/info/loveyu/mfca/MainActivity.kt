@@ -155,6 +155,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         ensureServiceRunning()
+        promptBatteryOptimization()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -195,6 +196,18 @@ class MainActivity : ComponentActivity() {
         startService(Intent(this, ForwardService::class.java).apply {
             action = ForwardService.ACTION_STOP
         })
+    }
+
+    private fun promptBatteryOptimization() {
+        val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
+        if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+            try {
+                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = android.net.Uri.parse("package:$packageName")
+                })
+            } catch (_: Exception) {
+            }
+        }
     }
 }
 
