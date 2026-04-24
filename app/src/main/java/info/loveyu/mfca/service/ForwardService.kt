@@ -1,11 +1,15 @@
 package info.loveyu.mfca.service
 
+import android.app.AlarmManager
 import android.app.Notification
+import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.config.AppConfig
 import info.loveyu.mfca.config.AppStatusConfig
@@ -17,6 +21,7 @@ import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.pipeline.RuleEngine
 import info.loveyu.mfca.queue.QueueManager
+import info.loveyu.mfca.receiver.ServiceWatchdogReceiver
 import info.loveyu.mfca.server.HttpServer
 import info.loveyu.mfca.server.MessageForwarder
 import info.loveyu.mfca.util.AppStatusManager
@@ -24,9 +29,9 @@ import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.NetworkChecker
 import info.loveyu.mfca.util.Preferences
-import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
 class ForwardService : Service() {
@@ -51,6 +56,10 @@ class ForwardService : Service() {
         /** 事件触发 tick 的最小间隔：5 秒，防止事件风暴 */
         private const val MIN_TICK_INTERVAL_MS = 5_000L
         private const val NOTIFICATION_PRESENCE_CHECK_INTERVAL_MS = 10 * 60 * 1000L
+
+        /** AlarmManager 看门狗触发间隔：15 分钟，服务崩溃后最迟在此时间内恢复 */
+        private const val WATCHDOG_INTERVAL_MS = 15 * 60 * 1000L
+        private const val REQUEST_CODE_WATCHDOG = 1001
 
         /**
          * 由外部事件触发一次提前 tick（网络变更、前后台切换等）。
@@ -233,6 +242,7 @@ class ForwardService : Service() {
         createNotificationChannel()
         startTick()
         registerScreenEvents()
+        scheduleWatchdogAlarm()
     }
 
     /**
@@ -359,6 +369,7 @@ class ForwardService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                cancelWatchdogAlarm()
                 stopAll()
                 saveStatus()
                 updateNotification()
@@ -670,6 +681,38 @@ class ForwardService : Service() {
         ruleEngine = null
         deadLetterHandler = null
         LogManager.logInfo("SERVICE", "All components stopped")
+    }
+
+    /**
+     * 注册 AlarmManager 看门狗定时器（15 分钟触发一次 [ServiceWatchdogReceiver]）。
+     * 仅在用户主动停止服务（ACTION_STOP）时取消，从而在服务崩溃 / 被 OEM 杀死后仍能自动重启。
+     */
+    private fun scheduleWatchdogAlarm() {
+        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val pendingIntent = watchdogPendingIntent(PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE) ?: return
+        alarmManager.setInexactRepeating(
+            AlarmManager.ELAPSED_REALTIME_WAKEUP,
+            SystemClock.elapsedRealtime() + WATCHDOG_INTERVAL_MS,
+            WATCHDOG_INTERVAL_MS,
+            pendingIntent,
+        )
+        LogManager.logDebug("WATCHDOG", "Watchdog alarm scheduled (interval=${WATCHDOG_INTERVAL_MS / 1000}s)")
+    }
+
+    private fun cancelWatchdogAlarm() {
+        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val pendingIntent =
+            watchdogPendingIntent(PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)
+                ?: return
+        alarmManager.cancel(pendingIntent)
+        LogManager.logDebug("WATCHDOG", "Watchdog alarm cancelled (user-initiated stop)")
+    }
+
+    private fun watchdogPendingIntent(flags: Int): PendingIntent? {
+        val intent = Intent(this, ServiceWatchdogReceiver::class.java).apply {
+            action = ServiceWatchdogReceiver.ACTION_WATCHDOG
+        }
+        return PendingIntent.getBroadcast(this, REQUEST_CODE_WATCHDOG, intent, flags)
     }
 
     private fun saveStatus() {
