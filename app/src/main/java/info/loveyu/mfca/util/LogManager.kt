@@ -58,13 +58,17 @@ object LogManager {
     private var maxLogLines = 1000
 
     private var logFile: File? = null
+    private var logFileStream: FileOutputStream? = null
     private var logFileWriter: BufferedWriter? = null
     private var contextRef: WeakReference<Context>? = null
+    private val fileLock = Any()
 
     // 线程安全的 DateTimeFormatter（替代非线程安全的 SimpleDateFormat）
     private val dateFormat = DateTimeFormatter.ofPattern("HH:mm:ss", Locale.getDefault())
         .withZone(ZoneId.systemDefault())
     private val fileDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+        .withZone(ZoneId.systemDefault())
+    private val exitFileDateFormat = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS", Locale.getDefault())
         .withZone(ZoneId.systemDefault())
 
     // 环形缓冲：避免每条日志复制整个列表
@@ -88,7 +92,11 @@ object LogManager {
         isAllLogcatEnabled = prefs.logToLogcatAll
         maxLogLines = prefs.maxLogLines
         if (isFileLoggingEnabled) {
-            startFileLogging()
+            if (logFileWriter == null) {
+                startFileLogging()
+            }
+        } else if (logFileWriter != null) {
+            stopFileLogging()
         }
     }
 
@@ -241,18 +249,20 @@ object LogManager {
         logFile = File(logDir, "log_$timestamp.txt")
 
         try {
-            logFileWriter = BufferedWriter(
-                OutputStreamWriter(FileOutputStream(logFile, true), Charsets.UTF_8),
-                8192
-            )
-            // Write existing logs to file
-            synchronized(bufferLock) {
-                logBuffer.forEach { entry ->
-                    logFileWriter?.write(entry.formatted)
-                    logFileWriter?.write("\n")
+            synchronized(fileLock) {
+                logFileStream = FileOutputStream(logFile, true)
+                logFileWriter = BufferedWriter(
+                    OutputStreamWriter(logFileStream, Charsets.UTF_8),
+                    8192
+                )
+                synchronized(bufferLock) {
+                    logBuffer.forEach { entry ->
+                        logFileWriter?.write(entry.formatted)
+                        logFileWriter?.write("\n")
+                    }
                 }
+                logFileWriter?.flush()
             }
-            logFileWriter?.flush()
         } catch (e: Exception) {
             Log.e("LogManager", "Failed to start file logging", e)
         }
@@ -260,18 +270,24 @@ object LogManager {
 
     private fun stopFileLogging() {
         try {
-            logFileWriter?.close()
+            synchronized(fileLock) {
+                logFileWriter?.close()
+                logFileStream?.close()
+            }
         } catch (e: Exception) {
             Log.e("LogManager", "Failed to stop file logging", e)
         }
         logFileWriter = null
+        logFileStream = null
         logFile = null
     }
 
     private fun writeToFile(line: String) {
         try {
-            logFileWriter?.write(line)
-            logFileWriter?.write("\n")
+            synchronized(fileLock) {
+                logFileWriter?.write(line)
+                logFileWriter?.write("\n")
+            }
         } catch (e: Exception) {
             Log.e("LogManager", "Failed to write to log file", e)
         }
@@ -283,9 +299,72 @@ object LogManager {
      */
     fun flush() {
         try {
-            logFileWriter?.flush()
+            synchronized(fileLock) {
+                logFileWriter?.flush()
+            }
         } catch (e: Exception) {
             Log.e("LogManager", "Failed to flush log file", e)
+        }
+    }
+
+    fun flushAndSync() {
+        try {
+            synchronized(fileLock) {
+                logFileWriter?.flush()
+                logFileStream?.fd?.sync()
+            }
+        } catch (e: Exception) {
+            Log.e("LogManager", "Failed to flush and sync log file", e)
+        }
+    }
+
+    fun writeExitEventSync(
+        ctx: Context,
+        event: String,
+        reason: String,
+        throwable: Throwable? = null,
+        extras: Map<String, String> = emptyMap()
+    ): String? {
+        val baseDir = ctx.getExternalFilesDir(null) ?: ctx.filesDir
+        val exitDir = File(File(baseDir, "logs"), "exit")
+        if (!exitDir.exists()) {
+            exitDir.mkdirs()
+        }
+
+        val file = File(exitDir, "exit_${exitFileDateFormat.format(Instant.now())}.log")
+        val recentLogs = synchronized(bufferLock) { logBuffer.takeLast(200) }
+        val content = buildString {
+            appendLine("time=${fileDateFormat.format(Instant.now())}")
+            appendLine("event=$event")
+            appendLine("reason=$reason")
+            extras.toSortedMap().forEach { (key, value) ->
+                appendLine("$key=$value")
+            }
+            throwable?.let {
+                appendLine()
+                appendLine("stacktrace:")
+                appendLine(Log.getStackTraceString(it))
+            }
+            appendLine()
+            appendLine("recentLogs:")
+            recentLogs.forEach { entry ->
+                appendLine(entry.formatted)
+            }
+        }
+
+        return try {
+            FileOutputStream(file, false).use { stream ->
+                OutputStreamWriter(stream, Charsets.UTF_8).use { writer ->
+                    writer.write(content)
+                    writer.flush()
+                    stream.fd.sync()
+                }
+            }
+            flushAndSync()
+            file.absolutePath
+        } catch (e: Exception) {
+            Log.e("LogManager", "Failed to write exit event log", e)
+            null
         }
     }
 

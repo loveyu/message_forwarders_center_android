@@ -223,6 +223,8 @@ class ForwardService : Service() {
 
     @Volatile
     private var isApplyingConfig = false
+    @Volatile
+    private var destroyReason = "unknown"
     private val notificationDelegate by lazy { ForwardServiceNotificationDelegate(this) }
     private val lockController by lazy { ForwardServiceLockController(this, appScheduler) }
     private val screenEventController by lazy { ForwardServiceScreenEventController(this, appScheduler) }
@@ -370,6 +372,7 @@ class ForwardService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                destroyReason = "user_stop"
                 cancelWatchdogJob()
                 stopAll()
                 saveStatus()
@@ -471,6 +474,7 @@ class ForwardService : Service() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         if (isRunning) {
+            destroyReason = "task_removed"
             LogManager.logInfo("SERVICE", "Task removed, restarting service to keep running")
             val restartIntent = Intent(this, ForwardService::class.java).apply {
                 action = ACTION_START
@@ -481,8 +485,35 @@ class ForwardService : Service() {
     }
 
     override fun onDestroy() {
-        // 捕获当前运行状态：系统强杀时 isRunning=true；用户主动停止时 stopAll() 已被 ACTION_STOP 提前调用，isRunning=false
         val wasRunning = isRunning
+        val finalDestroyReason = when {
+            destroyReason != "unknown" -> destroyReason
+            wasRunning -> "destroyed_while_running"
+            else -> "destroyed_after_stop"
+        }
+        LogManager.logWarn(
+            "SERVICE",
+            "onDestroy invoked, reason=$finalDestroyReason, running=$wasRunning"
+        )
+        LogManager.writeExitEventSync(
+            ctx = this,
+            event = "forward-service-onDestroy",
+            reason = finalDestroyReason,
+            extras = mapOf(
+                "wasRunning" to wasRunning.toString(),
+                "receivedCount" to receivedCount.toString(),
+                "forwardedCount" to forwardedCount.toString(),
+                "linkCount" to linkCount.toString(),
+                "inputCount" to inputCount.toString(),
+                "outputCount" to outputCount.toString(),
+                "isReceivingEnabled" to isReceivingEnabled.toString(),
+                "isForwardingEnabled" to isForwardingEnabled.toString(),
+                "isWakeLockEnabled" to isWakeLockEnabled.toString(),
+                "isWifiLockEnabled" to isWifiLockEnabled.toString(),
+                "currentConfigUrl" to currentConfigUrl.ifBlank { "<empty>" }
+            )
+        )
+        LogManager.flushAndSync()
         stopForeground(STOP_FOREGROUND_REMOVE)
         tickScheduler.stop()
         cancelEarlyTick()
@@ -496,8 +527,16 @@ class ForwardService : Service() {
             try {
                 startForegroundService(Intent(this, ForwardService::class.java))
                 LogManager.logInfo("SERVICE", "Self-restart triggered in onDestroy")
+                LogManager.flushAndSync()
             } catch (e: Exception) {
                 LogManager.logWarn("SERVICE", "Self-restart in onDestroy failed: ${e.message}")
+                LogManager.writeExitEventSync(
+                    ctx = this,
+                    event = "forward-service-restart-failed",
+                    reason = e.message ?: "unknown",
+                    throwable = e,
+                    extras = mapOf("destroyReason" to finalDestroyReason)
+                )
             }
         }
     }
