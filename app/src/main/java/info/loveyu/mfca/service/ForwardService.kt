@@ -235,10 +235,17 @@ class ForwardService : Service() {
         preferences = Preferences(this)
         createNotificationChannel()
         val notification = createNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: Exception) {
+            LogManager.logWarn("SERVICE", "startForeground failed, stopping self: ${e.message}")
+            serviceInstance = null
+            stopSelf()
+            return
         }
         startTick()
         registerScreenEvents()
