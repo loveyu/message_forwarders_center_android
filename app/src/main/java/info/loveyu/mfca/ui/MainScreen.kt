@@ -47,6 +47,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,6 +58,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import info.loveyu.mfca.AllComponentsActivity
 import info.loveyu.mfca.ConfigActivity
 import info.loveyu.mfca.HelpActivity
 import info.loveyu.mfca.R
@@ -162,7 +164,7 @@ fun MainScreen(
 
     var isRunning by remember { mutableStateOf(ForwardService.isRunning) }
     var isStarting by remember { mutableStateOf(ForwardService.isStarting) }
-
+    var componentStateVersion by remember { mutableIntStateOf(0) }
     val detailSheetState = rememberModalBottomSheetState()
     var showComponentSheet by remember { mutableStateOf(false) }
     var selectedComponentKey by remember { mutableStateOf<ComponentSelectionKey?>(null) }
@@ -175,6 +177,7 @@ fun MainScreen(
         ForwardService.onStatsChanged = {
             isRunning = ForwardService.isRunning
             isStarting = ForwardService.isStarting
+            componentStateVersion++
         }
         ForwardService.onStartFailed = { errorMsg ->
             Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
@@ -196,8 +199,9 @@ fun MainScreen(
     }
 
     val networkStateVersion by LinkManager.networkStateVersion.collectAsState()
-    val allComponents = remember(isRunning, networkStateVersion) {
-        if (!isRunning) emptyList() else getAllComponentStatuses(context)
+    val hasConfig = ForwardService.currentConfig != null
+    val allComponents = remember(isRunning, networkStateVersion, hasConfig, componentStateVersion) {
+        if (!isRunning && !hasConfig) emptyList() else getAllComponentStatuses(context)
     }
     val enabledComponents = remember(allComponents) { allComponents.filter { it.isEnabled } }
     val disabledComponents = remember(allComponents) { allComponents.filter { !it.isEnabled } }
@@ -275,9 +279,7 @@ fun MainScreen(
             val totalCount = enabledComponents.size + disabledComponents.size
 
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showComponentSheet = true }
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Row(
@@ -295,7 +297,11 @@ fun MainScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = stringResource(R.string.component_status),
-                                style = MaterialTheme.typography.titleMedium
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.clickable {
+                                    context.startActivity(Intent(context, AllComponentsActivity::class.java))
+                                }
                             )
                         }
                         if (totalCount > 0) {
@@ -396,6 +402,7 @@ fun ComponentChip(component: ComponentStatus, isEnabled: Boolean, onClick: () ->
             ComponentType.LINK -> if (isDark) LinkChipBgDark else LinkChipBgLight
             ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBgDark else HttpInputChipBgLight
             ComponentType.LINK_INPUT -> if (isDark) LinkInputChipBgDark else LinkInputChipBgLight
+            ComponentType.RULE -> if (isDark) LinkInputChipBgDark else LinkInputChipBgLight
         }
     } else {
         if (isDark) DisabledChipBgDark else DisabledChipBgLight
@@ -407,6 +414,7 @@ fun ComponentChip(component: ComponentStatus, isEnabled: Boolean, onClick: () ->
             ComponentType.LINK -> if (isDark) LinkChipBorderDark else LinkChipBorderLight
             ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBorderDark else HttpInputChipBorderLight
             ComponentType.LINK_INPUT -> if (isDark) LinkInputChipBorderDark else LinkInputChipBorderLight
+            ComponentType.RULE -> if (isDark) LinkInputChipBorderDark else LinkInputChipBorderLight
         }
     } else {
         if (isDark) DisabledChipBorderDark else DisabledChipBorderLight
@@ -417,6 +425,7 @@ fun ComponentChip(component: ComponentStatus, isEnabled: Boolean, onClick: () ->
             ComponentType.LINK -> if (isDark) LinkChipTextDark else LinkChipTextLight
             ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipTextDark else HttpInputChipTextLight
             ComponentType.LINK_INPUT -> if (isDark) LinkInputChipTextDark else LinkInputChipTextLight
+            ComponentType.RULE -> if (isDark) LinkInputChipTextDark else LinkInputChipTextLight
         }
     } else {
         if (isDark) DisabledChipTextDark else DisabledChipTextLight

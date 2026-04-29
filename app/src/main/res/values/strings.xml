@@ -75,6 +75,10 @@
     <string name="config_not_found">未找到配置，已跳转到配置管理页面</string>
     <string name="system_settings">系统设置</string>
     <string name="component_status">组件状态</string>
+    <string name="all_components_title">全部组件</string>
+    <string name="view_all_components">点击进入全部组件列表</string>
+    <string name="no_components_configured">暂无组件配置</string>
+    <string name="back">返回</string>
     <string name="github">GitHub</string>
     <string name="tile_input_method_switcher">切换输入法</string>
     <string name="notification_action_input_method">输入</string>

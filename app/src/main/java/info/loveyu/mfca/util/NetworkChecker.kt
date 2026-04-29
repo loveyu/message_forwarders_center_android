@@ -100,28 +100,38 @@ object NetworkChecker {
 
         // 非 WiFi 或 WiFi 未获取到 IP 时，从网络接口获取
         if (ipAddress == null) {
-            ipAddress = queryIpFromInterfaces()
+            ipAddress = queryPrimaryIpFromInterfaces()
         }
 
         return NetworkSnapshot(networkType, ssid, bssid, ipAddress)
     }
 
-    private fun queryIpFromInterfaces(): String? {
+    fun getAllLocalIpv4Addresses(): List<String> {
+        return queryIpv4AddressesFromInterfaces()
+    }
+
+    private fun queryPrimaryIpFromInterfaces(): String? {
+        return queryIpv4AddressesFromInterfaces().firstOrNull()
+    }
+
+    private fun queryIpv4AddressesFromInterfaces(): List<String> {
+        val results = linkedSetOf<String>()
         try {
             val interfaces = NetworkInterface.getNetworkInterfaces()
             while (interfaces.hasMoreElements()) {
                 val ni = interfaces.nextElement()
-                val addresses = ni.inetAddresses
-                while (addresses.hasMoreElements()) {
-                    val address = addresses.nextElement()
+                if (!ni.isUp || ni.isLoopback) continue
+                val inetAddresses = ni.inetAddresses
+                while (inetAddresses.hasMoreElements()) {
+                    val address = inetAddresses.nextElement()
                     if (!address.isLoopbackAddress && address is Inet4Address) {
-                        return address.hostAddress
+                        address.hostAddress?.takeIf { it.isNotBlank() }?.let { results.add(it) }
                     }
                 }
             }
         } catch (_: Exception) {
         }
-        return null
+        return results.toList()
     }
 
     /**

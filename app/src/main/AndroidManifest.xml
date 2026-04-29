@@ -71,6 +71,11 @@
             android:theme="@style/Theme.MessageForwardersCenter" />
 
         <activity
+            android:name=".AllComponentsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MessageForwardersCenter" />
+
+        <activity
             android:name=".LicenseActivity"
             android:exported="false"
             android:theme="@style/Theme.MessageForwardersCenter" />

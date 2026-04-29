@@ -38,7 +38,9 @@ object InputManager {
         val isSharedServer: Boolean = false,
         val whenCondition: String? = null,
         val deny: String? = null
-    )
+    ) {
+        fun uniqueKey(): String = if (linkId.isNullOrBlank()) name else "$name@$linkId"
+    }
 
     fun setContext(context: Context) {
         applicationContext = context.applicationContext
@@ -301,14 +303,25 @@ object InputManager {
         globalMessageListener = null
     }
 
-    fun getInput(name: String): InputSource? =
-        entries.find { it.config.name == name && !it.config.isSharedServer }?.input
+    fun getInput(name: String, linkId: String? = null): InputSource? =
+        entries.find {
+            it.config.name == name &&
+                !it.config.isSharedServer &&
+                (linkId == null || it.config.linkId == linkId)
+        }?.input
 
     fun getAllInputs(): Map<String, InputSource> =
-        entries.filter { !it.config.isSharedServer }.associateBy({ it.input.inputName }, { it.input })
+        entries
+            .filter { !it.config.isSharedServer }
+            .associate { it.config.uniqueKey() to it.input }
 
-    fun getInputState(name: String): Boolean =
-        entries.any { it.config.name == name && !it.config.isSharedServer && it.input.isRunning() }
+    fun getInputState(name: String, linkId: String? = null): Boolean =
+        entries.any {
+            it.config.name == name &&
+                !it.config.isSharedServer &&
+                (linkId == null || it.config.linkId == linkId) &&
+                it.input.isRunning()
+        }
 
     /**
      * 查找指定名称的 link input 配置。
