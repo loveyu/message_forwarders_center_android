@@ -105,7 +105,7 @@ data class InputsConfig(
 data class HttpInputConfig(
     val name: String,
     val dsn: String,
-    val paths: List<String> = listOf("/"),
+    val paths: List<String> = emptyList(),
     val linkId: String? = null,
     val whenCondition: String? = null,
     val deny: String? = null

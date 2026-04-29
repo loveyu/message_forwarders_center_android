@@ -77,10 +77,18 @@ class SharedHttpInput(
         messageListener = listener
     }
 
+    fun findMatchingVirtualInputs(uri: String): List<HttpVirtualInput> {
+        val highestPriority = virtualInputs.maxOfOrNull { it.matchPriority(uri) } ?: return emptyList()
+        if (highestPriority == HttpVirtualInput.NO_MATCH_PRIORITY) {
+            return emptyList()
+        }
+        return virtualInputs.filter { it.matchPriority(uri) == highestPriority }
+    }
+
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri ?: "/"
-        // Iterate virtual inputs in YAML definition order
-        for (virtualInput in virtualInputs) {
+        // Prefer explicit path matches over catch-all inputs, then keep YAML order.
+        for (virtualInput in findMatchingVirtualInputs(uri)) {
             val response = virtualInput.matchAndHandle(session)
             if (response != null) {
                 return response

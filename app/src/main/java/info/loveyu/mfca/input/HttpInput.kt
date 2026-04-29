@@ -216,8 +216,25 @@ class HttpInput(
         }
 
         private fun authenticateQuery(session: NanoHTTPD.IHTTPSession, queryAuth: info.loveyu.mfca.config.QueryAuth): Boolean {
-            val queryString = session.queryParameterString ?: return false
-            return queryString.contains("${queryAuth.key}=${queryAuth.value}")
+            return parseQueryParameters(session.queryParameterString)[queryAuth.key] == queryAuth.value
+        }
+
+        fun parseQueryParameters(queryString: String?): Map<String, String> {
+            if (queryString.isNullOrEmpty()) return emptyMap()
+
+            val queryParams = mutableMapOf<String, String>()
+            queryString.split("&").forEach { pair ->
+                val kv = pair.split("=", limit = 2)
+                if (kv.size == 2) {
+                    val key = java.net.URLDecoder.decode(kv[0], "UTF-8")
+                    val value = java.net.URLDecoder.decode(kv[1], "UTF-8")
+                    queryParams[key] = value
+                } else if (kv.isNotEmpty() && kv[0].isNotEmpty()) {
+                    val key = java.net.URLDecoder.decode(kv[0], "UTF-8")
+                    queryParams[key] = ""
+                }
+            }
+            return queryParams
         }
 
         private fun authenticateCookie(session: NanoHTTPD.IHTTPSession, cookieAuth: CookieAuth): Boolean {
@@ -262,13 +279,8 @@ class HttpInput(
                 session.queryParameterString?.let { queryStr ->
                     headersMap["queryRaw"] = queryStr
                     val queryJson = JSONObject()
-                    queryStr.split("&").forEach { pair ->
-                        val kv = pair.split("=", limit = 2)
-                        if (kv.size == 2) {
-                            queryJson.put(java.net.URLDecoder.decode(kv[0], "UTF-8"), java.net.URLDecoder.decode(kv[1], "UTF-8"))
-                        } else if (kv.isNotEmpty() && kv[0].isNotEmpty()) {
-                            queryJson.put(java.net.URLDecoder.decode(kv[0], "UTF-8"), "")
-                        }
+                    parseQueryParameters(queryStr).forEach { (key, value) ->
+                        queryJson.put(key, value)
                     }
                     headersMap["X-Query-Params"] = queryJson.toString()
                 }
@@ -312,6 +324,11 @@ class HttpInput(
 class HttpVirtualInput(
     private val httpConfig: HttpInputConfig
 ) : InputSource {
+    companion object {
+        const val NO_MATCH_PRIORITY = 0
+        const val CATCH_ALL_PRIORITY = 1
+        const val EXACT_PATH_PRIORITY = 2
+    }
 
     private val parsedConfig: HttpInputParsedConfig
     override val inputName: String = httpConfig.name
@@ -349,7 +366,15 @@ class HttpVirtualInput(
      * Check if this virtual input matches the given URI path.
      */
     fun matchesPath(uri: String): Boolean {
-        return httpConfig.paths.isEmpty() || httpConfig.paths.contains(uri)
+        return matchPriority(uri) != NO_MATCH_PRIORITY
+    }
+
+    fun matchPriority(uri: String): Int {
+        return when {
+            httpConfig.paths.contains(uri) -> EXACT_PATH_PRIORITY
+            httpConfig.paths.isEmpty() -> CATCH_ALL_PRIORITY
+            else -> NO_MATCH_PRIORITY
+        }
     }
 
     /**
