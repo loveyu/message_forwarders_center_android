@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -72,6 +73,11 @@ import info.loveyu.mfca.ui.theme.StatusRunningLight
 import info.loveyu.mfca.ui.theme.StatusWarningDark
 import info.loveyu.mfca.ui.theme.StatusWarningLight
 
+private data class AllComponentsSelectionKey(
+    val id: String,
+    val type: ComponentType
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AllComponentsScreen(
@@ -79,10 +85,19 @@ fun AllComponentsScreen(
 ) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState()
-    var selectedComponent by remember { mutableStateOf<ComponentStatus?>(null) }
+    var selectedComponentKey by remember { mutableStateOf<AllComponentsSelectionKey?>(null) }
     val networkStateVersion by LinkManager.networkStateVersion.collectAsState()
+
+    LaunchedEffect(Unit) {
+        LinkManager.refreshNetworkState()
+    }
+
     val allComponents = remember(networkStateVersion, ForwardService.isRunning, ForwardService.currentConfig) {
         getAllComponentStatuses(context)
+    }
+    val selectedComponent = remember(selectedComponentKey, allComponents) {
+        val key = selectedComponentKey ?: return@remember null
+        allComponents.find { it.id == key.id && it.type == key.type }
     }
     val groupedComponents = remember(allComponents) {
         allComponents
@@ -136,7 +151,9 @@ fun AllComponentsScreen(
                     ) { component ->
                         ComponentListItem(
                             component = component,
-                            onClick = { selectedComponent = component }
+                            onClick = {
+                                selectedComponentKey = AllComponentsSelectionKey(component.id, component.type)
+                            }
                         )
                     }
                 }
@@ -148,7 +165,7 @@ fun AllComponentsScreen(
         ComponentDetailSheet(
             component = selectedComponent,
             sheetState = sheetState,
-            onDismiss = { selectedComponent = null }
+            onDismiss = { selectedComponentKey = null }
         )
     }
 }

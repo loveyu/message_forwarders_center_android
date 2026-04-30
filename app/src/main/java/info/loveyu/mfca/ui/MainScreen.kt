@@ -198,6 +198,12 @@ fun MainScreen(
         }
     }
 
+    LaunchedEffect(showComponentSheet) {
+        if (showComponentSheet) {
+            LinkManager.refreshNetworkState()
+        }
+    }
+
     val networkStateVersion by LinkManager.networkStateVersion.collectAsState()
     val hasConfig = ForwardService.currentConfig != null
     val allComponents = remember(isRunning, networkStateVersion, hasConfig, componentStateVersion) {

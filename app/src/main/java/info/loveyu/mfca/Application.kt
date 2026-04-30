@@ -3,6 +3,7 @@ package info.loveyu.mfca
 import android.app.Activity
 import android.app.Application
 import android.os.Process
+import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
@@ -18,6 +19,9 @@ class Application : Application() {
         installCrashLogging()
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityResumed(activity: Activity) {
+                if (ForwardService.isServiceAlive()) {
+                    LinkManager.refreshNetworkState()
+                }
                 // 任意 Activity 回到前台时触发 tick，确保状态最新
                 ForwardService.triggerTick()
                 lastActivityResumeTime = System.currentTimeMillis()

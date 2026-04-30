@@ -39,6 +39,10 @@ import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -567,7 +571,19 @@ fun ComponentStatusSheet(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val (enabledComponents, disabledComponents) = getEnabledAndDisabledComponents(context)
+    val networkStateVersion by LinkManager.networkStateVersion.collectAsState()
+
+    LaunchedEffect(Unit) {
+        LinkManager.refreshNetworkState()
+    }
+
+    val (enabledComponents, disabledComponents) = remember(
+        networkStateVersion,
+        ForwardService.isRunning,
+        ForwardService.currentConfig
+    ) {
+        getEnabledAndDisabledComponents(context)
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -779,6 +795,10 @@ fun ComponentDetailSheet(
 
     val isDark = androidx.compose.foundation.isSystemInDarkTheme()
     val context = LocalContext.current
+
+    LaunchedEffect(component.id, component.type) {
+        LinkManager.refreshNetworkState()
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

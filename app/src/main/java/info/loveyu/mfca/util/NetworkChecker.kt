@@ -43,12 +43,18 @@ object NetworkChecker {
     /**
      * 获取网络状态快照（纯事件驱动，无 TTL 过期）
      */
-    private fun getSnapshot(context: Context): NetworkSnapshot {
-        cachedSnapshot?.let { return it }
+    private fun getSnapshot(context: Context, forceRefresh: Boolean = false): NetworkSnapshot {
+        if (!forceRefresh) {
+            cachedSnapshot?.let { return it }
+        }
 
         val snapshot = querySnapshot(context)
         cachedSnapshot = snapshot
         return snapshot
+    }
+
+    fun refreshCache(context: Context) {
+        getSnapshot(context, forceRefresh = true)
     }
 
     /**
@@ -154,10 +160,15 @@ object NetworkChecker {
     /**
      * 获取链接是否应该启用及原因
      */
-    fun getEnableReason(context: Context, whenCondition: String?, denyCondition: String?): EnableResult {
+    fun getEnableReason(
+        context: Context,
+        whenCondition: String?,
+        denyCondition: String?,
+        forceRefresh: Boolean = false
+    ): EnableResult {
         // First check deny conditions
         if (denyCondition != null) {
-            val denyResult = checkConditionWithReason(context, denyCondition)
+            val denyResult = checkConditionWithReason(context, denyCondition, forceRefresh)
             if (denyResult.matched) {
                 return EnableResult(enabled = false, reason = "Denied by condition: $denyCondition")
             }
@@ -165,7 +176,7 @@ object NetworkChecker {
 
         // Then check when conditions
         if (whenCondition != null) {
-            val whenResult = checkConditionWithReason(context, whenCondition)
+            val whenResult = checkConditionWithReason(context, whenCondition, forceRefresh)
             if (!whenResult.matched) {
                 return EnableResult(enabled = false, reason = "Condition not met: $whenCondition")
             }
@@ -179,9 +190,9 @@ object NetworkChecker {
     /**
      * 检查条件是否匹配（使用快照缓存）
      */
-    private fun checkCondition(context: Context, condition: String): Boolean {
+    private fun checkCondition(context: Context, condition: String, forceRefresh: Boolean = false): Boolean {
         val params = parseCondition(condition)
-        val snapshot = getSnapshot(context)
+        val snapshot = getSnapshot(context, forceRefresh)
 
         // Check network type
         params["network"]?.let { network ->
@@ -217,9 +228,13 @@ object NetworkChecker {
     /**
      * 检查条件是否匹配，返回详细原因（使用快照缓存）
      */
-    private fun checkConditionWithReason(context: Context, condition: String): ConditionResult {
+    private fun checkConditionWithReason(
+        context: Context,
+        condition: String,
+        forceRefresh: Boolean = false
+    ): ConditionResult {
         val params = parseCondition(condition)
-        val snapshot = getSnapshot(context)
+        val snapshot = getSnapshot(context, forceRefresh)
 
         // Check network type
         params["network"]?.let { network ->
@@ -322,10 +337,10 @@ object NetworkChecker {
 
         val currentSsid = snapshot.ssid ?: ""
 
-        // 后台时系统可能返回 <unknown ssid>，此时无法判断，跳过SSID检查以保持连接
+        // 对显式依赖 SSID 的规则，拿不到 SSID 时必须保守失败，避免断网后继续判定为满足条件。
         if (currentSsid == "<unknown ssid>" || currentSsid.isEmpty()) {
-            LogManager.logDebug("NETWORK", "SSID unavailable (app in background?), skipping SSID check")
-            return true
+            LogManager.logDebug("NETWORK", "SSID unavailable, treating SSID check as not matched")
+            return false
         }
 
         // ssidPattern can be comma-separated list
@@ -347,12 +362,11 @@ object NetworkChecker {
         // 非 WiFi 时 BSSID 不匹配
         if (snapshot.networkType != "wifi") return false
 
-        val currentBssid = snapshot.bssid ?: return true
+        val currentBssid = snapshot.bssid
 
-        // 后台时系统可能返回 02:00:00:00:00:00，此时无法判断，跳过BSSID检查以保持连接
-        if (currentBssid == "02:00:00:00:00:00") {
-            LogManager.logDebug("NETWORK", "BSSID unavailable (app in background?), skipping BSSID check")
-            return true
+        if (currentBssid == null || currentBssid == "02:00:00:00:00:00" || currentBssid.isBlank()) {
+            LogManager.logDebug("NETWORK", "BSSID unavailable, treating BSSID check as not matched")
+            return false
         }
 
         // bssidPattern can be comma-separated list
@@ -398,9 +412,14 @@ object NetworkChecker {
     /**
      * 获取当前网络条件与 when/deny 的匹配详情（直接查询，用于 UI 展示）
      */
-    fun getMatchedConditions(context: Context, whenCondition: String?, denyCondition: String?): String {
+    fun getMatchedConditions(
+        context: Context,
+        whenCondition: String?,
+        denyCondition: String?,
+        forceRefresh: Boolean = false
+    ): String {
         val sb = StringBuilder()
-        val snapshot = getSnapshot(context)
+        val snapshot = getSnapshot(context, forceRefresh)
 
         val type = snapshot.networkType ?: "none"
         val typeDisplay = when (type) {
@@ -426,14 +445,14 @@ object NetworkChecker {
 
         // Show when condition evaluation (need fresh check for reason display)
         if (whenCondition != null) {
-            val result = checkConditionWithReason(context, whenCondition)
+            val result = checkConditionWithReason(context, whenCondition, forceRefresh)
             sb.append("\nWhen: $whenCondition -> ${if (result.matched) "MATCHED" else "NOT MATCHED"}")
             if (!result.matched && result.reason != null) {
                 sb.append(" (${result.reason})")
             }
         }
         if (denyCondition != null) {
-            val result = checkConditionWithReason(context, denyCondition)
+            val result = checkConditionWithReason(context, denyCondition, forceRefresh)
             sb.append("\nDeny: $denyCondition -> ${if (result.matched) "MATCHED (denied)" else "not matched"}")
         }
 
@@ -443,8 +462,8 @@ object NetworkChecker {
     /**
      * 获取当前网络类型描述（直接查询，用于 UI 展示）
      */
-    fun getNetworkInfo(context: Context): String {
-        val snapshot = getSnapshot(context)
+    fun getNetworkInfo(context: Context, forceRefresh: Boolean = false): String {
+        val snapshot = getSnapshot(context, forceRefresh)
         val type = snapshot.networkType
 
         if (type == null) {
@@ -471,8 +490,8 @@ object NetworkChecker {
      * 获取详细网络信息，包含 IP、SSID、BSSID、类型等
      * 使用快照缓存
      */
-    fun getDetailedNetworkInfo(context: Context): String {
-        val snapshot = getSnapshot(context)
+    fun getDetailedNetworkInfo(context: Context, forceRefresh: Boolean = false): String {
+        val snapshot = getSnapshot(context, forceRefresh)
         val sb = StringBuilder()
         sb.append("Network Info:")
 

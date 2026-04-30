@@ -580,8 +580,24 @@ object LinkManager {
      * 刷新网络状态（权限变更后调用）
      */
     fun refreshNetworkState() {
+        val ctx = applicationContext ?: return
+        val connectivityManager = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        NetworkChecker.invalidateCache()
+        NetworkChecker.refreshCache(ctx)
+        isNetworkAvailable = connectivityManager.activeNetwork != null
         lastNetworkTypeUpdateTime = 0L
         updateNetworkType()
+
+        if (!initialized) return
+
+        if (!isNetworkAvailable) {
+            disconnectAll()
+            InputManager.stopAllLinkBased()
+            return
+        }
+
+        checkAllLinkConditions()
+        InputManager.checkAllInputConditions()
     }
 
     fun getCurrentNetworkType(): NetworkType = currentNetworkType
