@@ -36,6 +36,41 @@ class ClipboardHistoryDbHelper(context: Context) :
 
         private val sha1Digest by lazy { MessageDigest.getInstance("SHA-1") }
 
+        /**
+         * 检查内容是否为新内容，或者距离上次更新已超过指定时长
+         * 用于 clipboardNew 过滤函数，确保在写入历史之前调用
+         *
+         * @return true 表示内容是新的（未在历史中）或者上次更新时间超过 maxAgeMs 毫秒
+         */
+        fun isNotRecentlyUpdated(context: Context, text: String, maxAgeMs: Long = 10_000L): Boolean {
+            if (text.isEmpty()) return false
+            val hash = sha1(text)
+            val helper = ClipboardHistoryDbHelper(context.applicationContext)
+            return try {
+                val db = helper.readableDatabase
+                val cursor = db.query(
+                    TABLE_NAME,
+                    arrayOf(COL_UPDATED_AT),
+                    "$COL_CONTENT_HASH = ?",
+                    arrayOf(hash),
+                    null, null, null, "1"
+                )
+                if (!cursor.moveToFirst()) {
+                    cursor.close()
+                    true // 不在历史中，属于新内容
+                } else {
+                    val updatedAt = cursor.getLong(0)
+                    cursor.close()
+                    val now = System.currentTimeMillis()
+                    (now - updatedAt) > maxAgeMs // 超过时间窗口才认为是新内容
+                }
+            } catch (e: Exception) {
+                true // 查询失败时放行
+            } finally {
+                helper.close()
+            }
+        }
+
         @Synchronized
         fun sha1(text: String): String {
             val digest = sha1Digest

@@ -1,6 +1,7 @@
 package info.loveyu.mfca.pipeline
 
 import android.content.Context
+import info.loveyu.mfca.clipboard.ClipboardHistoryDbHelper
 import info.loveyu.mfca.config.AppConfig
 import info.loveyu.mfca.config.RuleConfig
 import info.loveyu.mfca.input.InputMessage
@@ -54,6 +55,27 @@ class RuleEngine(
         // Register built-in enrichers
         val gotifyIconEnricher = GotifyIconEnricher(context)
         enrichers[gotifyIconEnricher.type] = gotifyIconEnricher
+
+        // Register raw data functions that need Android context
+        context?.let { ctx ->
+            val appCtx = ctx.applicationContext
+            // clipboardNew(seconds): 检查当前数据是否为新内容，或距上次更新已超过指定秒数
+            // 用于剪贴板去重同步，在写入历史之前调用
+            expressionEngine.registerRawDataFunction(
+                "clipboardNew",
+                ExpressionEngine.RawDataFunction("clipboardNew") { data, args ->
+                    val seconds = args.getOrNull(0)
+                    val maxAgeMs = when (seconds) {
+                        is Long -> seconds * 1000L
+                        is Double -> (seconds * 1000).toLong()
+                        is String -> seconds.toLongOrNull()?.times(1000L) ?: 10_000L
+                        else -> 10_000L
+                    }
+                    val text = String(data)
+                    ClipboardHistoryDbHelper.isNotRecentlyUpdated(appCtx, text, maxAgeMs)
+                }
+            )
+        }
 
         // 预编译所有规则中的表达式
         precompileExpressions()

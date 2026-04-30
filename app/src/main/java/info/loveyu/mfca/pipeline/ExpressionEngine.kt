@@ -35,6 +35,9 @@ class ExpressionEngine {
     // 内置函数
     private val builtinFunctions = ConcurrentHashMap<String, BuiltinFunction>()
 
+    // 原始数据函数（可访问原始字节数据，适用于非 JSON 数据场景）
+    private val rawDataFunctions = ConcurrentHashMap<String, RawDataFunction>()
+
     init {
         registerBuiltinFunctions()
     }
@@ -488,6 +491,13 @@ class ExpressionEngine {
                         tokens.add(FilterToken(FilterTokenType.IDENT, word))
                     }
                 }
+                c.isDigit() -> {
+                    val start = i
+                    while (i < expr.length && (expr[i].isDigit() || expr[i] == '.')) {
+                        i++
+                    }
+                    tokens.add(FilterToken(FilterTokenType.NUMBER, expr.substring(start, i)))
+                }
                 else -> i++
             }
         }
@@ -625,42 +635,44 @@ class ExpressionEngine {
      * 执行过滤器（从原始字节解析 JSON）
      */
     fun executeFilter(expression: String, data: ByteArray, headers: Map<String, String>? = null): Boolean {
-        val json = try {
-            JSONObject(String(data))
-        } catch (e: Exception) {
-            return true // 非 JSON 数据默认通过
-        }
-
         val compiled = compileFilter(expression)
         if (compiled.error != null) return true
 
-        return evaluateCompiledFilter(compiled.parsed!!, json, headers)
+        val json = try {
+            JSONObject(String(data))
+        } catch (e: Exception) {
+            null // 非 JSON 数据，对原始数据函数仍可正常求值
+        }
+
+        return evaluateCompiledFilter(compiled.parsed!!, json, data, headers)
     }
 
     /**
      * 执行过滤器（复用已解析的 JSONObject，避免重复解析）
      */
     fun executeFilter(expression: String, preParsedJson: JSONObject?, data: ByteArray, headers: Map<String, String>? = null): Boolean {
-        val json = preParsedJson ?: try {
-            JSONObject(String(data))
-        } catch (e: Exception) {
-            return true
-        }
-
         val compiled = compileFilter(expression)
         if (compiled.error != null) return true
 
-        return evaluateCompiledFilter(compiled.parsed!!, json, headers)
+        val json = preParsedJson ?: try {
+            JSONObject(String(data))
+        } catch (e: Exception) {
+            null // 非 JSON 数据，对原始数据函数仍可正常求值
+        }
+
+        return evaluateCompiledFilter(compiled.parsed!!, json, data, headers)
     }
 
-    private fun evaluateCompiledFilter(filter: ParsedFilter, json: JSONObject, headers: Map<String, String>?): Boolean {
+    private fun evaluateCompiledFilter(filter: ParsedFilter, json: JSONObject?, data: ByteArray, headers: Map<String, String>?): Boolean {
         return when (filter.type) {
             ParsedNodeType.CONSTANT -> filter.constantValue == true
             ParsedNodeType.PATH -> {
+                if (json == null) return true // 非 JSON 数据默认通过
                 val extracted = extractPath(json, filter.path ?: "", headers)
                 extracted != null && extracted != JSONObject.NULL
             }
             ParsedNodeType.COMPARISON -> {
+                if (json == null) return true // 非 JSON 数据默认通过
                 val extracted = extractPath(json, filter.path ?: "", headers)
                 val value = filter.value ?: ""
 
@@ -675,20 +687,37 @@ class ExpressionEngine {
                 }
             }
             ParsedNodeType.AND -> {
-                val left = filter.left?.let { evaluateCompiledFilter(it, json, headers) } ?: true
-                val right = filter.right?.let { evaluateCompiledFilter(it, json, headers) } ?: true
+                val left = filter.left?.let { evaluateCompiledFilter(it, json, data, headers) } ?: true
+                val right = filter.right?.let { evaluateCompiledFilter(it, json, data, headers) } ?: true
                 left && right
             }
             ParsedNodeType.OR -> {
-                val left = filter.left?.let { evaluateCompiledFilter(it, json, headers) } ?: false
-                val right = filter.right?.let { evaluateCompiledFilter(it, json, headers) } ?: false
+                val left = filter.left?.let { evaluateCompiledFilter(it, json, data, headers) } ?: false
+                val right = filter.right?.let { evaluateCompiledFilter(it, json, data, headers) } ?: false
                 left || right
             }
             ParsedNodeType.FUNCTION -> {
+                // 优先检查原始数据函数（支持非 JSON 数据）
+                val rawFn = rawDataFunctions[filter.path]
+                if (rawFn != null) {
+                    val evaluatedArgs = (filter.args ?: emptyList()).map { arg ->
+                        parseRawArg(arg)
+                    }.toTypedArray()
+                    val result = rawFn.invoke(data, evaluatedArgs)
+                    return result == true || (result is Number && result.toLong() != 0L)
+                }
+                if (json == null) return true // 非 JSON 数据且无原始数据函数，默认通过
                 evaluateFunction(filter.path ?: "", filter.args ?: emptyList(), json, headers)
             }
-            else -> true
         }
+    }
+
+    /**
+     * 解析函数参数的字面量值（用于原始数据函数，不走 JSON 路径提取）
+     * 优先尝试数值解析，否则返回字符串
+     */
+    private fun parseRawArg(arg: String): Any? {
+        return arg.toLongOrNull() ?: arg.toDoubleOrNull() ?: arg
     }
 
     private fun evaluateFunction(name: String, args: List<String>, json: JSONObject, headers: Map<String, String>?): Boolean {
@@ -815,6 +844,14 @@ class ExpressionEngine {
     }
 
     /**
+     * 注册原始数据函数
+     * 原始数据函数可访问原始字节数据，适用于对非 JSON 数据进行过滤（例如 clipboardNew）
+     */
+    fun registerRawDataFunction(name: String, fn: RawDataFunction) {
+        rawDataFunctions[name] = fn
+    }
+
+    /**
      * 关闭引擎，释放资源
      */
     fun shutdown() {
@@ -868,6 +905,24 @@ class ExpressionEngine {
                 handler(args)
             } catch (e: Exception) {
                 LogManager.logWarn("EXPR", "Function $name error: ${e.message}")
+                null
+            }
+        }
+    }
+
+    /**
+     * 原始数据函数：handler 接收原始字节数据和解析后的参数
+     * 参数值优先解析为数字（Long/Double），否则作为字符串
+     */
+    data class RawDataFunction(
+        val name: String,
+        val handler: (ByteArray, Array<Any?>) -> Any?
+    ) {
+        fun invoke(data: ByteArray, args: Array<Any?>): Any? {
+            return try {
+                handler(data, args)
+            } catch (e: Exception) {
+                LogManager.logWarn("EXPR", "RawDataFunction $name error: ${e.message}")
                 null
             }
         }

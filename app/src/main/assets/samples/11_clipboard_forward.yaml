@@ -1,9 +1,11 @@
 # 剪贴板转发示例
-# 场景：订阅多个 MQTT broker 的剪贴板消息，统一处理后写入本地剪贴板
+# 场景：订阅多个 MQTT broker 的剪贴板消息，统一处理后写入本地剪贴板和历史记录
 #
 # 新特性：
 #   linkId 支持字符串或数组，可同时订阅多个 link
 #   from 支持字符串或数组，可匹配多个输入源
+#   clipboardHistory 输出：将文本写入应用内置剪贴板历史数据库
+#   clipboardNew(seconds) 过滤函数：仅当内容是新增或距上次更新超过指定秒数时通过
 
 
 links:
@@ -37,6 +39,10 @@ outputs:
     - name: clipboard_write
       type: clipboard
 
+    # 写入应用内置剪贴板历史（可在 App 内浏览和搜索）
+    - name: clipboard_history
+      type: clipboardHistory
+
 rules:
   # 方式1：from 使用字符串（推荐：当输入源名唯一时）
   # 由于 mqtt_clipboard 已通过 link_id 数组聚合了多个 broker，
@@ -44,11 +50,19 @@ rules:
   - name: clipboard_text_write
     from: mqtt_clipboard
     pipeline:
+      # Step 1: 解码 base64，过滤仅处理文本类型，写入系统剪贴板
       - transform:
           extract: "base64Decode(content)"
           filter: "type == 'text'"
         to:
           - clipboard_write
+
+      # Step 2: 去重过滤，仅当内容在 10 秒内未出现时才写入历史
+      #         clipboardNew 检查发生在历史写入之前，确保去重正确
+      - transform:
+          filter: "clipboardNew(10)"
+        to:
+          - clipboard_history
 
   # 方式2：from 使用数组（当需要匹配多个不同名称的输入源时）
   # - name: clipboard_text_write
@@ -58,6 +72,6 @@ rules:
   #   pipeline:
   #     - transform:
   #         extract: "base64Decode(content)"
-  #         filter: "type == text"
+  #         filter: "type == 'text'"
   #       to:
   #         - clipboard_write

@@ -1,0 +1,74 @@
+# 剪贴板历史示例
+# 场景：接收 fcitx5-android 推送的剪贴板 MQTT 消息，
+#       将内容解码后存入本地剪贴板历史，同时写入系统剪贴板；
+#       仅当内容是新增或距上次同步超过指定时长时，才将其发布回远端（多设备同步）。
+#
+# 涉及输出类型:
+#   clipboardHistory - 将文本写入应用内置的剪贴板历史数据库
+#   clipboard        - 将文本写入系统剪贴板（仅在亮屏时立即生效，熄屏时缓冲）
+#   link (producer)  - 发布到 MQTT，用于多设备剪贴板同步
+#
+# 核心过滤函数 clipboardNew(seconds):
+#   对当前数据（pipeline 中已解码的文本）进行去重判断：
+#     - 内容从未出现在本地历史中 → 通过（新内容）
+#     - 内容存在于历史，但距上次更新已超过 seconds 秒 → 通过（长时间未出现，视为新）
+#     - 内容存在且在 seconds 秒内刚刚更新 → 拒绝（重复，跳过 MQTT 发布）
+#   注意：clipboardNew 检查必须在 clipboardHistory 写入之前执行，
+#         以确保检查的是"当前消息到达前"的历史状态。
+#
+# pipeline 执行顺序保证:
+#   Step 1 → Step 2 → Step 3（顺序执行，Step 3 的历史写入在 Step 2 的过滤检查之后）
+#
+# fcitx5-android 消息格式（JSON）:
+#   {"base64": "<base64编码的剪贴板文本>", "type": "text"}
+
+
+links:
+  - id: mqtt_broker
+    dsn: mqtt://user:pass@192.168.1.1:1883?connectTimeout=3&keepAliveInterval=60&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60&clientId=mfca-clipboard
+
+inputs:
+  link:
+    # 订阅 fcitx5-android 推送的剪贴板消息
+    - name: fcitx5_clipboard
+      linkId: mqtt_broker
+      role: consumer
+      topic: phone/clipboard/#
+      qos: 1
+
+outputs:
+  internal:
+    # 写入应用内置剪贴板历史（可在 App 内浏览和搜索）
+    - name: clipboard_history
+      type: clipboardHistory
+
+    # 写入系统剪贴板（亮屏时立即生效）
+    - name: clipboard_write
+      type: clipboard
+
+  link:
+    # 发布到 MQTT，用于其他设备订阅同步
+    - name: clipboard_sync
+      linkId: mqtt_broker
+      role: producer
+      topic: sync/clipboard
+
+rules:
+  - name: fcitx5_clipboard_record
+    from: fcitx5_clipboard
+    pipeline:
+      # Step 1: 解码 base64，写入系统剪贴板（不过滤，始终执行）
+      - transform:
+          extract: "base64Decode(base64)"
+          filter: "type == 'text'"
+        to: [clipboard_write]
+
+      # Step 2: 过滤去重，仅当内容是新增或距上次同步超过 30 秒时才同步到 MQTT
+      #         注意：此步骤必须在 Step 3（历史写入）之前，
+      #               clipboardNew 检查的是写入前的历史状态
+      - transform:
+          filter: "clipboardNew(30)"
+        to: [clipboard_sync]
+
+      # Step 3: 始终写入本地历史（无论 Step 2 是否过滤，均记录）
+      - to: [clipboard_history]

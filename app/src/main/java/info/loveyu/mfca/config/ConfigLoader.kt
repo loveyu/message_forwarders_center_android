@@ -358,6 +358,7 @@ object ConfigLoader {
             "file" -> InternalOutputType.file
             "broadcast" -> InternalOutputType.broadcast
             "notify" -> InternalOutputType.notify
+            "clipboardhistory" -> InternalOutputType.clipboardHistory
             else -> {
                 LogManager.logError("CONFIG", "Unknown internal output type: $type")
                 LogManager.showToast("未知的输出类型: $type")
