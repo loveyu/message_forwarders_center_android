@@ -37,3 +37,5 @@ google-services.json
 # Signing
 release.keystore
 keystore.properties
+
+.kotlin/sessions
