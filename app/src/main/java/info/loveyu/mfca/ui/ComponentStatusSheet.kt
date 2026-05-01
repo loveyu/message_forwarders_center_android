@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -74,6 +75,10 @@ import info.loveyu.mfca.ui.theme.OutputChipBgDark
 import info.loveyu.mfca.ui.theme.OutputChipBgLight
 import info.loveyu.mfca.ui.theme.OutputChipBorderDark
 import info.loveyu.mfca.ui.theme.OutputChipBorderLight
+import info.loveyu.mfca.ui.theme.QueueChipBgDark
+import info.loveyu.mfca.ui.theme.QueueChipBgLight
+import info.loveyu.mfca.ui.theme.QueueChipBorderDark
+import info.loveyu.mfca.ui.theme.QueueChipBorderLight
 import info.loveyu.mfca.ui.theme.DisabledChipBgDark
 import info.loveyu.mfca.ui.theme.DisabledChipBgLight
 import info.loveyu.mfca.ui.theme.DisabledChipBorderDark
@@ -113,7 +118,7 @@ import java.net.URI
  * 组件类型
  */
 enum class ComponentType {
-    LINK, HTTP_INPUT, LINK_INPUT, RULE, OUTPUT
+    LINK, HTTP_INPUT, LINK_INPUT, RULE, OUTPUT, QUEUE
 }
 
 /**
@@ -174,6 +179,11 @@ fun getAllComponentStatuses(context: Context): List<ComponentStatus> {
         appConfig.outputs.internal.forEach { internalOutputConfig ->
             statuses.add(buildInternalOutputStatus(internalOutputConfig))
         }
+    }
+
+    // Queue statuses (from QueueManager — available even without config snapshot)
+    info.loveyu.mfca.queue.QueueManager.getAllQueues().forEach { (_, queue) ->
+        statuses.add(buildQueueStatus(queue))
     }
 
     return statuses
@@ -549,8 +559,7 @@ private fun buildHttpOutputStatus(config: HttpOutputConfig): ComponentStatus {
         append("\nMethod: ${config.method}")
         config.timeout.let { append("\nTimeout: ${it.value}") }
         config.retry?.let { append("\nRetry: max ${it.maxAttempts} × ${it.interval.value}") }
-        config.queue?.memoryQueue?.let { append("\nQueue: memory/$it") }
-        config.queue?.sqliteQueue?.let { append("\nQueue: sqlite/$it") }
+        config.queue?.queue?.let { append("\nQueue: $it") }
     }
     return ComponentStatus(
         id = config.name,
@@ -579,8 +588,7 @@ private fun buildLinkOutputStatus(context: Context, config: LinkOutputConfig): C
         append("\nLink: ${config.linkId}")
         append("\nRole: ${config.role}")
         config.topic?.let { append("\nTopic: $it") }
-        config.queue?.memoryQueue?.let { append("\nQueue: memory/$it") }
-        config.queue?.sqliteQueue?.let { append("\nQueue: sqlite/$it") }
+        config.queue?.queue?.let { append("\nQueue: $it") }
         if (config.whenCondition != null || config.deny != null) {
             append(
                 "\n\n${NetworkChecker.getMatchedConditions(context, config.whenCondition, config.deny)}"
@@ -598,8 +606,7 @@ private fun buildLinkOutputStatus(context: Context, config: LinkOutputConfig): C
     )
 }
 
-private fun buildInternalOutputStatus(config: InternalOutputConfig): ComponentStatus {
-    val isRunning = OutputManager.getOutput(config.name)?.isAvailable() ?: false
+private fun buildInternalOutputStatus(config: InternalOutputConfig): ComponentStatus {    val isRunning = OutputManager.getOutput(config.name)?.isAvailable() ?: false
     val typeStr =
         when (config.type) {
             InternalOutputType.clipboard -> "Clipboard"
@@ -624,6 +631,26 @@ private fun buildInternalOutputStatus(config: InternalOutputConfig): ComponentSt
     )
 }
 
+private fun buildQueueStatus(queue: info.loveyu.mfca.queue.Queue): ComponentStatus {
+    val typeStr = when (queue.type) {
+        info.loveyu.mfca.queue.QueueType.memory -> "Memory"
+        info.loveyu.mfca.queue.QueueType.sqlite -> "SQLite"
+    }
+    val size = try { queue.size() } catch (_: Exception) { -1 }
+    val details = buildString {
+        append("Type: $typeStr Queue")
+        if (size >= 0) append("\nSize: $size items")
+    }
+    return ComponentStatus(
+        id = "queue:${queue.name}",
+        name = queue.name,
+        type = ComponentType.QUEUE,
+        isEnabled = true,
+        isRunning = true,
+        details = details
+    )
+}
+
 fun getGroupedComponentStatuses(context: Context): List<Pair<ComponentType, List<ComponentStatus>>> {
     return getAllComponentStatuses(context)
         .groupBy { it.type }
@@ -638,6 +665,7 @@ fun getComponentTypeOrder(type: ComponentType): Int {
         ComponentType.LINK_INPUT -> 2
         ComponentType.RULE -> 3
         ComponentType.OUTPUT -> 4
+        ComponentType.QUEUE -> 5
     }
 }
 
@@ -782,6 +810,7 @@ fun ComponentCard(
             ComponentType.LINK_INPUT -> if (isDark) LinkInputChipBgDark else LinkInputChipBgLight
             ComponentType.RULE -> if (isDark) LinkInputChipBgDark else LinkInputChipBgLight
             ComponentType.OUTPUT -> if (isDark) OutputChipBgDark else OutputChipBgLight
+            ComponentType.QUEUE -> if (isDark) QueueChipBgDark else QueueChipBgLight
         }
     } else {
         if (isDark) DisabledChipBgDark else DisabledChipBgLight
@@ -794,6 +823,7 @@ fun ComponentCard(
             ComponentType.LINK_INPUT -> if (isDark) LinkInputChipBorderDark else LinkInputChipBorderLight
             ComponentType.RULE -> if (isDark) LinkInputChipBorderDark else LinkInputChipBorderLight
             ComponentType.OUTPUT -> if (isDark) OutputChipBorderDark else OutputChipBorderLight
+            ComponentType.QUEUE -> if (isDark) QueueChipBorderDark else QueueChipBorderLight
         }
     } else {
         if (isDark) DisabledChipBorderDark else DisabledChipBorderLight
@@ -1157,6 +1187,7 @@ private fun getComponentIcon(type: ComponentType): ImageVector {
         ComponentType.LINK_INPUT -> Icons.Default.PlayArrow
         ComponentType.RULE -> Icons.Default.Build
         ComponentType.OUTPUT -> Icons.AutoMirrored.Filled.Send
+        ComponentType.QUEUE -> Icons.Default.List
     }
 }
 
@@ -1167,6 +1198,7 @@ fun getComponentTypeName(type: ComponentType): String {
         ComponentType.LINK_INPUT -> "Link Input"
         ComponentType.RULE -> "Rule"
         ComponentType.OUTPUT -> "Output"
+        ComponentType.QUEUE -> "Queue"
     }
 }
 

@@ -189,10 +189,11 @@ data class FailQueueInputConfig(
     val name: String,
     /** 订阅的失败消息类型列表，空表示读取队列中所有消息 */
     val idTypes: List<String> = emptyList(),
-    /** 从指定内存队列读取 */
-    val memoryQueue: String? = null,
-    /** 从指定 SQLite 队列读取 */
-    val sqliteQueue: String? = null,
+    /**
+     * 从哪些队列读取失败消息，格式: "sqlite:队列名" 或 "memory:队列名"。
+     * 支持同时监听多个队列。
+     */
+    val queues: List<String> = emptyList(),
     /** 每次 tick 最多处理的消息数（默认 20） */
     val batchSize: Int = 20
 )
@@ -268,10 +269,11 @@ data class OnFailureConfig(
     val action: OnFailureAction = OnFailureAction.discard,
     /** 失败消息类型标识，action=failQueue 时必填 */
     val idType: String? = null,
-    /** 目标内存队列名称 */
-    val memoryQueue: String? = null,
-    /** 目标 SQLite 队列名称 */
-    val sqliteQueue: String? = null,
+    /**
+     * 目标队列，格式: "sqlite:队列名" 或 "memory:队列名"。
+     * action=failQueue 时必填。
+     */
+    val queue: String? = null,
     /** 消息在失败队列中等待多久后重新注入为 input（按 tick 近似）*/
     val delay: Duration = Duration("60s")
 )
@@ -285,8 +287,10 @@ enum class OnFailureAction {
 
 data class QueueRefConfig(
     val priority: String? = null,
-    val memoryQueue: String? = null,
-    val sqliteQueue: String? = null
+    /**
+     * 队列引用，格式: "sqlite:队列名" 或 "memory:队列名"。
+     */
+    val queue: String? = null
 )
 
 data class LinkOutputConfig(

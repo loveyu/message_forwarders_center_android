@@ -102,7 +102,8 @@ object ConfigLoader {
         val map = inputs as Map<String, Any>
         return InputsConfig(
             http = parseHttpInputs(map["http"]),
-            link = parseLinkInputs(map["link"])
+            link = parseLinkInputs(map["link"]),
+            failQueue = parseFailQueueInputs(map["failQueue"])
         )
     }
 
@@ -153,6 +154,34 @@ object ConfigLoader {
             "producer" -> LinkRole.producer
             else -> LinkRole.consumer
         }
+    }
+
+    private fun parseFailQueueInputs(failQueue: Any?): List<FailQueueInputConfig> {
+        if (failQueue == null) return emptyList()
+        return (failQueue as List<*>).mapNotNull { item ->
+            (item as? Map<String, Any>)?.let { map ->
+                FailQueueInputConfig(
+                    name = map["name"] as? String ?: return@mapNotNull null,
+                    idTypes = (map["idTypes"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+                    queues = parseStringOrList(map["queues"]),
+                    batchSize = (map["batchSize"] as? Number)?.toInt() ?: 20
+                )
+            }
+        }
+    }
+
+    private fun parseOnFailure(onFailure: Any?): OnFailureConfig? {
+        if (onFailure == null) return null
+        val map = onFailure as? Map<String, Any> ?: return null
+        return OnFailureConfig(
+            action = when (map["action"] as? String) {
+                "failQueue" -> OnFailureAction.failQueue
+                else -> OnFailureAction.discard
+            },
+            idType = map["idType"] as? String,
+            queue = map["queue"] as? String,
+            delay = Duration(map["delay"] as? String ?: "60s")
+        )
     }
 
     private fun parseReplay(replay: Any?): ReplayConfig? {
@@ -312,8 +341,7 @@ object ConfigLoader {
         val map = queue as Map<String, Any>
         return QueueRefConfig(
             priority = map["priority"] as? String,
-            memoryQueue = map["memoryQueue"] as? String,
-            sqliteQueue = map["sqliteQueue"] as? String
+            queue = map["queue"] as? String
         )
     }
 
@@ -327,6 +355,10 @@ object ConfigLoader {
                     linkId = map["linkId"] as? String ?: return@mapNotNull null,
                     role = parseLinkRole(map["role"] as? String),
                     topic = map["topic"] as? String,
+                    qos = (map["qos"] as? Number)?.toInt(),
+                    retain = map["retain"] as? Boolean ?: false,
+                    retry = parseRetry(map["retry"]),
+                    onFailure = parseOnFailure(map["onFailure"]),
                     queue = parseQueueRef(map["queue"]),
                     whenCondition = map["when"] as? String,
                     deny = map["deny"] as? String

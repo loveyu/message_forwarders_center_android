@@ -38,6 +38,18 @@ object QueueManager {
 
     fun getSqliteQueue(name: String): SqliteQueue? = queues[name] as? SqliteQueue
 
+    /**
+     * 按格式字符串解析队列引用。
+     * 格式: "sqlite:队列名" 或 "memory:队列名"；省略前缀时按名称直接查找。
+     */
+    fun resolveQueue(queueRef: String): Queue? {
+        return when {
+            queueRef.startsWith("sqlite:") -> getSqliteQueue(queueRef.removePrefix("sqlite:"))
+            queueRef.startsWith("memory:") -> getMemoryQueue(queueRef.removePrefix("memory:"))
+            else -> getQueue(queueRef)
+        }
+    }
+
     fun startAll() {
         queues.values.forEach { queue ->
             try {

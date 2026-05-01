@@ -128,15 +128,14 @@ class MqttOutput(
             nextAttemptAt = System.currentTimeMillis() + onFailure.delay.millis
         )
 
-        val queued = when {
-            onFailure.sqliteQueue != null ->
-                QueueManager.getSqliteQueue(onFailure.sqliteQueue)?.enqueue(failItem) ?: false
-            onFailure.memoryQueue != null ->
-                QueueManager.getMemoryQueue(onFailure.memoryQueue)?.enqueue(failItem) ?: false
-            else -> {
-                LogManager.logWarn("MQTT", "[$name] onFailure.action=failQueue but no queue specified")
+        val queued = onFailure.queue?.let { queueRef ->
+            QueueManager.resolveQueue(queueRef)?.enqueue(failItem) ?: run {
+                LogManager.logWarn("MQTT", "[$name] Queue not found: $queueRef")
                 false
             }
+        } ?: run {
+            LogManager.logWarn("MQTT", "[$name] onFailure.action=failQueue but no queue specified")
+            false
         }
 
         if (queued) {

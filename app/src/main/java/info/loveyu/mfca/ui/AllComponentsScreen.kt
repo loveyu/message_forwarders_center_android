@@ -68,6 +68,10 @@ import info.loveyu.mfca.ui.theme.OutputChipBgDark
 import info.loveyu.mfca.ui.theme.OutputChipBgLight
 import info.loveyu.mfca.ui.theme.OutputChipBorderDark
 import info.loveyu.mfca.ui.theme.OutputChipBorderLight
+import info.loveyu.mfca.ui.theme.QueueChipBgDark
+import info.loveyu.mfca.ui.theme.QueueChipBgLight
+import info.loveyu.mfca.ui.theme.QueueChipBorderDark
+import info.loveyu.mfca.ui.theme.QueueChipBorderLight
 import info.loveyu.mfca.ui.theme.StatusDisabledDark
 import info.loveyu.mfca.ui.theme.StatusDisabledLight
 import info.loveyu.mfca.ui.theme.StatusErrorDark
@@ -212,6 +216,7 @@ private fun ComponentListItem(
             ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBgDark else HttpInputChipBgLight
             ComponentType.LINK_INPUT, ComponentType.RULE -> if (isDark) LinkInputChipBgDark else LinkInputChipBgLight
             ComponentType.OUTPUT -> if (isDark) OutputChipBgDark else OutputChipBgLight
+            ComponentType.QUEUE -> if (isDark) QueueChipBgDark else QueueChipBgLight
         }
     } else {
         if (isDark) DisabledChipBgDark else DisabledChipBgLight
@@ -222,6 +227,7 @@ private fun ComponentListItem(
             ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBorderDark else HttpInputChipBorderLight
             ComponentType.LINK_INPUT, ComponentType.RULE -> if (isDark) LinkInputChipBorderDark else LinkInputChipBorderLight
             ComponentType.OUTPUT -> if (isDark) OutputChipBorderDark else OutputChipBorderLight
+            ComponentType.QUEUE -> if (isDark) QueueChipBorderDark else QueueChipBorderLight
         }
     } else {
         if (isDark) DisabledChipBorderDark else DisabledChipBorderLight

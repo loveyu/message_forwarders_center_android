@@ -110,13 +110,12 @@ class WebSocketOutput(
             nextAttemptAt = System.currentTimeMillis() + onFailure.delay.millis
         )
 
-        val queued = when {
-            onFailure.sqliteQueue != null ->
-                QueueManager.getSqliteQueue(onFailure.sqliteQueue)?.enqueue(failItem) ?: false
-            onFailure.memoryQueue != null ->
-                QueueManager.getMemoryQueue(onFailure.memoryQueue)?.enqueue(failItem) ?: false
-            else -> false
-        }
+        val queued = onFailure.queue?.let { queueRef ->
+            QueueManager.resolveQueue(queueRef)?.enqueue(failItem) ?: run {
+                LogManager.logWarn("WS", "[$name] Queue not found: $queueRef")
+                false
+            }
+        } ?: false
 
         if (queued) {
             LogManager.logDebug("WS", "[$name] Queued failed item (idType=$idType)")

@@ -60,9 +60,10 @@ class FailQueueInput(
     fun onTick() {
         if (!running) return
 
-        val queues = buildList {
-            config.sqliteQueue?.let { QueueManager.getSqliteQueue(it) }?.let { add(it) }
-            config.memoryQueue?.let { QueueManager.getMemoryQueue(it) }?.let { add(it) }
+        val queues = config.queues.mapNotNull { queueRef ->
+            QueueManager.resolveQueue(queueRef).also { q ->
+                if (q == null) LogManager.logWarn("FAILQ", "[${config.name}] Queue not found: $queueRef")
+            }
         }
 
         if (queues.isEmpty()) {
