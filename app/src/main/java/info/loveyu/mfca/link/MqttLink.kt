@@ -339,7 +339,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         return false // Need topic to send - use sendToTopic
     }
 
-    fun sendToTopic(topic: String, data: ByteArray, qos: Int = 1): Boolean {
+    fun sendToTopic(topic: String, data: ByteArray, qos: Int = 1, retain: Boolean = false): Boolean {
         if (!connected || client == null) {
             LogManager.logWarn("MQTT", "Cannot send to topic for $id: not connected")
             return false
@@ -348,6 +348,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         return try {
             val message = MqttMessage(data)
             message.qos = qos
+            message.isRetained = retain
             lastOutboundActivity = System.currentTimeMillis()
             val token = client?.publish(topic, message)
             // Fire-and-forget: 不再 waitForCompletion，避免阻塞 RuleEngine worker 线程

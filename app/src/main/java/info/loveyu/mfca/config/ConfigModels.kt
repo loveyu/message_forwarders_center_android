@@ -99,7 +99,8 @@ data class TlsConfig(
  */
 data class InputsConfig(
     val http: List<HttpInputConfig> = emptyList(),
-    val link: List<LinkInputConfig> = emptyList()
+    val link: List<LinkInputConfig> = emptyList(),
+    val failQueue: List<FailQueueInputConfig> = emptyList()
 )
 
 data class HttpInputConfig(
@@ -181,6 +182,22 @@ enum class ReplayProvider {
 }
 
 /**
+ * 失败队列输入源配置
+ * 由统一 Ticker 驱动，从失败队列中取出消息并重新注入规则引擎
+ */
+data class FailQueueInputConfig(
+    val name: String,
+    /** 订阅的失败消息类型列表，空表示读取队列中所有消息 */
+    val idTypes: List<String> = emptyList(),
+    /** 从指定内存队列读取 */
+    val memoryQueue: String? = null,
+    /** 从指定 SQLite 队列读取 */
+    val sqliteQueue: String? = null,
+    /** 每次 tick 最多处理的消息数（默认 20） */
+    val batchSize: Int = 20
+)
+
+/**
  * 队列系统配置
  */
 data class QueuesConfig(
@@ -244,6 +261,28 @@ data class RetryConfig(
     val interval: Duration = Duration("1s")
 )
 
+/**
+ * 失败后处理策略
+ */
+data class OnFailureConfig(
+    val action: OnFailureAction = OnFailureAction.discard,
+    /** 失败消息类型标识，action=failQueue 时必填 */
+    val idType: String? = null,
+    /** 目标内存队列名称 */
+    val memoryQueue: String? = null,
+    /** 目标 SQLite 队列名称 */
+    val sqliteQueue: String? = null,
+    /** 消息在失败队列中等待多久后重新注入为 input（按 tick 近似）*/
+    val delay: Duration = Duration("60s")
+)
+
+enum class OnFailureAction {
+    /** 丢弃（默认） */
+    discard,
+    /** 放入失败队列，等待 FailQueueInput 重新注入 */
+    failQueue
+}
+
 data class QueueRefConfig(
     val priority: String? = null,
     val memoryQueue: String? = null,
@@ -255,6 +294,14 @@ data class LinkOutputConfig(
     val linkId: String,
     val role: LinkRole,
     val topic: String? = null,
+    // MQTT only: QoS level 0/1/2 (default 1)
+    val qos: Int? = null,
+    // MQTT only: retain flag (default false)
+    val retain: Boolean = false,
+    // Retry on transient failure before giving up
+    val retry: RetryConfig? = null,
+    // Action after all retries exhausted (null = discard)
+    val onFailure: OnFailureConfig? = null,
     val queue: QueueRefConfig? = null,
     val whenCondition: String? = null,
     val deny: String? = null

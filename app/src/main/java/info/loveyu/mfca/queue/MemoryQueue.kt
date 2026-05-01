@@ -70,6 +70,22 @@ class MemoryQueue(
         return item
     }
 
+    override fun dequeueByTag(tags: List<String>): QueueItem? {
+        if (tags.isEmpty()) return dequeue()
+        synchronized(queue) {
+            val iterator = queue.iterator()
+            while (iterator.hasNext()) {
+                val item = iterator.next()
+                if (item.tag in tags) {
+                    iterator.remove()
+                    counter.decrementAndGet()
+                    return item
+                }
+            }
+        }
+        return null
+    }
+
     override fun peek(): QueueItem? = queue.peek()
 
     override fun size(): Int = counter.get()

@@ -25,6 +25,7 @@ object InputManager {
 
     private val entries = mutableListOf<InputEntry>()
     private val linkInputConfigs = mutableListOf<info.loveyu.mfca.config.LinkInputConfig>()
+    private val failQueueInputs = mutableListOf<FailQueueInput>()
     private var globalMessageListener: ((InputMessage) -> Unit)? = null
     private var applicationContext: Context? = null
 
@@ -150,6 +151,13 @@ object InputManager {
         }
 
         LogManager.logDebug("INPUT", "InputManager initialized: ${entries.size} inputs registered")
+
+        // FailQueue inputs (tick-driven)
+        config.inputs.failQueue.forEach { fqConfig ->
+            val fqi = FailQueueInput(fqConfig, messageHandler)
+            failQueueInputs.add(fqi)
+            LogManager.logDebug("INPUT", "Registered fail queue input: ${fqConfig.name} (idTypes=${fqConfig.idTypes})")
+        }
     }
 
     /**
@@ -159,6 +167,13 @@ object InputManager {
         val ctx = applicationContext ?: return
         if (!LinkManager.isNetworkAvailable()) return
         checkAllInputConditions()
+        failQueueInputs.forEach { fqi ->
+            try {
+                fqi.onTick()
+            } catch (e: Exception) {
+                LogManager.logError("INPUT", "Error in FailQueueInput.onTick for ${fqi.inputName}: ${e.message}")
+            }
+        }
     }
 
     /**
@@ -266,6 +281,13 @@ object InputManager {
                 LogManager.logError("INPUT", "Failed to start ${entry.config.name}: ${e.message}")
             }
         }
+        failQueueInputs.forEach { fqi ->
+            try {
+                fqi.start()
+            } catch (e: Exception) {
+                LogManager.logError("INPUT", "Failed to start fail queue input ${fqi.inputName}: ${e.message}")
+            }
+        }
     }
 
     fun stopAll() {
@@ -274,6 +296,13 @@ object InputManager {
                 entry.input.stop()
             } catch (e: Exception) {
                 LogManager.logError("INPUT", "Error stopping ${entry.config.name}: ${e.message}")
+            }
+        }
+        failQueueInputs.forEach { fqi ->
+            try {
+                fqi.stop()
+            } catch (e: Exception) {
+                LogManager.logError("INPUT", "Error stopping fail queue input ${fqi.inputName}: ${e.message}")
             }
         }
     }
@@ -298,6 +327,7 @@ object InputManager {
 
     fun clear() {
         stopAll()
+        failQueueInputs.clear()
         entries.clear()
         linkInputConfigs.clear()
         globalMessageListener = null

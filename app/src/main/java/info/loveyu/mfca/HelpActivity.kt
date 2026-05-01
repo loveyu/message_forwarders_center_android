@@ -312,6 +312,10 @@ private fun loadSampleFiles(context: Context): List<SampleFile> {
             description = "数据编码封装 - base64/URL/JSON 编码与元信息注入"
         ),
         SampleFileInfo(
+            fileName = "17_fail_queue.yaml",
+            description = "失败队列输入 - 输出失败后重新注入规则引擎"
+        ),
+        SampleFileInfo(
             fileName = "99_full_demo.yaml",
             description = "完整演示 - 智能家居场景"
         )

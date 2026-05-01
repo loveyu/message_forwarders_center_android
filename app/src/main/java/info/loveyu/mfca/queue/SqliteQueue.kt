@@ -94,6 +94,7 @@ class SqliteQueue(
             put("retry_count", item.retryCount)
             put("next_attempt_at", item.nextAttemptAt)
             put("metadata", serializeMetadata(item.metadata))
+            put("tag", item.tag)
         }
 
         val id = db.insert("queue_items", null, values)
@@ -201,6 +202,27 @@ class SqliteQueue(
         this.consumer = consumer
     }
 
+    override fun dequeueByTag(tags: List<String>): QueueItem? {
+        if (tags.isEmpty()) return dequeue()
+        val now = System.currentTimeMillis()
+        val db = dbHelper.writableDatabase
+        val placeholders = tags.joinToString(",") { "?" }
+        val args = (tags + listOf(now.toString())).toTypedArray()
+        val cursor = db.rawQuery(
+            "SELECT * FROM queue_items WHERE tag IN ($placeholders) AND next_attempt_at <= ? " +
+                "ORDER BY priority DESC, next_attempt_at ASC, enqueued_at ASC LIMIT 1",
+            args
+        )
+        var item: QueueItem? = null
+        if (cursor.moveToFirst()) {
+            item = cursorToItem(cursor)
+            val deleted = db.delete("queue_items", "id = ?", arrayOf(item.id.toString()))
+            if (deleted > 0) counter.decrementAndGet()
+        }
+        cursor.close()
+        return item
+    }
+
     private suspend fun processBatch(now: Long) {
         repeat(config.batchSize) {
             val item = dequeueReady(now) ?: return@repeat
@@ -267,7 +289,8 @@ class SqliteQueue(
             enqueuedAt = cursor.getLong(cursor.getColumnIndexOrThrow("enqueued_at")),
             retryCount = cursor.getInt(cursor.getColumnIndexOrThrow("retry_count")),
             nextAttemptAt = cursor.getLong(cursor.getColumnIndexOrThrow("next_attempt_at")),
-            metadata = deserializeMetadata(cursor.getString(cursor.getColumnIndexOrThrow("metadata")))
+            metadata = deserializeMetadata(cursor.getString(cursor.getColumnIndexOrThrow("metadata"))),
+            tag = cursor.getString(cursor.getColumnIndexOrThrow("tag")) ?: ""
         )
     }
 
@@ -286,7 +309,7 @@ class SqliteQueue(
     private inner class QueueDbHelper(
         context: Context,
         dbPath: String
-    ) : SQLiteOpenHelper(context, dbPath, null, 2) {
+    ) : SQLiteOpenHelper(context, dbPath, null, 3) {
 
         override fun onCreate(db: SQLiteDatabase) {
             db.execSQL("""
@@ -297,12 +320,14 @@ class SqliteQueue(
                     enqueued_at INTEGER NOT NULL,
                     retry_count INTEGER DEFAULT 0,
                     next_attempt_at INTEGER NOT NULL,
-                    metadata TEXT
+                    metadata TEXT,
+                    tag TEXT NOT NULL DEFAULT ''
                 )
             """.trimIndent())
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_queue_priority ON queue_items(priority)")
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_queue_enqueued ON queue_items(enqueued_at)")
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_queue_next_attempt ON queue_items(next_attempt_at)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_queue_tag ON queue_items(tag)")
         }
 
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -310,6 +335,10 @@ class SqliteQueue(
                 db.execSQL("ALTER TABLE queue_items ADD COLUMN next_attempt_at INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("UPDATE queue_items SET next_attempt_at = enqueued_at WHERE next_attempt_at = 0")
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_queue_next_attempt ON queue_items(next_attempt_at)")
+            }
+            if (oldVersion < 3) {
+                db.execSQL("ALTER TABLE queue_items ADD COLUMN tag TEXT NOT NULL DEFAULT ''")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_queue_tag ON queue_items(tag)")
             }
         }
     }

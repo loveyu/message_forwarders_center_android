@@ -1,0 +1,120 @@
+# 失败队列输入（FailQueueInput）完整示例
+# 演示：输出失败后放入失败队列，由 FailQueueInput 在下次 tick 时重新注入规则引擎
+#
+# 适用场景:
+#   - MQTT / WebSocket / TCP 输出在链接断开时失败，希望保留消息并稍后重试
+#   - 服务暂时不可用，消息需要延迟重发
+#   - 区分不同业务类型的失败消息，分别路由处理
+#
+# 架构图:
+#   HTTP Input → Rule → MQTT Output → [失败] → fail_store (SQLite)
+#                                                    ↓  (60s后, 按tick)
+#                                              FailQueueInput → Rule → [重新路由]
+#
+# FailQueueInput 注入的 InputMessage 携带以下 headers:
+#   X-IdType      - 失败消息类型（对应 onFailure.idType）
+#   X-OutputName  - 发出失败的输出源名称
+#   X-Source      - 原始输入源名称
+#   X-Rule        - 触发失败的规则名
+#   X-EnqueuedAt  - 入队时间戳（毫秒）
+#   X-FailedAt    - 输出失败时间戳（毫秒）
+#   X-RetryCount  - 已被重试次数
+#
+# 消息内容:
+#   data 字段与原始输出时完全相同（不做任何包装），可通过 {data} 直接访问
+
+
+links:
+  - id: mqtt_broker
+    dsn: mqtt://localhost:1883
+    reconnect:
+      enabled: true
+      interval: 10s
+
+queues:
+  sqlite:
+    # 持久化失败队列：服务重启后消息不丢失
+    fail_store:
+      path: data://queues/fail_queue.db
+      batchSize: 50
+      retryInterval: 10s   # SqliteQueue 自身的处理间隔（无需与 onFailure.delay 一致）
+      cleanup:
+        maxAge: 7d           # 超过 7 天的旧条目自动清理
+
+inputs:
+  http:
+    - name: http_in
+      dsn: "http://0.0.0.0:8080"
+      paths:
+        - /message
+
+  failQueue:
+    # 失败队列输入源：订阅 idType=mqtt_failures 的失败消息
+    - name: mqtt_retry_in
+      idTypes: [mqtt_failures]      # 只处理 mqtt_failures 类型
+      sqliteQueue: fail_store        # 从 fail_store 读取
+      batchSize: 20                  # 每次 tick 最多处理 20 条
+
+    # 也可订阅多种类型（来自同一队列的不同 idType）
+    - name: all_failures_in
+      idTypes: [mqtt_failures, ws_failures]
+      sqliteQueue: fail_store
+      batchSize: 10
+
+    # 不指定 idTypes 则处理队列中所有消息
+    - name: any_failure_in
+      sqliteQueue: fail_store
+      batchSize: 5
+
+outputs:
+  link:
+    - name: mqtt_out
+      linkId: mqtt_broker
+      role: producer
+      topic: device/messages
+      qos: 1
+      retry:
+        maxAttempts: 3          # 即时重试 3 次
+        interval: 2s            # 每次等待 2 秒
+      onFailure:
+        action: failQueue
+        idType: mqtt_failures   # 失败消息打上此标签
+        sqliteQueue: fail_store  # 写入持久化队列
+        delay: 60s              # 60 秒后重新注入（按 tick 近似）
+
+  http:
+    - name: http_fallback
+      url: http://fallback.example.com/receive
+      method: POST
+      timeout: 10s
+      retry:
+        maxAttempts: 2
+        interval: 3s
+
+rules:
+  # 正常路径：接收 HTTP 消息，发布到 MQTT
+  - name: forward_to_mqtt
+    from: http_in
+    pipeline:
+      - to: [mqtt_out]
+
+  # 重试路径：从失败队列重新注入的消息，路由到 HTTP fallback
+  # source 为 FailQueueInput 的 name（此处为 mqtt_retry_in）
+  - name: retry_via_http
+    from: mqtt_retry_in
+    pipeline:
+      - transform:
+          # 过滤条件：只处理真正的 mqtt_failures 类型（冗余安全）
+          filter: "$headers.X-IdType == 'mqtt_failures'"
+          # 可选：在 header 中附加重试标记
+          format: "{data}"
+        to: [http_fallback]
+
+  # 通用失败监控：记录所有失败消息
+  - name: monitor_all_failures
+    from: all_failures_in
+    pipeline:
+      - transform:
+          # 构造包含失败元信息的 JSON 日志
+          format: '{"failedOutput":"{$headers.X-OutputName}","idType":"{$headers.X-IdType}","source":"{$headers.X-Source}","failedAt":{$headers.X-FailedAt},"retryCount":{$headers.X-RetryCount}}'
+        to: [http_fallback]

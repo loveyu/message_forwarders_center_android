@@ -9,6 +9,8 @@ interface Queue {
 
     fun enqueue(item: QueueItem): Boolean
     fun dequeue(): QueueItem?
+    /** 从队列中取出第一个 tag 在 [tags] 中的就绪项（tags 为空表示不过滤）*/
+    fun dequeueByTag(tags: List<String>): QueueItem? = dequeue()
     fun peek(): QueueItem?
     fun size(): Int
     fun isEmpty(): Boolean
@@ -32,7 +34,9 @@ data class QueueItem(
     val metadata: Map<String, String> = emptyMap(),
     val enqueuedAt: Long = System.currentTimeMillis(),
     val retryCount: Int = 0,
-    val nextAttemptAt: Long = enqueuedAt
+    val nextAttemptAt: Long = enqueuedAt,
+    /** 路由标签，用于 FailQueueInput 按 idType 订阅 */
+    val tag: String = ""
 ) {
     val text: String
         get() = String(data)
