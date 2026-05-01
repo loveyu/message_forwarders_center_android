@@ -53,17 +53,27 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.automirrored.filled.Send
 import info.loveyu.mfca.config.HttpInputConfig
 import info.loveyu.mfca.config.HttpInputDsnParser
 import info.loveyu.mfca.config.HttpInputParsedConfig
+import info.loveyu.mfca.config.HttpOutputConfig
+import info.loveyu.mfca.config.InternalOutputConfig
+import info.loveyu.mfca.config.InternalOutputType
 import info.loveyu.mfca.config.LinkConfig
 import info.loveyu.mfca.config.LinkInputConfig
+import info.loveyu.mfca.config.LinkOutputConfig
 import info.loveyu.mfca.config.LinkType
 import info.loveyu.mfca.input.HttpInput
 import info.loveyu.mfca.input.HttpVirtualInput
 import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.link.LinkManager
+import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.service.ForwardService
+import info.loveyu.mfca.ui.theme.OutputChipBgDark
+import info.loveyu.mfca.ui.theme.OutputChipBgLight
+import info.loveyu.mfca.ui.theme.OutputChipBorderDark
+import info.loveyu.mfca.ui.theme.OutputChipBorderLight
 import info.loveyu.mfca.ui.theme.DisabledChipBgDark
 import info.loveyu.mfca.ui.theme.DisabledChipBgLight
 import info.loveyu.mfca.ui.theme.DisabledChipBorderDark
@@ -103,7 +113,7 @@ import java.net.URI
  * 组件类型
  */
 enum class ComponentType {
-    LINK, HTTP_INPUT, LINK_INPUT, RULE
+    LINK, HTTP_INPUT, LINK_INPUT, RULE, OUTPUT
 }
 
 /**
@@ -154,6 +164,15 @@ fun getAllComponentStatuses(context: Context): List<ComponentStatus> {
         }
         appConfig.rules.forEach { ruleConfig ->
             statuses.add(buildRuleStatus(context, ruleConfig))
+        }
+        appConfig.outputs.http.forEach { httpOutputConfig ->
+            statuses.add(buildHttpOutputStatus(httpOutputConfig))
+        }
+        appConfig.outputs.link.forEach { linkOutputConfig ->
+            statuses.add(buildLinkOutputStatus(context, linkOutputConfig))
+        }
+        appConfig.outputs.internal.forEach { internalOutputConfig ->
+            statuses.add(buildInternalOutputStatus(internalOutputConfig))
         }
     }
 
@@ -522,6 +541,89 @@ private fun isWildcardHost(host: String): Boolean {
     return host == "0.0.0.0" || host == "::" || host == "*"
 }
 
+private fun buildHttpOutputStatus(config: HttpOutputConfig): ComponentStatus {
+    val isRunning = OutputManager.getOutput(config.name)?.isAvailable() ?: false
+    val details = buildString {
+        append("Type: HTTP")
+        append("\nURL: ${config.url}")
+        append("\nMethod: ${config.method}")
+        config.timeout.let { append("\nTimeout: ${it.value}") }
+        config.retry?.let { append("\nRetry: max ${it.maxAttempts} × ${it.interval.value}") }
+        config.queue?.memoryQueue?.let { append("\nQueue: memory/$it") }
+        config.queue?.sqliteQueue?.let { append("\nQueue: sqlite/$it") }
+    }
+    return ComponentStatus(
+        id = config.name,
+        name = config.name,
+        type = ComponentType.OUTPUT,
+        isEnabled = true,
+        isRunning = isRunning,
+        details = details
+    )
+}
+
+private fun buildLinkOutputStatus(context: Context, config: LinkOutputConfig): ComponentStatus {
+    val enableResult = NetworkChecker.getEnableReason(context, config.whenCondition, config.deny)
+    val isRunning =
+        enableResult.enabled && (OutputManager.getOutput(config.name)?.isAvailable() ?: false)
+    val linkType = LinkManager.getLinkConfig(config.linkId)?.dsn?.let { LinkType.fromDsn(it) }
+    val typeStr =
+        when (linkType) {
+            LinkType.mqtt -> "MQTT"
+            LinkType.websocket -> "WebSocket"
+            LinkType.tcp -> "TCP"
+            else -> "Link"
+        }
+    val details = buildString {
+        append("Type: $typeStr Output")
+        append("\nLink: ${config.linkId}")
+        append("\nRole: ${config.role}")
+        config.topic?.let { append("\nTopic: $it") }
+        config.queue?.memoryQueue?.let { append("\nQueue: memory/$it") }
+        config.queue?.sqliteQueue?.let { append("\nQueue: sqlite/$it") }
+        if (config.whenCondition != null || config.deny != null) {
+            append(
+                "\n\n${NetworkChecker.getMatchedConditions(context, config.whenCondition, config.deny)}"
+            )
+        }
+    }
+    return ComponentStatus(
+        id = config.name,
+        name = config.name,
+        type = ComponentType.OUTPUT,
+        isEnabled = enableResult.enabled,
+        isRunning = isRunning,
+        notEnabledReason = enableResult.reason,
+        details = details
+    )
+}
+
+private fun buildInternalOutputStatus(config: InternalOutputConfig): ComponentStatus {
+    val isRunning = OutputManager.getOutput(config.name)?.isAvailable() ?: false
+    val typeStr =
+        when (config.type) {
+            InternalOutputType.clipboard -> "Clipboard"
+            InternalOutputType.file -> "File"
+            InternalOutputType.broadcast -> "Broadcast"
+            InternalOutputType.notify -> "Notify"
+            InternalOutputType.clipboardHistory -> "Clipboard History"
+        }
+    val details = buildString {
+        append("Type: $typeStr")
+        config.basePath?.let { append("\nPath: $it") }
+        config.fileName?.let { append("\nFile: $it") }
+        config.channel?.let { append("\nChannel: $it") }
+    }
+    return ComponentStatus(
+        id = config.name,
+        name = config.name,
+        type = ComponentType.OUTPUT,
+        isEnabled = true,
+        isRunning = isRunning,
+        details = details
+    )
+}
+
 fun getGroupedComponentStatuses(context: Context): List<Pair<ComponentType, List<ComponentStatus>>> {
     return getAllComponentStatuses(context)
         .groupBy { it.type }
@@ -535,6 +637,7 @@ fun getComponentTypeOrder(type: ComponentType): Int {
         ComponentType.HTTP_INPUT -> 1
         ComponentType.LINK_INPUT -> 2
         ComponentType.RULE -> 3
+        ComponentType.OUTPUT -> 4
     }
 }
 
@@ -678,6 +781,7 @@ fun ComponentCard(
             ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBgDark else HttpInputChipBgLight
             ComponentType.LINK_INPUT -> if (isDark) LinkInputChipBgDark else LinkInputChipBgLight
             ComponentType.RULE -> if (isDark) LinkInputChipBgDark else LinkInputChipBgLight
+            ComponentType.OUTPUT -> if (isDark) OutputChipBgDark else OutputChipBgLight
         }
     } else {
         if (isDark) DisabledChipBgDark else DisabledChipBgLight
@@ -689,6 +793,7 @@ fun ComponentCard(
             ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBorderDark else HttpInputChipBorderLight
             ComponentType.LINK_INPUT -> if (isDark) LinkInputChipBorderDark else LinkInputChipBorderLight
             ComponentType.RULE -> if (isDark) LinkInputChipBorderDark else LinkInputChipBorderLight
+            ComponentType.OUTPUT -> if (isDark) OutputChipBorderDark else OutputChipBorderLight
         }
     } else {
         if (isDark) DisabledChipBorderDark else DisabledChipBorderLight
@@ -1051,6 +1156,7 @@ private fun getComponentIcon(type: ComponentType): ImageVector {
         ComponentType.HTTP_INPUT -> Icons.Default.PlayArrow
         ComponentType.LINK_INPUT -> Icons.Default.PlayArrow
         ComponentType.RULE -> Icons.Default.Build
+        ComponentType.OUTPUT -> Icons.AutoMirrored.Filled.Send
     }
 }
 
@@ -1060,6 +1166,7 @@ fun getComponentTypeName(type: ComponentType): String {
         ComponentType.HTTP_INPUT -> "HTTP Input"
         ComponentType.LINK_INPUT -> "Link Input"
         ComponentType.RULE -> "Rule"
+        ComponentType.OUTPUT -> "Output"
     }
 }
 

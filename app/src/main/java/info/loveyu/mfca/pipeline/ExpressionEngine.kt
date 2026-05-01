@@ -97,6 +97,76 @@ class ExpressionEngine {
             }
         }
 
+        builtinFunctions["base64Encode"] = BuiltinFunction("base64Encode", 1) { args ->
+            val str = args.getOrNull(0)?.toString() ?: ""
+            android.util.Base64.encodeToString(str.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+        }
+
+        builtinFunctions["urlEncode"] = BuiltinFunction("urlEncode", 1) { args ->
+            val str = args.getOrNull(0)?.toString() ?: ""
+            try {
+                java.net.URLEncoder.encode(str, "UTF-8")
+            } catch (_: Exception) {
+                str
+            }
+        }
+
+        builtinFunctions["jsonEncode"] = BuiltinFunction("jsonEncode", 1) { args ->
+            val str = args.getOrNull(0)?.toString() ?: ""
+            str.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t")
+        }
+
+        builtinFunctions["httpBuildQuery"] = BuiltinFunction("httpBuildQuery", 1) { args ->
+            val arg = args.getOrNull(0) ?: return@BuiltinFunction ""
+            val json =
+                when (arg) {
+                    is JSONObject -> arg
+                    is String ->
+                        try {
+                            JSONObject(arg)
+                        } catch (_: Exception) {
+                            null
+                        }
+                    else -> null
+                }
+            if (json == null) {
+                return@BuiltinFunction try {
+                    java.net.URLEncoder.encode(arg.toString(), "UTF-8")
+                } catch (_: Exception) {
+                    arg.toString()
+                }
+            }
+            json
+                .keys()
+                .asSequence()
+                .map { key ->
+                    val v = json.opt(key)?.toString() ?: ""
+                    try {
+                        "${java.net.URLEncoder.encode(key, "UTF-8")}=${java.net.URLEncoder.encode(v, "UTF-8")}"
+                    } catch (_: Exception) {
+                        "$key=$v"
+                    }
+                }
+                .joinToString("&")
+        }
+
+        builtinFunctions["now"] = BuiltinFunction("now", 0) { _ -> System.currentTimeMillis() / 1000L }
+
+        builtinFunctions["nowMs"] = BuiltinFunction("nowMs", 0) { _ -> System.currentTimeMillis() }
+
+        builtinFunctions["nowDate"] = BuiltinFunction("nowDate", 1) { args ->
+            val format = args.getOrNull(0)?.toString()?.trim('"', '\'') ?: "yyyy-MM-dd HH:mm:ss"
+            try {
+                java.text.SimpleDateFormat(format, java.util.Locale.getDefault()).format(java.util.Date())
+            } catch (_: Exception) {
+                System.currentTimeMillis().toString()
+            }
+        }
+
         builtinFunctions["replace"] = BuiltinFunction("replace", 3) { args ->
             val str = args.getOrNull(0)?.toString() ?: ""
             val target = args.getOrNull(1)?.toString() ?: ""
@@ -943,11 +1013,12 @@ class ExpressionEngine {
     fun evaluateFormatTemplate(
         template: String,
         data: ByteArray,
-        headers: Map<String, String>
+        headers: Map<String, String>,
+        context: Map<String, String> = emptyMap()
     ): ByteArray {
         val dataStr = String(data)
         val json = try { JSONObject(dataStr) } catch (_: Exception) { null }
-        return doEvaluateFormatTemplate(template, dataStr, json, headers)
+        return doEvaluateFormatTemplate(template, dataStr, json, headers, context)
     }
 
     /**
@@ -957,18 +1028,20 @@ class ExpressionEngine {
         template: String,
         data: ByteArray,
         preParsedJson: JSONObject?,
-        headers: Map<String, String>
+        headers: Map<String, String>,
+        context: Map<String, String> = emptyMap()
     ): ByteArray {
         val dataStr = String(data)
         val json = preParsedJson ?: try { JSONObject(dataStr) } catch (_: Exception) { null }
-        return doEvaluateFormatTemplate(template, dataStr, json, headers)
+        return doEvaluateFormatTemplate(template, dataStr, json, headers, context)
     }
 
     private fun doEvaluateFormatTemplate(
         template: String,
         dataStr: String,
         json: JSONObject?,
-        headers: Map<String, String>
+        headers: Map<String, String>,
+        context: Map<String, String> = emptyMap()
     ): ByteArray {
 
         val result = StringBuilder()
@@ -987,7 +1060,7 @@ class ExpressionEngine {
                     continue
                 }
                 val expr = template.substring(i + 1, closeIdx).trim()
-                result.append(resolveFormatExpression(expr, dataStr, json, headers))
+                result.append(resolveFormatExpression(expr, dataStr, json, headers, context))
                 i = closeIdx + 1
             } else {
                 result.append(template[i])
@@ -1001,31 +1074,59 @@ class ExpressionEngine {
         expr: String,
         dataStr: String,
         json: JSONObject?,
-        headers: Map<String, String>
+        headers: Map<String, String>,
+        context: Map<String, String> = emptyMap()
     ): String {
         if (expr == "data") return dataStr
-        if (expr == "headers") return JSONObject(headers).toString()
+        if (expr == "headers") return JSONObject(headers as Map<*, *>).toString()
+
+        // Context variables: $rule, $source, $timestamp, $unix, etc. (but not $headers.X)
+        if (expr.startsWith("$") && !expr.startsWith("\$headers.")) {
+            val varName = expr.substring(1)
+            context[varName]?.let { return it }
+            context[expr]?.let { return it }
+            return when (varName) {
+                "timestamp" -> (System.currentTimeMillis() / 1000).toString()
+                "unix" -> System.currentTimeMillis().toString()
+                else -> ""
+            }
+        }
 
         // headers.X -> $headers.X
-        val normalizedExpr = if (expr.startsWith("headers.") && !expr.startsWith("\$headers.")) {
-            "\$$expr"
-        } else {
-            expr
-        }
+        val normalizedExpr =
+            if (expr.startsWith("headers.") && !expr.startsWith("\$headers.")) {
+                "\$$expr"
+            } else {
+                expr
+            }
 
         // $headers.X
         if (normalizedExpr.startsWith("\$headers.")) {
             return headers[normalizedExpr.substring(9)] ?: ""
         }
 
-        // 函数调用 (需要 JSON)
+        // Function call — works even when json is null (e.g. now(), base64Encode(data))
         val funcMatch = FUNC_CALL_REGEX.find(normalizedExpr)
-        if (funcMatch != null && json != null) {
-            val funcResult = evaluateExtractExpression(json, normalizedExpr, headers)
-            return funcResult?.let { String(it) } ?: ""
+        if (funcMatch != null) {
+            val funcName = funcMatch.groupValues[1]
+            val argsStr = funcMatch.groupValues[2]
+            val fn = builtinFunctions[funcName]
+            if (fn != null) {
+                val args =
+                    if (argsStr.isBlank()) emptyArray()
+                    else {
+                        parseFunctionArgs(argsStr)
+                            .map { arg ->
+                                resolveFormatArg(arg.trim(), dataStr, json, headers, context)
+                            }
+                            .toTypedArray()
+                    }
+                val result = fn.invoke(args)
+                return result?.toString() ?: ""
+            }
         }
 
-        // GJSON 路径提取 (需要 JSON)
+        // GJSON path extraction (needs JSON)
         if (json != null) {
             val extracted = extractPath(json, normalizedExpr, headers)
             if (extracted != null && extracted != JSONObject.NULL) {
@@ -1034,5 +1135,40 @@ class ExpressionEngine {
         }
 
         return ""
+    }
+
+    private fun resolveFormatArg(
+        arg: String,
+        dataStr: String,
+        json: JSONObject?,
+        headers: Map<String, String>,
+        context: Map<String, String>
+    ): Any? {
+        val stripped =
+            if (
+                arg.length >= 2 &&
+                    ((arg.startsWith('"') && arg.endsWith('"')) ||
+                        (arg.startsWith('\'') && arg.endsWith('\'')))
+            ) {
+                arg.substring(1, arg.length - 1)
+            } else {
+                arg
+            }
+        return when {
+            stripped == "data" || stripped == "\$data" -> dataStr
+            stripped.startsWith("\$") && !stripped.startsWith("\$headers.") -> {
+                val varName = stripped.substring(1)
+                context[varName]
+                    ?: context[stripped]
+                    ?: when (varName) {
+                        "timestamp" -> (System.currentTimeMillis() / 1000).toString()
+                        "unix" -> System.currentTimeMillis().toString()
+                        else -> null
+                    }
+            }
+            stripped.startsWith("\$headers.") -> headers[stripped.substring(9)]
+            json != null -> extractPath(json, stripped, headers)
+            else -> null
+        }
     }
 }

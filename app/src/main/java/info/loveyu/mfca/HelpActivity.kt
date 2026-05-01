@@ -304,6 +304,14 @@ private fun loadSampleFiles(context: Context): List<SampleFile> {
             description = "调度器配置 - 定时检查间隔、锁超时"
         ),
         SampleFileInfo(
+            fileName = "15_clipboard_history.yaml",
+            description = "剪贴板历史 - 多设备剪贴板同步与去重"
+        ),
+        SampleFileInfo(
+            fileName = "16_encode.yaml",
+            description = "数据编码封装 - base64/URL/JSON 编码与元信息注入"
+        ),
+        SampleFileInfo(
             fileName = "99_full_demo.yaml",
             description = "完整演示 - 智能家居场景"
         )

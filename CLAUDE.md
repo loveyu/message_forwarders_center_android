@@ -127,3 +127,9 @@ protocol://[username:password@]host:port[?param1=value1&param2=value2...]
 
 示例配置与演示文件位于 `app/src/main/assets/samples/`，详见该目录下的 README.md（仓库内）。
 
+## 示例配置文件列表维护
+
+**每次新增或调整 `app/src/main/assets/samples/` 下的文件后，必须同步更新 `HelpActivity.kt` 中的 `loadSampleFiles` 函数列表。**
+
+列表位于：`app/src/main/java/info/loveyu/mfca/HelpActivity.kt` → `private fun loadSampleFiles()` → `sampleList`
+

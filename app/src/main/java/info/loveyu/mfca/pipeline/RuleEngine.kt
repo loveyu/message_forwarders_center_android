@@ -183,7 +183,7 @@ class RuleEngine(
 
             // Apply transform if present
             if (!skipStep && transform != null) {
-                val transformed = applyTransform(transform, currentData, currentJson, inputMessage)
+                val transformed = applyTransform(transform, currentData, currentJson, inputMessage, rule.name)
                 if (transformed == null) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] extract [${transform.extract}] -> null, SKIPPED")
                     skipStep = true
@@ -272,7 +272,7 @@ class RuleEngine(
 
             // Apply transform if present
             if (!skipStep && transform != null) {
-                val transformed = applyTransform(transform, currentData, currentJson, inputMessage)
+                val transformed = applyTransform(transform, currentData, currentJson, inputMessage, rule.name)
                 if (transformed == null) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] extract [${transform.extract}] -> null, SKIPPED")
                     skipStep = true
@@ -325,7 +325,8 @@ class RuleEngine(
         transform: info.loveyu.mfca.config.TransformConfig,
         data: ByteArray,
         preParsedJson: JSONObject?,
-        inputMessage: InputMessage
+        inputMessage: InputMessage,
+        ruleName: String = ""
     ): ByteArray? {
         var currentData = data
 
@@ -348,7 +349,14 @@ class RuleEngine(
 
         // Apply format template
         transform.format?.let { template ->
-            return expressionEngine.evaluateFormatTemplate(template, currentData, json, inputMessage.headers)
+            val context =
+                mapOf(
+                    "rule" to ruleName,
+                    "source" to inputMessage.source,
+                    "timestamp" to (System.currentTimeMillis() / 1000).toString(),
+                    "unix" to System.currentTimeMillis().toString()
+                )
+            return expressionEngine.evaluateFormatTemplate(template, currentData, json, inputMessage.headers, context)
         }
 
         return currentData

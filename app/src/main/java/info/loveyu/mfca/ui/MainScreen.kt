@@ -93,6 +93,12 @@ import info.loveyu.mfca.ui.theme.LinkInputChipBorderDark
 import info.loveyu.mfca.ui.theme.LinkInputChipBorderLight
 import info.loveyu.mfca.ui.theme.LinkInputChipTextDark
 import info.loveyu.mfca.ui.theme.LinkInputChipTextLight
+import info.loveyu.mfca.ui.theme.OutputChipBgDark
+import info.loveyu.mfca.ui.theme.OutputChipBgLight
+import info.loveyu.mfca.ui.theme.OutputChipBorderDark
+import info.loveyu.mfca.ui.theme.OutputChipBorderLight
+import info.loveyu.mfca.ui.theme.OutputChipTextDark
+import info.loveyu.mfca.ui.theme.OutputChipTextLight
 import info.loveyu.mfca.ui.theme.StatusDisabledDark
 import info.loveyu.mfca.ui.theme.StatusDisabledLight
 import info.loveyu.mfca.ui.theme.StatusRunningDark
@@ -409,6 +415,7 @@ fun ComponentChip(component: ComponentStatus, isEnabled: Boolean, onClick: () ->
             ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBgDark else HttpInputChipBgLight
             ComponentType.LINK_INPUT -> if (isDark) LinkInputChipBgDark else LinkInputChipBgLight
             ComponentType.RULE -> if (isDark) LinkInputChipBgDark else LinkInputChipBgLight
+            ComponentType.OUTPUT -> if (isDark) OutputChipBgDark else OutputChipBgLight
         }
     } else {
         if (isDark) DisabledChipBgDark else DisabledChipBgLight
@@ -421,6 +428,7 @@ fun ComponentChip(component: ComponentStatus, isEnabled: Boolean, onClick: () ->
             ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBorderDark else HttpInputChipBorderLight
             ComponentType.LINK_INPUT -> if (isDark) LinkInputChipBorderDark else LinkInputChipBorderLight
             ComponentType.RULE -> if (isDark) LinkInputChipBorderDark else LinkInputChipBorderLight
+            ComponentType.OUTPUT -> if (isDark) OutputChipBorderDark else OutputChipBorderLight
         }
     } else {
         if (isDark) DisabledChipBorderDark else DisabledChipBorderLight
@@ -432,6 +440,7 @@ fun ComponentChip(component: ComponentStatus, isEnabled: Boolean, onClick: () ->
             ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipTextDark else HttpInputChipTextLight
             ComponentType.LINK_INPUT -> if (isDark) LinkInputChipTextDark else LinkInputChipTextLight
             ComponentType.RULE -> if (isDark) LinkInputChipTextDark else LinkInputChipTextLight
+            ComponentType.OUTPUT -> if (isDark) OutputChipTextDark else OutputChipTextLight
         }
     } else {
         if (isDark) DisabledChipTextDark else DisabledChipTextLight
