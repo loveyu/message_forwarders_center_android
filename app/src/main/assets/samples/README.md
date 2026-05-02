@@ -20,6 +20,9 @@
 | `12_http_shared_input.yaml` | HTTP 共享端口 - 多输入共用端口示例 |
 | `13_quick_settings.yaml` | 快捷设置 - quickSettings 通知栏按钮、快捷开关 |
 | `14_scheduler.yaml` | 调度器 - tickInterval / 事件触发 配置 |
+| `15_clipboard_history.yaml` | 剪贴板历史 - 去重同步与历史存储 |
+| `16_encode.yaml` | 数据编码封装 - base64/url/json/嵌套函数/UUID/IP |
+| `17_fail_queue.yaml` | 失败队列 - 输出重试与失败消息回收 |
 | `99_full_demo.yaml` | 完整演示 - 将多个模块组合的演示配置 |
 
 ## 链接配置说明
@@ -166,7 +169,86 @@ rules:
 - `"{headers.X}"` - 特定 Header 值
 - `"{data.field}"` - GJSON 路径提取
 - `"{base64Decode(content)}"` - 内置函数调用
+- `"{jsonEncode(base64Encode(data))}"` - 嵌套函数调用
 - `"{{"` - 转义为字面量 `{`
+
+#### 格式化上下文变量 ($var)
+
+| 变量 | 说明 |
+|------|------|
+| `{$rule}` | 当前规则名称 |
+| `{$source}` | 消息来源输入名称 |
+| `{$timestamp}` | 当前秒级时间戳（整数） |
+| `{$unix}` | 当前毫秒级时间戳（整数） |
+| `{$receivedAt}` | 消息被接收时的毫秒时间戳（InputManager 自动注入） |
+| `{$headers.X-ReceivedAt}` | 同 `$receivedAt`，通过 header 访问 |
+
+#### 内置函数列表
+
+**时间函数**
+
+| 函数 | 说明 | 示例输出 |
+|------|------|----------|
+| `now()` | 当前秒级时间戳（整数） | `1746184530` |
+| `now(3)` | 秒级时间戳，保留至多3位小数（ms精度） | `1746184530.123` |
+| `now(6)` | 秒级时间戳，保留至多6位小数 | `1746184530.123000` |
+| `nowMs()` | 当前毫秒时间戳（整数） | `1746184530123` |
+| `nowDate("yyyy-MM-dd HH:mm:ss")` | 当前时间格式化字符串 | `2026-05-02 19:55:30` |
+| `msToDate(ms, "yyyy-MM-dd")` | 毫秒时间戳转日期字符串 | `2026-05-02` |
+| `msToSec(ms)` | 毫秒转带小数秒（默认3位） | `1746184530.123` |
+| `msToSec(ms, 6)` | 毫秒转带小数秒（最多6位） | `1746184530.123000` |
+
+**UUID 函数**
+
+| 函数 | 说明 | 示例输出 |
+|------|------|----------|
+| `uuid()` / `uuidv4()` | UUID v4（随机） | `550e8400-e29b-41d4-a716-446655440000` |
+| `uuidv3("dns", "example.com")` | UUID v3（MD5，名称空间+名称） | 确定性，相同输入相同输出 |
+| `uuidv5("url", "https://example.com")` | UUID v5（SHA-1，名称空间+名称） | 确定性，相同输入相同输出 |
+| `uuidv7()` | UUID v7（时间有序，单调递增） | `01960d1a-b4c3-7abc-8def-123456789abc` |
+
+uuidv3/uuidv5 内置名称空间：`"dns"`, `"url"`, `"oid"`, `"x500"`, 或自定义 UUID 字符串。
+
+**随机/编码函数**
+
+| 函数 | 说明 | 示例输出 |
+|------|------|----------|
+| `randStr(16)` | 16位随机字母数字字符串（0-9a-zA-Z） | `aB3xK9mZ2qW7vNpQ` |
+| `base64Encode(data)` | Base64 编码 | `aGVsbG8=` |
+| `base64Decode(data)` | Base64 解码 | `hello` |
+| `urlEncode(data)` | URL 编码 | `hello+world` |
+| `jsonEncode(data)` | JSON 字符串转义 | `he said \"hello\"` |
+| `httpBuildQuery(data)` | JSON 对象转 URL query string | `key1=val1&key2=val2` |
+
+**字符串函数**
+
+| 函数 | 说明 |
+|------|------|
+| `contains(str, sub)` | 包含检查 |
+| `startsWith(str, prefix)` | 前缀检查 |
+| `endsWith(str, suffix)` | 后缀检查 |
+| `length(str)` | 字符串/数组长度 |
+| `toUpperCase(str)` | 转大写 |
+| `toLowerCase(str)` | 转小写 |
+| `trim(str)` | 去除首尾空白 |
+| `replace(str, old, new)` | 字符串替换 |
+| `substring(str, start, end)` | 子字符串 |
+
+**设备/网络函数**
+
+| 函数 | 说明 | 示例输出 |
+|------|------|----------|
+| `deviceId()` | 设备 ANDROID_ID（每应用签名+设备唯一） | `a1b2c3d4e5f60789` |
+| `localIp()` | 当前设备主 IPv4 地址 | `192.168.1.100` |
+| `localIps()` | 所有 IPv4 地址，逗号分隔 | `192.168.1.100,10.0.0.2` |
+
+**数学函数**
+
+| 函数 | 说明 |
+|------|------|
+| `abs(n)` | 绝对值 |
+| `ceil(n)` | 向上取整 |
+| `floor(n)` | 向下取整 |
 
 ### 富化 (enrich)
 - `"gotifyIcon:<linkId>"` - 从 Gotify REST API 获取应用图标并注入 `icon` 字段

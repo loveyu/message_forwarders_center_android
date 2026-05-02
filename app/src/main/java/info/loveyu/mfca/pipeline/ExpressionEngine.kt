@@ -182,11 +182,81 @@ class ExpressionEngine {
             java.util.UUID.randomUUID().toString()
         }
 
+        // uuid() is an alias for uuidv4()
+        builtinFunctions["uuid"] = builtinFunctions["uuidv4"]!!
+
+        // UUID v3: name-based, MD5 hash (RFC 4122)
+        // uuidv3(namespace, name) — namespace: "dns"|"url"|"oid"|"x500" or UUID string
+        builtinFunctions["uuidv3"] = BuiltinFunction("uuidv3", 2) { args ->
+            val nsStr = args.getOrNull(0)?.toString()?.trim('"', '\'') ?: "dns"
+            val name = args.getOrNull(1)?.toString() ?: ""
+            uuidFromHash("MD5", 3, nsStr, name)
+        }
+
+        // UUID v5: name-based, SHA-1 hash (RFC 4122)
+        // uuidv5(namespace, name) — namespace: "dns"|"url"|"oid"|"x500" or UUID string
+        builtinFunctions["uuidv5"] = BuiltinFunction("uuidv5", 2) { args ->
+            val nsStr = args.getOrNull(0)?.toString()?.trim('"', '\'') ?: "dns"
+            val name = args.getOrNull(1)?.toString() ?: ""
+            uuidFromHash("SHA-1", 5, nsStr, name)
+        }
+
+        // UUID v7: time-ordered, monotonic (draft-ietf-uuidrev-rfc4122bis)
+        // Format: 48-bit ms timestamp | 4-bit version(7) | 12-bit random | 2-bit variant | 62-bit random
+        builtinFunctions["uuidv7"] = BuiltinFunction("uuidv7", 0) { _ ->
+            val ms = System.currentTimeMillis()
+            val rng = java.security.SecureRandom()
+            val hi = (ms shl 16) or (7L shl 12) or (rng.nextLong() and 0x0FFFL)
+            val lo = (rng.nextLong() and 0x3FFFFFFFFFFFFFFFL) or (2L shl 62)
+            java.util.UUID(hi, lo).toString()
+        }
+
         builtinFunctions["randStr"] = BuiltinFunction("randStr", 1) { args ->
             val n = (args.getOrNull(0) as? Number)?.toInt()?.coerceAtLeast(0) ?: 16
             val charset = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
             val rng = java.security.SecureRandom()
             (1..n).map { charset[rng.nextInt(charset.length)] }.joinToString("")
+        }
+
+        // localIp() — 返回当前设备主要的 IPv4 地址（不需要 Context）
+        builtinFunctions["localIp"] = BuiltinFunction("localIp", 0) { _ ->
+            try {
+                val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+                var result: String? = null
+                outer@ while (interfaces.hasMoreElements()) {
+                    val ni = interfaces.nextElement()
+                    if (!ni.isUp || ni.isLoopback) continue
+                    val addrs = ni.inetAddresses
+                    while (addrs.hasMoreElements()) {
+                        val addr = addrs.nextElement()
+                        if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                            result = addr.hostAddress
+                            break@outer
+                        }
+                    }
+                }
+                result ?: ""
+            } catch (_: Exception) { "" }
+        }
+
+        // localIps() — 返回所有 IPv4 地址，逗号分隔
+        builtinFunctions["localIps"] = BuiltinFunction("localIps", 0) { _ ->
+            try {
+                val results = mutableListOf<String>()
+                val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+                while (interfaces.hasMoreElements()) {
+                    val ni = interfaces.nextElement()
+                    if (!ni.isUp || ni.isLoopback) continue
+                    val addrs = ni.inetAddresses
+                    while (addrs.hasMoreElements()) {
+                        val addr = addrs.nextElement()
+                        if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                            addr.hostAddress?.let { results.add(it) }
+                        }
+                    }
+                }
+                results.joinToString(",")
+            } catch (_: Exception) { "" }
         }
 
         builtinFunctions["msToDate"] = BuiltinFunction("msToDate", 2) { args ->
@@ -964,6 +1034,38 @@ class ExpressionEngine {
      */
     fun registerRawDataFunction(name: String, fn: RawDataFunction) {
         rawDataFunctions[name] = fn
+    }
+
+    /**
+     * UUID v3/v5 生成：对 namespace + name 进行 MD5/SHA-1 哈希，按 RFC 4122 设置版本和变体位
+     */
+    private fun uuidFromHash(algorithm: String, version: Int, nsStr: String, name: String): String {
+        val nsUuid = when (nsStr.lowercase()) {
+            "dns"  -> java.util.UUID.fromString("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+            "url"  -> java.util.UUID.fromString("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
+            "oid"  -> java.util.UUID.fromString("6ba7b812-9dad-11d1-80b4-00c04fd430c8")
+            "x500" -> java.util.UUID.fromString("6ba7b814-9dad-11d1-80b4-00c04fd430c8")
+            else   -> runCatching { java.util.UUID.fromString(nsStr) }
+                        .getOrDefault(java.util.UUID.fromString("6ba7b810-9dad-11d1-80b4-00c04fd430c8"))
+        }
+        // Encode namespace UUID as big-endian bytes
+        val nsBytes = ByteArray(16).also { buf ->
+            val msb = nsUuid.mostSignificantBits
+            val lsb = nsUuid.leastSignificantBits
+            for (i in 0..7) buf[i]     = ((msb ushr (56 - i * 8)) and 0xFF).toByte()
+            for (i in 0..7) buf[i + 8] = ((lsb ushr (56 - i * 8)) and 0xFF).toByte()
+        }
+        val nameBytes = name.toByteArray(Charsets.UTF_8)
+        val digest = java.security.MessageDigest.getInstance(algorithm)
+        digest.update(nsBytes)
+        val hash = digest.digest(nameBytes)
+        // Set version bits
+        hash[6] = ((hash[6].toInt() and 0x0F) or (version shl 4)).toByte()
+        // Set variant bits (RFC 4122 variant: 10xx xxxx)
+        hash[8] = ((hash[8].toInt() and 0x3F) or 0x80).toByte()
+        val msb = (0..7).fold(0L) { acc, i -> (acc shl 8) or (hash[i].toLong() and 0xFF) }
+        val lsb = (8..15).fold(0L) { acc, i -> (acc shl 8) or (hash[i].toLong() and 0xFF) }
+        return java.util.UUID(msb, lsb).toString()
     }
 
     /**
