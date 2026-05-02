@@ -354,7 +354,8 @@ class RuleEngine(
                     "rule" to ruleName,
                     "source" to inputMessage.source,
                     "timestamp" to (System.currentTimeMillis() / 1000).toString(),
-                    "unix" to System.currentTimeMillis().toString()
+                    "unix" to System.currentTimeMillis().toString(),
+                    "receivedAt" to (inputMessage.headers["X-ReceivedAt"] ?: System.currentTimeMillis().toString())
                 )
             return expressionEngine.evaluateFormatTemplate(template, currentData, json, inputMessage.headers, context)
         }

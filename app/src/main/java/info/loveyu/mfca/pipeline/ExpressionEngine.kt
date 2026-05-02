@@ -154,7 +154,18 @@ class ExpressionEngine {
                 .joinToString("&")
         }
 
-        builtinFunctions["now"] = BuiltinFunction("now", 0) { _ -> System.currentTimeMillis() / 1000L }
+        builtinFunctions["now"] = BuiltinFunction("now", -1) { args ->
+            val precision = (args.getOrNull(0) as? Number)?.toInt() ?: 0
+            val ms = System.currentTimeMillis()
+            if (precision <= 0) {
+                ms / 1000L
+            } else {
+                val secs = ms / 1000L
+                val millis = ms % 1000
+                val fracStr = millis.toString().padStart(3, '0').padEnd(precision, '0').take(precision)
+                "$secs.$fracStr"
+            }
+        }
 
         builtinFunctions["nowMs"] = BuiltinFunction("nowMs", 0) { _ -> System.currentTimeMillis() }
 
@@ -164,6 +175,40 @@ class ExpressionEngine {
                 java.text.SimpleDateFormat(format, java.util.Locale.getDefault()).format(java.util.Date())
             } catch (_: Exception) {
                 System.currentTimeMillis().toString()
+            }
+        }
+
+        builtinFunctions["uuidv4"] = BuiltinFunction("uuidv4", 0) { _ ->
+            java.util.UUID.randomUUID().toString()
+        }
+
+        builtinFunctions["randStr"] = BuiltinFunction("randStr", 1) { args ->
+            val n = (args.getOrNull(0) as? Number)?.toInt()?.coerceAtLeast(0) ?: 16
+            val charset = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            val rng = java.security.SecureRandom()
+            (1..n).map { charset[rng.nextInt(charset.length)] }.joinToString("")
+        }
+
+        builtinFunctions["msToDate"] = BuiltinFunction("msToDate", 2) { args ->
+            val ms = args.getOrNull(0)?.toString()?.toLongOrNull() ?: System.currentTimeMillis()
+            val format = args.getOrNull(1)?.toString()?.trim('"', '\'') ?: "yyyy-MM-dd HH:mm:ss"
+            try {
+                java.text.SimpleDateFormat(format, java.util.Locale.getDefault()).format(java.util.Date(ms))
+            } catch (_: Exception) {
+                ms.toString()
+            }
+        }
+
+        builtinFunctions["msToSec"] = BuiltinFunction("msToSec", -1) { args ->
+            val ms = args.getOrNull(0)?.toString()?.toLongOrNull() ?: System.currentTimeMillis()
+            val precision = (args.getOrNull(1) as? Number)?.toInt() ?: 3
+            if (precision <= 0) {
+                ms / 1000L
+            } else {
+                val secs = ms / 1000L
+                val millis = ms % 1000
+                val fracStr = millis.toString().padStart(3, '0').padEnd(precision, '0').take(precision)
+                "$secs.$fracStr"
             }
         }
 
@@ -1154,6 +1199,11 @@ class ExpressionEngine {
             } else {
                 arg
             }
+        // Nested function call: resolve recursively
+        if (FUNC_CALL_REGEX.matches(stripped)) {
+            return resolveFormatExpression(stripped, dataStr, json, headers, context)
+        }
+
         return when {
             stripped == "data" || stripped == "\$data" -> dataStr
             stripped.startsWith("\$") && !stripped.startsWith("\$headers.") -> {

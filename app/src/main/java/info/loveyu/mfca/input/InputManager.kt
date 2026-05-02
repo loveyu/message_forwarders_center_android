@@ -53,6 +53,13 @@ object InputManager {
         linkInputConfigs.addAll(config.inputs.link)
         LogManager.logDebug("INPUT", "Initializing InputManager with ${config.inputs.http.size} HTTP inputs, ${config.inputs.link.size} link inputs")
 
+        val timestampedHandler: (InputMessage) -> Unit = { msg ->
+            val enriched =
+                if ("X-ReceivedAt" in msg.headers) msg
+                else msg.copy(headers = msg.headers + ("X-ReceivedAt" to System.currentTimeMillis().toString()))
+            messageHandler(enriched)
+        }
+
         // HTTP inputs - group by linkId for shared mode
         val standaloneInputs = mutableListOf<HttpInputConfig>()
         val sharedGroups = mutableMapOf<String, MutableList<HttpInputConfig>>()
@@ -78,8 +85,7 @@ object InputManager {
                     deny = httpConfig.deny
                 )
             ))
-            input.setOnMessageListener { msg -> messageHandler(msg) }
-            LogManager.logDebug("INPUT", "Registered HTTP input: ${httpConfig.name} dsn=${httpConfig.dsn}")
+            input.setOnMessageListener { msg -> timestampedHandler(msg) }
         }
 
         // Shared HTTP inputs (with link_id → SharedHttpInput + HttpVirtualInputs)
@@ -109,7 +115,7 @@ object InputManager {
                         deny = httpConfig.deny
                     )
                 ))
-                virtualInput.setOnMessageListener { msg -> messageHandler(msg) }
+                virtualInput.setOnMessageListener { msg -> timestampedHandler(msg) }
                 LogManager.logDebug("INPUT", "Registered shared HTTP input: ${httpConfig.name} (link: $linkId)")
             }
 
@@ -145,7 +151,7 @@ object InputManager {
                         deny = linkConfig.deny
                     )
                 ))
-                input.setOnMessageListener { msg -> messageHandler(msg) }
+                input.setOnMessageListener { msg -> timestampedHandler(msg) }
                 LogManager.logDebug("INPUT", "Registered ${linkConfig.role} input: ${linkConfig.name} (link: $linkId)")
             }
         }
@@ -154,7 +160,7 @@ object InputManager {
 
         // FailQueue inputs (tick-driven)
         config.inputs.failQueue.forEach { fqConfig ->
-            val fqi = FailQueueInput(fqConfig, messageHandler)
+            val fqi = FailQueueInput(fqConfig, timestampedHandler)
             failQueueInputs.add(fqi)
             LogManager.logDebug("INPUT", "Registered fail queue input: ${fqConfig.name} (idTypes=${fqConfig.idTypes})")
         }
