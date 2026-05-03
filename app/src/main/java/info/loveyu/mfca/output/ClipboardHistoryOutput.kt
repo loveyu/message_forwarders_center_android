@@ -13,6 +13,7 @@ class ClipboardHistoryOutput(
 ) : InternalOutput {
 
     override val type: OutputType = OutputType.internal
+    override val formatSteps get() = config.format
 
     private val historyDbHelper = ClipboardHistoryDbHelper(context)
 

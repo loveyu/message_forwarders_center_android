@@ -29,6 +29,7 @@ class TcpOutput(
 ) : Output {
 
     override val type: OutputType = OutputType.tcp
+    override val formatSteps get() = config.format
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 

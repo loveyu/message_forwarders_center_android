@@ -15,6 +15,7 @@ class BroadcastOutput(
     private val config: InternalOutputConfig
 ) : InternalOutput {
     override val type: OutputType = OutputType.internal
+    override val formatSteps get() = config.format
 
     companion object {
         private val broadcastReceivers = mutableMapOf<String, (Intent) -> Unit>()

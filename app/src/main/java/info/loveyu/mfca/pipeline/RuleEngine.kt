@@ -6,6 +6,7 @@ import info.loveyu.mfca.clipboard.ClipboardHistoryDbHelper
 import info.loveyu.mfca.config.AppConfig
 import info.loveyu.mfca.config.RuleConfig
 import info.loveyu.mfca.input.InputMessage
+import info.loveyu.mfca.output.Output
 import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.output.OutputType
 import info.loveyu.mfca.queue.QueueItem
@@ -226,10 +227,15 @@ class RuleEngine(
                         LogManager.logDebug("RULE", "转发已暂停, 跳过输出: $outputName")
                         return@forEach
                     }
-                    val item = QueueItem(
-                        data = currentData,
-                        metadata = mapOf("rule" to rule.name)
-                    )
+                    val ruleCtx = buildRuleContext(rule.name, inputMessage)
+                    val (outData, outHeaders) =
+                        applyOutputFormat(output, currentData, inputMessage.headers, ruleCtx)
+                    val item =
+                        QueueItem(
+                            data = outData,
+                            metadata = mapOf("rule" to rule.name),
+                            headers = outHeaders
+                        )
                     output.send(item) { success ->
                         if (success) {
                             LogManager.logDebug("RULE", "Rule [${rule.name}] -> $outputName: OK")
@@ -310,10 +316,15 @@ class RuleEngine(
                         LogManager.logDebug("RULE", "转发已暂停, 跳过输出: $outputName")
                         return@forEach
                     }
-                    val item = QueueItem(
-                        data = currentData,
-                        metadata = mapOf("rule" to rule.name)
-                    )
+                    val ruleCtx = buildRuleContext(rule.name, inputMessage)
+                    val (outData, outHeaders) =
+                        applyOutputFormat(output, currentData, inputMessage.headers, ruleCtx)
+                    val item =
+                        QueueItem(
+                            data = outData,
+                            metadata = mapOf("rule" to rule.name),
+                            headers = outHeaders
+                        )
                     output.send(item) { success ->
                         if (success) {
                             LogManager.logDebug("RULE", "Rule [${rule.name}] -> $outputName: OK")
@@ -327,6 +338,25 @@ class RuleEngine(
                 }
             }
         }
+    }
+
+    private fun buildRuleContext(ruleName: String, inputMessage: InputMessage): Map<String, String> =
+        mapOf(
+            "rule" to ruleName,
+            "source" to inputMessage.source,
+            "timestamp" to (System.currentTimeMillis() / 1000).toString(),
+            "unix" to System.currentTimeMillis().toString(),
+            "receivedAt" to (inputMessage.headers["X-ReceivedAt"] ?: System.currentTimeMillis().toString())
+        )
+
+    private fun applyOutputFormat(
+        output: Output,
+        data: ByteArray,
+        headers: Map<String, String>,
+        context: Map<String, String>
+    ): Pair<ByteArray, Map<String, String>> {
+        val steps = output.formatSteps ?: return Pair(data, headers)
+        return expressionEngine.applyFormatSteps(steps, data, headers, context)
     }
 
     private fun applyTransform(
@@ -355,7 +385,20 @@ class RuleEngine(
             }
         }
 
-        // Apply format template
+        // Apply format template (string shorthand or array steps)
+        transform.formatSteps?.let { steps ->
+            val context =
+                mapOf(
+                    "rule" to ruleName,
+                    "source" to inputMessage.source,
+                    "timestamp" to (System.currentTimeMillis() / 1000).toString(),
+                    "unix" to System.currentTimeMillis().toString(),
+                    "receivedAt" to (inputMessage.headers["X-ReceivedAt"] ?: System.currentTimeMillis().toString())
+                )
+            val (newData, _) =
+                expressionEngine.applyFormatSteps(steps, currentData, inputMessage.headers, context)
+            return newData
+        }
         transform.format?.let { template ->
             val context =
                 mapOf(

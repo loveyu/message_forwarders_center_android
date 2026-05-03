@@ -29,6 +29,7 @@ class WebSocketOutput(
 ) : Output {
 
     override val type: OutputType = OutputType.websocket
+    override val formatSteps get() = config.format
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 

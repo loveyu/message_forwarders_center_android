@@ -316,6 +316,10 @@ private fun loadSampleFiles(context: Context): List<SampleFile> {
             description = "失败队列输入 - 输出失败后重新注入规则引擎"
         ),
         SampleFileInfo(
+            fileName = "18_output_format.yaml",
+            description = "输出格式化 - 每个输出独立格式化 data/header，不影响 pipeline"
+        ),
+        SampleFileInfo(
             fileName = "99_full_demo.yaml",
             description = "完整演示 - 智能家居场景"
         )

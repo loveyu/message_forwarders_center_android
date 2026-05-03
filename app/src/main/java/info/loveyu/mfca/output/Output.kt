@@ -1,5 +1,6 @@
 package info.loveyu.mfca.output
 
+import info.loveyu.mfca.config.OutputFormatStep
 import info.loveyu.mfca.queue.QueueItem
 
 /**
@@ -8,6 +9,10 @@ import info.loveyu.mfca.queue.QueueItem
 interface Output {
     val name: String
     val type: OutputType
+
+    /** 输出前的数据/header 格式化步骤（null 表示不处理） */
+    val formatSteps: List<OutputFormatStep>?
+        get() = null
 
     fun send(item: QueueItem, callback: ((Boolean) -> Unit)? = null)
     fun isAvailable(): Boolean

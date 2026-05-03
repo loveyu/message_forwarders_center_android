@@ -254,7 +254,9 @@ data class HttpOutputConfig(
     val method: String = "POST",
     val timeout: Duration = Duration("5s"),
     val retry: RetryConfig? = null,
-    val queue: QueueRefConfig? = null
+    val queue: QueueRefConfig? = null,
+    /** 输出前的数据格式化步骤 */
+    val format: List<OutputFormatStep>? = null
 )
 
 data class RetryConfig(
@@ -308,7 +310,9 @@ data class LinkOutputConfig(
     val onFailure: OnFailureConfig? = null,
     val queue: QueueRefConfig? = null,
     val whenCondition: String? = null,
-    val deny: String? = null
+    val deny: String? = null,
+    /** 输出前的数据格式化步骤 */
+    val format: List<OutputFormatStep>? = null
 )
 
 data class InternalOutputConfig(
@@ -317,7 +321,9 @@ data class InternalOutputConfig(
     val basePath: String? = null,
     val fileName: String? = null,
     val options: Map<String, Any>? = null,
-    val channel: String? = null
+    val channel: String? = null,
+    /** 输出前的数据格式化步骤 */
+    val format: List<OutputFormatStep>? = null
 )
 
 enum class InternalOutputType {
@@ -377,11 +383,28 @@ data class PipelineStep(
     val to: List<String> = emptyList()
 )
 
+/**
+ * 单个格式化步骤，指定目标和模板。
+ *
+ * target 语法:
+ *   $data              — 替换整个 data（模板求值结果为新的 data 字符串）
+ *   $data.field        — 设置/添加 data JSON 对象的 field 字段
+ *   $header            — 替换全部 headers（模板必须求值为 JSON 对象字符串）
+ *   $header.Key        — 设置/添加单个 header 键
+ */
+data class OutputFormatStep(
+    val target: String,
+    val template: String
+)
+
 data class TransformConfig(
     val extract: String? = null,
     val filter: String? = null,
     val detect: String? = null,
+    /** 字符串简写格式，等同于 formatSteps = [{target="\$data", template=format}] */
     val format: String? = null,
+    /** 数组格式，与 format 互斥，优先级高于 format */
+    val formatSteps: List<OutputFormatStep>? = null,
     val enrich: String? = null  // "enricherType:parameter", e.g., "gotifyIcon:gotify_link"
 )
 

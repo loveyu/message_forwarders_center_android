@@ -32,6 +32,7 @@ data class QueueItem(
     val data: ByteArray,
     val priority: Int = 0,
     val metadata: Map<String, String> = emptyMap(),
+    val headers: Map<String, String> = emptyMap(),
     val enqueuedAt: Long = System.currentTimeMillis(),
     val retryCount: Int = 0,
     val nextAttemptAt: Long = enqueuedAt,

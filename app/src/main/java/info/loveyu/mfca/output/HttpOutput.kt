@@ -24,6 +24,7 @@ class HttpOutput(
 ) : Output {
 
     override val type: OutputType = OutputType.http
+    override val formatSteps get() = config.format
 
     @Volatile
     private var available = true

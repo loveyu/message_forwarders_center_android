@@ -310,6 +310,20 @@ object ConfigLoader {
         )
     }
 
+    private fun parseFormatSteps(format: Any?): List<OutputFormatStep>? {
+        if (format == null) return null
+        return when (format) {
+            is String -> listOf(OutputFormatStep(target = "\$data", template = format))
+            is List<*> ->
+                format.mapNotNull { item ->
+                    (item as? Map<*, *>)?.entries?.firstOrNull()?.let { (k, v) ->
+                        OutputFormatStep(target = k.toString(), template = v.toString())
+                    }
+                }
+            else -> null
+        }
+    }
+
     private fun parseHttpOutputs(http: Any?): List<HttpOutputConfig> {
         if (http == null) return emptyList()
 
@@ -321,7 +335,8 @@ object ConfigLoader {
                     method = map["method"] as? String ?: "POST",
                     timeout = Duration(map["timeout"] as? String ?: "5s"),
                     retry = parseRetry(map["retry"]),
-                    queue = parseQueueRef(map["queue"])
+                    queue = parseQueueRef(map["queue"]),
+                    format = parseFormatSteps(map["format"])
                 )
             }
         }
@@ -361,7 +376,8 @@ object ConfigLoader {
                     onFailure = parseOnFailure(map["onFailure"]),
                     queue = parseQueueRef(map["queue"]),
                     whenCondition = map["when"] as? String,
-                    deny = map["deny"] as? String
+                    deny = map["deny"] as? String,
+                    format = parseFormatSteps(map["format"])
                 )
             }
         }
@@ -378,7 +394,8 @@ object ConfigLoader {
                     basePath = map["basePath"] as? String,
                     fileName = map["fileName"] as? String,
                     options = map["options"] as? Map<String, Any>,
-                    channel = map["channel"] as? String
+                    channel = map["channel"] as? String,
+                    format = parseFormatSteps(map["format"])
                 )
             }
         }
@@ -437,12 +454,16 @@ object ConfigLoader {
     private fun parseTransform(transform: Any?): TransformConfig? {
         if (transform == null) return null
         val map = transform as Map<String, Any>
+        val rawFormat = map["format"]
+        val formatSteps = if (rawFormat is List<*>) parseFormatSteps(rawFormat) else null
+        val formatStr = if (rawFormat is String) rawFormat else null
         return TransformConfig(
             extract = map["extract"] as? String,
             filter = map["filter"] as? String,
             detect = map["detect"] as? String,
-            format = map["format"] as? String,
-            enrich = map["enrich"] as? String
+            format = formatStr,
+            enrich = map["enrich"] as? String,
+            formatSteps = formatSteps
         )
     }
 

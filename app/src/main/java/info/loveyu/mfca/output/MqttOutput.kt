@@ -33,6 +33,7 @@ class MqttOutput(
 ) : Output {
 
     override val type: OutputType = OutputType.mqtt
+    override val formatSteps get() = config.format
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 

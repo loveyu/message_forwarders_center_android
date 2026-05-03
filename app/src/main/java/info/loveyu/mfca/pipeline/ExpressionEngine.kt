@@ -1075,6 +1075,80 @@ class ExpressionEngine {
         compiledFilters.clear()
     }
 
+    /**
+     * 应用格式化步骤序列，返回处理后的 (data, headers)。
+     *
+     * 每个步骤按顺序执行，前一步的输出作为下一步的输入。
+     *
+     * target 语法：
+     *   $data              替换整个 data（模板结果为新 data 字符串）
+     *   $data.field        设置/追加 data JSON 对象的 field 字段（data 非 JSON 时包装为对象）
+     *   $header            替换全部 headers（模板必须求值为 JSON 对象字符串）
+     *   $header.Key        设置/添加单个 header 键
+     */
+    fun applyFormatSteps(
+        steps: List<info.loveyu.mfca.config.OutputFormatStep>,
+        initialData: ByteArray,
+        initialHeaders: Map<String, String>,
+        context: Map<String, String> = emptyMap()
+    ): Pair<ByteArray, Map<String, String>> {
+        var data = initialData
+        var headers = initialHeaders
+
+        for (step in steps) {
+            val target = step.target.trim()
+            val template = step.template
+            val dataStr = String(data)
+            val json = try { org.json.JSONObject(dataStr) } catch (_: Exception) { null }
+
+            when {
+                target == "\$data" -> {
+                    val result = evaluateFormatTemplate(template, data, json, headers, context)
+                    data = result
+                }
+                target.startsWith("\$data.") -> {
+                    val field = target.removePrefix("\$data.")
+                    val result = String(evaluateFormatTemplate(template, data, json, headers, context))
+                    val obj = json ?: org.json.JSONObject()
+                    obj.put(field, parseJsonValueOrString(result))
+                    data = obj.toString().toByteArray()
+                }
+                target == "\$header" -> {
+                    val result = String(evaluateFormatTemplate(template, data, json, headers, context))
+                    headers = try {
+                        val parsed = org.json.JSONObject(result)
+                        val map = mutableMapOf<String, String>()
+                        for (key in parsed.keys()) map[key] = parsed.getString(key)
+                        map
+                    } catch (_: Exception) { headers }
+                }
+                target.startsWith("\$header.") -> {
+                    val key = target.removePrefix("\$header.")
+                    val result = String(evaluateFormatTemplate(template, data, json, headers, context))
+                    headers = headers + (key to result)
+                }
+                else -> {
+                    LogManager.logWarn("EXPR", "Unknown format target: $target")
+                }
+            }
+        }
+
+        return Pair(data, headers)
+    }
+
+    /** 尝试将字符串解析为 JSON 值（对象/数组/数字/布尔/null），失败则返回原字符串 */
+    private fun parseJsonValueOrString(s: String): Any {
+        val trimmed = s.trim()
+        return when {
+            trimmed == "null" -> org.json.JSONObject.NULL
+            trimmed == "true" -> true
+            trimmed == "false" -> false
+            trimmed.startsWith("{") -> runCatching { org.json.JSONObject(trimmed) }.getOrDefault(s)
+            trimmed.startsWith("[") -> runCatching { org.json.JSONArray(trimmed) }.getOrDefault(s)
+            else -> trimmed.toLongOrNull() ?: trimmed.toDoubleOrNull() ?: s
+        }
+    }
+
     enum class FilterTokenType {
         IDENT, STRING, NUMBER, BOOLEAN, OPERATOR, LOGICAL, PAREN, COMMA
     }

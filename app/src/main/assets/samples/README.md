@@ -23,6 +23,7 @@
 | `15_clipboard_history.yaml` | 剪贴板历史 - 去重同步与历史存储 |
 | `16_encode.yaml` | 数据编码封装 - base64/url/json/嵌套函数/UUID/IP |
 | `17_fail_queue.yaml` | 失败队列 - 输出重试与失败消息回收 |
+| `18_output_format.yaml` | 输出格式化 - 每个输出独立格式化 data/header，不影响 pipeline |
 | `99_full_demo.yaml` | 完整演示 - 将多个模块组合的演示配置 |
 
 ## 链接配置说明
@@ -140,6 +141,46 @@ rules:
     pipeline:
       - to: [some_output]
 ```
+
+## 输出格式化（Output Format）
+
+每个输出（`link`、`http`、`internal`）均支持 `format` 字段，对发送数据做二次处理，**不影响 pipeline 后续步骤**。
+
+### 字符串简写
+```yaml
+outputs:
+  link:
+    - name: mqtt_out
+      ...
+      format: '{"data":"{base64Encode(data)}","type":"text","ts":now(3)}'
+```
+等同于一步 `$data` 替换。
+
+### 数组步骤（分别处理 data 字段 / header）
+```yaml
+format:
+  - $data: '模板字符串'          # 整体替换 data（→ 字符串）
+  - $data.field: '模板字符串'   # 设置/追加 JSON 字段（若 data 不是 JSON 则包裹）
+  - $header: '{"K":"V",...}'    # 整体替换 headers（模板须返回 JSON 对象）
+  - $header.X-Key: '模板字符串' # 设置/追加单个 header
+```
+
+### 可用上下文变量
+| 变量 | 说明 |
+|------|------|
+| `{data}` | 原始数据字符串 |
+| `{data.field}` | JSON 路径提取 |
+| `{rule}` | 规则名称 |
+| `{source}` | 来源输入名 |
+| `{timestamp}` | 秒级时间戳 |
+| `{unix}` | 毫秒时间戳 |
+| `{receivedAt}` | 输入接收毫秒时间戳 |
+| `now()` / `now(3)` | 当前时间（可选小数位） |
+| `uuidv4()` | 随机 UUID |
+| `deviceId()` | Android ID |
+| `base64Encode(data)` | Base64 编码 |
+| `jsonEncode(data)` | JSON 字符串转义 |
+| `urlEncode(data)` | URL 编码 |
 
 ## 规则引擎语法
 

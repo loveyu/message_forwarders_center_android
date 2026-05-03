@@ -40,6 +40,7 @@ class NotifyOutput(
 ) : InternalOutput {
 
     override val type: OutputType = OutputType.internal
+    override val formatSteps get() = config.format
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val iconCacheManager = IconCacheManager.getInstance(context)
