@@ -4,7 +4,7 @@
 # 支持的编码函数（在 format 模板中使用 {func(arg)} 语法）:
 #   base64Encode(data)                   - 将数据进行 base64 编码
 #   urlEncode(data)                      - 将数据进行 URL 编码
-#   jsonEncode(data)                     - 对字符串进行 JSON 转义（转义 " \ \n 等）
+#   jsonEncode(data)                     - 对字符串进行 JSON 编码（返回带引号的 JSON 字符串值）
 #   httpBuildQuery(data)                 - 将 JSON 对象转为 URL query string
 #   now()                                - 当前秒级时间戳（整数）
 #   now(3)                               - 当前秒级时间戳，保留最多3位小数（毫秒精度），如 1234567890.123
@@ -18,7 +18,7 @@
 #   msToSec(ms, 6)                       - 将毫秒时间戳转为带小数秒（最多6位）
 #
 # 支持嵌套函数调用:
-#   {jsonEncode(base64Encode(data))}     - base64编码后再JSON转义（安全嵌入JSON字符串）
+#   {jsonEncode(base64Encode(data))}     - base64编码后再JSON编码（安全嵌入JSON值）
 #
 # 支持的上下文变量（在 format 模板中使用 {$var} 语法）:
 #   {$rule}        - 当前规则名称
@@ -69,7 +69,7 @@ rules:
     from: http_in
     pipeline:
       - transform:
-          format: '{"data":"{base64Encode(data)}","type":"text","timestamp":{now()},"rule":"{$rule}"}'
+          format: '{{"data":"{base64Encode(data)}","type":"text","timestamp":{now()},"rule":"{$rule}"}'
         to: [mqtt_publish]
 
   # 示例2: 高精度时间戳（类 Python time.time() 风格）
@@ -78,26 +78,26 @@ rules:
     from: http_in
     pipeline:
       - transform:
-          format: '{"time":{msToSec($receivedAt,3)},"uuid":"{uuidv4()}","deviceName":"mydevice","type":"text","content":"{jsonEncode(base64Encode(data))}","sendTime":{now(3)}}'
+          format: '{{"time":{msToSec($receivedAt,3)},"uuid":"{uuidv4()}","deviceName":"mydevice","type":"text","content":{jsonEncode(base64Encode(data))},"sendTime":{now(3)}}'
         to: [mqtt_publish]
 
-  # 示例3: JSON 字符串转义，安全嵌入 JSON 字段（嵌套函数调用）
+  # 示例3: JSON 字符串编码，安全嵌入 JSON 字段（嵌套函数调用）
   # 输入: he said "hello"
   # 输出: {"message":"he said \"hello\"","source":"http_in","time":1234567890}
   - name: json_escape_embed
     from: http_in
     pipeline:
       - transform:
-          format: '{"message":"{jsonEncode(data)}","source":"{$source}","time":{now()}}'
+          format: '{{"message":{jsonEncode(data)},"source":"{$source}","time":{now()}}'
         to: [http_api]
 
-  # 示例4: 对 base64 编码结果进行 JSON 转义（安全嵌入 JSON 字符串，防止 base64 padding 污染）
+  # 示例4: 对 base64 编码结果进行 JSON 编码（安全嵌入 JSON 值，防止 base64 padding 污染）
   # 嵌套调用: jsonEncode(base64Encode(data))
   - name: nested_encode
     from: http_in
     pipeline:
       - transform:
-          format: '{"payload":"{jsonEncode(base64Encode(data))}"}'
+          format: '{{"payload":{jsonEncode(base64Encode(data))}}}'
         to: [mqtt_publish]
 
   # 示例5: 生成唯一请求ID，附加随机token
@@ -106,7 +106,7 @@ rules:
     from: http_in
     pipeline:
       - transform:
-          format: '{"id":"{uuidv4()}","token":"{randStr(12)}","data":"{jsonEncode(data)}"}'
+          format: '{{"id":"{uuidv4()}","token":"{randStr(12)}","data":{jsonEncode(data)}}'
         to: [http_api]
 
   # 示例6: 从 JSON 数据提取特定字段后 base64 编码
@@ -117,7 +117,7 @@ rules:
     pipeline:
       - transform:
           filter: "type == 'text'"
-          format: '{"data":"{base64Encode(content)}","type":"{type}"}'
+          format: '{{"data":"{base64Encode(content)}","type":"{type}"}'
         to: [mqtt_publish]
 
   # 示例7: 利用 $receivedAt 获取消息接收时间，msToDate 转换为可读格式
@@ -126,7 +126,7 @@ rules:
     from: http_in
     pipeline:
       - transform:
-          format: '{"data":"{data}","receivedAt":"{msToDate($receivedAt,"yyyy-MM-dd HH:mm:ss")}","processedAt":"{nowDate("yyyy-MM-dd HH:mm:ss")}"}'
+          format: '{{"data":"{data}","receivedAt":"{msToDate($receivedAt,"yyyy-MM-dd HH:mm:ss")}","processedAt":"{nowDate("yyyy-MM-dd HH:mm:ss")}"}'
         to: [http_api]
 
   # 示例8: 将 JSON 对象转为 URL query string
@@ -173,7 +173,7 @@ rules:
     from: http_in
     pipeline:
       - transform:
-          format: '{"data":"{base64Encode(data)}","type":"text","timestamp":{now()},"rule":"{$rule}"}'
+          format: '{{"data":"{base64Encode(data)}","type":"text","timestamp":{now()},"rule":"{$rule}"}'
         to: [mqtt_publish]
 
   # 示例2: 将数据 URL 编码，适合拼接到 HTTP 参数
@@ -186,14 +186,14 @@ rules:
           format: "{urlEncode(data)}"
         to: [http_api]
 
-  # 示例3: JSON 字符串转义，安全嵌入 JSON 字段
+  # 示例3: JSON 字符串编码，安全嵌入 JSON 字段
   # 输入: he said "hello"
   # 输出: {"message":"he said \"hello\"","source":"http_in","time":1234567890}
   - name: json_escape_embed
     from: http_in
     pipeline:
       - transform:
-          format: '{"message":"{jsonEncode(data)}","source":"{$source}","time":{now()}}'
+          format: '{{"message":{jsonEncode(data)},"source":"{$source}","time":{now()}}'
         to: [http_api]
 
   # 示例4: 将 JSON 对象转为 URL query string
@@ -213,7 +213,7 @@ rules:
     from: http_in
     pipeline:
       - transform:
-          format: '{"payload":"{base64Encode(data)}","meta":{"rule":"{$rule}","source":"{$source}","timestamp":{$timestamp},"date":"{nowDate("yyyy-MM-dd HH:mm:ss")}"}}'
+          format: '{{"payload":"{base64Encode(data)}","meta":{{"rule":"{$rule}","source":"{$source}","timestamp":{$timestamp},"date":"{nowDate("yyyy-MM-dd HH:mm:ss")}"}}'
         to: [mqtt_publish, http_api]
 
   # 示例6: 从 JSON 数据提取特定字段后 base64 编码
@@ -224,7 +224,7 @@ rules:
     pipeline:
       - transform:
           filter: "type == 'text'"
-          format: '{"data":"{base64Encode(content)}","type":"{type}"}'
+          format: '{{"data":"{base64Encode(content)}","type":"{type}"}'
         to: [mqtt_publish]
 
   # 示例7: 格式化当前时间戳
@@ -233,5 +233,5 @@ rules:
     from: http_in
     pipeline:
       - transform:
-          format: '{"data":"{data}","createdAt":"{nowDate("yyyy-MM-dd HH:mm:ss")}","unix":{nowMs()}}'
+          format: '{{"data":"{data}","createdAt":"{nowDate("yyyy-MM-dd HH:mm:ss")}","unix":{nowMs()}}'
         to: [http_api]

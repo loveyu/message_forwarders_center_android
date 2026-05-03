@@ -7,8 +7,8 @@
 #
 # format 写在 outputs 各条目内，仅对当前输出生效，不污染 pipeline 数据流。
 #
-# 字符串简写（等同于 $data 整体替换）:
-#   format: '{"data":"{base64Encode(data)}","type":"text"}'
+# 字符串简写（等同于 $data 整体替换，注意 JSON 外层 { 需用 {{ 转义）:
+#   format: '{{"data":"{base64Encode(data)}","type":"text"}'
 #
 # 数组形式（支持多步骤、处理 data 字段 / header）:
 #   format:
@@ -47,7 +47,7 @@ outputs:
       role: producer
       topic: output/wrapped
       qos: 1
-      format: '{"data":"{base64Encode(data)}","type":"text","ts":"{now(3)}"}'
+      format: '{{"data":"{base64Encode(data)}","type":"text","ts":"{now(3)}"}'
 
     # 多字段示例：data 是 JSON，分别设置字段后再发送
     - name: mqtt_enriched
@@ -74,7 +74,7 @@ outputs:
     - name: http_json_envelope
       url: https://api.example.com/event
       method: POST
-      format: '{"payload":"{jsonEncode(data)}","source":"{$source}","ts":"{now(3)}","id":"{uuidv4()}"}'
+      format: '{{"payload":{jsonEncode(data)},"source":"{$source}","ts":"{now(3)}","id":"{uuidv4()}"}}'
 
   internal:
     # 剪贴板：截取 JSON 中的 content 字段写入

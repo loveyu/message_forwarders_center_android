@@ -113,11 +113,7 @@ class ExpressionEngine {
 
         builtinFunctions["jsonEncode"] = BuiltinFunction("jsonEncode", 1) { args ->
             val str = args.getOrNull(0)?.toString() ?: ""
-            str.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t")
+            JSONObject.quote(str)
         }
 
         builtinFunctions["httpBuildQuery"] = BuiltinFunction("httpBuildQuery", 1) { args ->
@@ -963,7 +959,7 @@ class ExpressionEngine {
             if (fn != null) {
                 // 解析参数
                 val args = parseFunctionArgs(argsStr).map { arg ->
-                    extractPath(json, arg.trim(), headers)
+                    resolveExtractArg(json, arg.trim(), headers)
                 }.toTypedArray()
 
                 val result = fn.invoke(args)
@@ -979,6 +975,36 @@ class ExpressionEngine {
 
         // 否则作为普通路径处理
         return extractAndTransform(json, trimmed)
+    }
+
+    private fun resolveExtractArg(
+        json: Any?,
+        arg: String,
+        headers: Map<String, String>?
+    ): Any? {
+        // Strip surrounding quotes for literal string args
+        val stripped =
+            if (
+                arg.length >= 2 &&
+                    ((arg.startsWith('"') && arg.endsWith('"')) ||
+                        (arg.startsWith('\'') && arg.endsWith('\'')))
+            ) {
+                return arg.substring(1, arg.length - 1)
+            } else {
+                arg
+            }
+        // Nested function call
+        if (FUNC_CALL_REGEX.matches(stripped)) {
+            return evaluateExtractExpression(json, stripped, headers)?.let { String(it) }
+        }
+        // Try JSON path extraction first
+        val pathResult = extractPath(json, stripped, headers)
+        if (pathResult != null) return pathResult
+        // Fallback: literal number
+        stripped.toIntOrNull()?.let { return it }
+        stripped.toLongOrNull()?.let { return it }
+        stripped.toDoubleOrNull()?.let { return it }
+        return null
     }
 
     private fun parseFunctionArgs(argsStr: String): List<String> {
@@ -1476,8 +1502,19 @@ class ExpressionEngine {
                     }
             }
             stripped.startsWith("\$headers.") -> headers[stripped.substring(9)]
-            json != null -> extractPath(json, stripped, headers)
-            else -> null
+            json != null -> {
+                val pathResult = extractPath(json, stripped, headers)
+                if (pathResult != null) pathResult
+                else {
+                    stripped.toIntOrNull()
+                        ?: stripped.toLongOrNull()
+                        ?: stripped.toDoubleOrNull()
+                }
+            }
+            else ->
+                stripped.toIntOrNull()
+                    ?: stripped.toLongOrNull()
+                    ?: stripped.toDoubleOrNull()
         }
     }
 }

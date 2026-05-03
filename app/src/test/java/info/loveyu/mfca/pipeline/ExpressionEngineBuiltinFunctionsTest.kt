@@ -144,13 +144,24 @@ class ExpressionEngineBuiltinFunctionsTest : ExpressionEngineBaseTest() {
     }
 
     @Test
-    fun `jsonEncode - escapes special characters`() {
+    fun `jsonEncode - returns quoted JSON string`() {
         val json = json("""{"text":"line1\nline2\ttab\"quote"}""")
         val result = engine.evaluateExtractExpression(json, "jsonEncode(text)")
         val s = String(result!!)
+        // JSONObject.quote() wraps in quotes and escapes special chars
+        assertTrue(s.startsWith("\""))
+        assertTrue(s.endsWith("\""))
         assertTrue(s.contains("\\n"))
         assertTrue(s.contains("\\t"))
         assertTrue(s.contains("\\\""))
+    }
+
+    @Test
+    fun `jsonEncode - plain text returns quoted string`() {
+        val json = json("""{"text":"hello"}""")
+        val result = engine.evaluateExtractExpression(json, "jsonEncode(text)")
+        val s = String(result!!)
+        assertEquals(""""hello"""", s)
     }
 
     @Test
@@ -193,6 +204,20 @@ class ExpressionEngineBuiltinFunctionsTest : ExpressionEngineBaseTest() {
     }
 
     @Test
+    fun `now 6 - returns float string with 6 decimal places`() {
+        val json = json("""{"dummy":1}""")
+        val result = engine.evaluateExtractExpression(json, "now(6)")
+        val s = String(result!!)
+        // now(6) should return a float string like "1746184530.123456"
+        assertTrue(s.contains("."))
+        val parts = s.split(".")
+        assertEquals(2, parts.size)
+        assertEquals(6, parts[1].length)
+        val floatVal = s.toDouble()
+        assertTrue(floatVal > 0)
+        val nowSec = System.currentTimeMillis() / 1000.0
+        assertTrue(floatVal <= nowSec + 1)
+    }
     fun `nowMs - returns milliseconds timestamp`() {
         val json = json("""{"dummy":1}""")
         val result = engine.evaluateExtractExpression(json, "nowMs()")
