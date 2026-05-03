@@ -16,6 +16,11 @@
 #     - $data.field: 模板字符串    # 设置/追加 JSON 字段
 #     - $header: '{"K":"V"}'       # 整体替换 headers（模板结果必须是 JSON 对象）
 #     - $header.X-Key: 模板字符串  # 设置/追加单个 header
+#     - $delete: ["field1","field2"] # 从 data JSON 中删除字段
+#     - $data:                          # Map 形式删除
+#         delete: ["field1", "field2"]
+#     - $header:                        # 删除 headers
+#         delete: ["X-Unwanted"]
 #
 # 可用上下文变量（在模板中通过 {varName} 引用）:
 #   {data}           - 原始数据（字符串）
@@ -77,6 +82,14 @@ outputs:
       type: clipboard
       format:
         - $data: '{data.content}'
+
+    # 通知：删除敏感字段后再发送
+    - name: notify_stripped
+      type: notify
+      title: "消息"
+      format:
+        - $delete: ["password", "token", "secret"]
+        - $data: '{data.message}'
 
 links:
   - name: mqtt_broker

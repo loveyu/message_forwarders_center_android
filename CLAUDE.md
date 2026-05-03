@@ -103,7 +103,7 @@ protocol://[username:password@]host:port[?param1=value1&param2=value2...]
 - extract: GJSON 路径提取（`"data.temperature"`, `"$raw"`, `"base64Decode(content)"`）
 - filter: 表达式过滤（`"len(data.items) > 0"`, `"path == value"`, `"startsWith"`, `"$headers.X"`）
 - detect: 类型检测（`image`, `json`, `text`）
-- format: 模板格式化（`"{headers}\n{data}"`, `"{data.field}"`）
+- format: 模板格式化（`"{headers}\n{data}"`, `"{data.field}"`）、字段删除（`$delete: ["field"]`）
 - enrich: 数据富化（`"gotifyIcon:<linkId>"`）
 - onError: 错误处理管道（每条规则可选）
 

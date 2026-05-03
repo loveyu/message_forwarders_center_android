@@ -1101,6 +1101,65 @@ class ExpressionEngine {
             val dataStr = String(data)
             val json = try { org.json.JSONObject(dataStr) } catch (_: Exception) { null }
 
+            // Support delete operations when raw is provided as Map/List
+            if (step.raw != null) {
+                when (val raw = step.raw) {
+                    is Map<*, *> -> {
+                        // Map form: { delete: ["a","b"] }
+                        if (raw.containsKey("delete")) {
+                            val delVal = raw["delete"]
+                            val keysToDelete = when (delVal) {
+                                is List<*> -> delVal.mapNotNull { it?.toString() }
+                                is String -> {
+                                    // comma separated or JSON array string
+                                    if (delVal.trim().startsWith("[")) {
+                                        try {
+                                            val arr = org.json.JSONArray(delVal)
+                                            (0 until arr.length()).mapNotNull { i -> arr.optString(i) }
+                                        } catch (_: Exception) { delVal.split(',').map { it.trim() } }
+                                    } else {
+                                        delVal.split(',').map { it.trim() }
+                                    }
+                                }
+                                else -> listOfNotNull(delVal?.toString())
+                            }
+
+                            if (target == "\$data" || target == "\$delete") {
+                                // delete from data JSON object (top-level or nested path using dot)
+                                val obj = json
+                                if (obj != null) {
+                                    for (k in keysToDelete) {
+                                        removeJsonPath(obj, k)
+                                    }
+                                    data = obj.toString().toByteArray()
+                                }
+                            } else if (target == "\$header" || target.startsWith("\$header.")) {
+                                var mutableHeaders = headers.toMutableMap()
+                                for (k in keysToDelete) {
+                                    mutableHeaders.remove(k)
+                                }
+                                headers = mutableHeaders.toMap()
+                            }
+
+                            // processed delete - continue to next step
+                            continue
+                        }
+                    }
+                    is List<*> -> {
+                        // list shorthand: - $delete: ["a","b"]
+                        if (target == "\$delete" || target == "\$data") {
+                            val keysToDelete = raw.mapNotNull { it?.toString() }
+                            val obj = json
+                            if (obj != null) {
+                                for (k in keysToDelete) removeJsonPath(obj, k)
+                                data = obj.toString().toByteArray()
+                            }
+                            continue
+                        }
+                    }
+                }
+            }
+
             when {
                 target == "\$data" -> {
                     val result = evaluateFormatTemplate(template, data, json, headers, context)
@@ -1146,6 +1205,30 @@ class ExpressionEngine {
             trimmed.startsWith("{") -> runCatching { org.json.JSONObject(trimmed) }.getOrDefault(s)
             trimmed.startsWith("[") -> runCatching { org.json.JSONArray(trimmed) }.getOrDefault(s)
             else -> trimmed.toLongOrNull() ?: trimmed.toDoubleOrNull() ?: s
+        }
+    }
+
+    /**
+     * 从 JSONObject 中删除指定路径的字段。
+     * 支持顶层键删除（如 "password"）和点号路径嵌套删除（如 "data.nested.field"）。
+     * 路径不存在时静默跳过。
+     */
+    private fun removeJsonPath(obj: JSONObject, path: String) {
+        val parts = path.split(".")
+        if (parts.size == 1) {
+            obj.remove(parts[0])
+            return
+        }
+        var current: Any? = obj
+        for (i in 0 until parts.size - 1) {
+            current = when (current) {
+                is JSONObject -> current.opt(parts[i])
+                else -> return
+            } ?: return
+        }
+        val lastKey = parts.last()
+        when (current) {
+            is JSONObject -> current.remove(lastKey)
         }
     }
 

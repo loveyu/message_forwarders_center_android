@@ -163,6 +163,11 @@ format:
   - $data.field: '模板字符串'   # 设置/追加 JSON 字段（若 data 不是 JSON 则包裹）
   - $header: '{"K":"V",...}'    # 整体替换 headers（模板须返回 JSON 对象）
   - $header.X-Key: '模板字符串' # 设置/追加单个 header
+  - $delete: ["field1","field2"] # 从 data JSON 删除字段
+  - $data:                        # Map 形式删除 data 字段
+      delete: ["field1", "field2"]
+  - $header:                      # Map 形式删除 headers
+      delete: ["X-Unwanted"]
 ```
 
 ### 可用上下文变量

@@ -313,11 +313,16 @@ object ConfigLoader {
     private fun parseFormatSteps(format: Any?): List<OutputFormatStep>? {
         if (format == null) return null
         return when (format) {
-            is String -> listOf(OutputFormatStep(target = "\$data", template = format))
+            is String -> listOf(OutputFormatStep(target = "\$data", template = format, raw = null))
             is List<*> ->
                 format.mapNotNull { item ->
                     (item as? Map<*, *>)?.entries?.firstOrNull()?.let { (k, v) ->
-                        OutputFormatStep(target = k.toString(), template = v.toString())
+                        if (v is String) {
+                            OutputFormatStep(target = k.toString(), template = v, raw = null)
+                        } else {
+                            // Preserve raw non-string value (List/Map) for special ops like delete
+                            OutputFormatStep(target = k.toString(), template = v.toString(), raw = v)
+                        }
                     }
                 }
             else -> null

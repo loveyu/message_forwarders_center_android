@@ -259,27 +259,33 @@ private fun ComponentListItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Text(
-                        text = component.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                    Icon(
+                        imageVector = getComponentIcon(component.type),
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(18.dp)
                     )
-                    Text(
-                        text = when {
-                            component.error != null -> "错误"
-                            component.isRunning -> "运行中"
-                            component.isEnabled -> "待命"
-                            else -> "未启用"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = statusColor
-                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = component.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = getComponentTypeName(component.type),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 Icon(
                     imageVector = when {
@@ -292,6 +298,17 @@ private fun ComponentListItem(
                     modifier = Modifier.size(18.dp)
                 )
             }
+
+            Text(
+                text = when {
+                    component.error != null -> "错误"
+                    component.isRunning -> "运行中"
+                    component.isEnabled -> "待命"
+                    else -> "未启用"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = statusColor
+            )
 
             if (component.notEnabledReason != null) {
                 Text(

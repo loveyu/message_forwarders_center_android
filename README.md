@@ -181,7 +181,7 @@ rules:
 | `extract` | GJSON 路径提取 | `"data.temperature"`, `"$raw"`, `"base64Decode(content)"` |
 | `filter` | 表达式过滤 | `"len(data.items) > 0"`, `"path == value"` |
 | `detect` | 类型检测 | `"image"`, `"json"`, `"text"` |
-| `format` | 模板格式化 | `"{headers}\n{data}"`, `"{data.field}"`, `"base64Decode(content)"` |
+| `format` | 模板格式化 | `"{headers}\n{data}"`, `"{data.field}"`, `"base64Decode(content)"`, `$delete: ["field"]` |
 | `enrich` | 数据富化 | `"gotifyIcon:<linkId>"` |
 
 #### Filter 支持的操作符
@@ -302,6 +302,10 @@ inputs:
 | [`12_http_shared_input.yaml`](app/src/main/assets/samples/12_http_shared_input.yaml) | HTTP 共享端口示例 |
 | [`13_quick_settings.yaml`](app/src/main/assets/samples/13_quick_settings.yaml) | 通知栏快捷设置示例 |
 | [`14_scheduler.yaml`](app/src/main/assets/samples/14_scheduler.yaml) | 调度器配置 |
+| [`15_clipboard_history.yaml`](app/src/main/assets/samples/15_clipboard_history.yaml) | 剪贴板历史 |
+| [`16_encode.yaml`](app/src/main/assets/samples/16_encode.yaml) | 数据编码封装 |
+| [`17_fail_queue.yaml`](app/src/main/assets/samples/17_fail_queue.yaml) | 失败队列 |
+| [`18_output_format.yaml`](app/src/main/assets/samples/18_output_format.yaml) | 输出格式化 |
 | [`99_full_demo.yaml`](app/src/main/assets/samples/99_full_demo.yaml) | 完整演示 (组合示例) |
 
 ## 状态栏 / 服务状态显示

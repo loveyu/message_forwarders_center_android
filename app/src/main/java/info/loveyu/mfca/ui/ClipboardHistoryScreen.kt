@@ -14,18 +14,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -132,115 +126,112 @@ fun ClipboardHistoryContent(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(contentPadding)) {
-        OutlinedTextField(
-            value = searchKeyword,
-            onValueChange = { searchKeyword = it },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp)
-                .height(48.dp),
-            placeholder = {
+    var showSearchBar by remember { mutableStateOf(false) }
+    Box(modifier = Modifier.fillMaxSize().padding(contentPadding)) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (searchKeyword.isNotBlank() && totalCount > 0) {
                 Text(
-                    "搜索内容...",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            },
-            leadingIcon = {
-                Icon(
-                    Icons.Default.Search,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp)
-                )
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            textStyle = MaterialTheme.typography.bodyLarge
-        )
-
-        if (searchKeyword.isNotBlank() && totalCount > 0) {
-            Text(
-                text = "共 $totalCount 条记录",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-            )
-        }
-
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else if (records.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = "暂无剪贴板记录",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = "共 $totalCount 条记录",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                 )
             }
-        } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
-            ) {
-                itemsIndexed(
-                    items = records,
-                    key = { _, record -> record.id }
-                ) { _, record ->
-                    val urls = remember(record.content) { extractUrls(record.content) }
-                    val isPureUrl = remember(record.content) { isSingleUrl(record.content) }
 
-                    ClipboardRecordCard(
-                        record = record,
-                        urls = urls,
-                        isPureUrl = isPureUrl,
-                        onCopy = { copyRecord(record) },
-                        onOpenDetail = {
-                            ClipboardDetailActivity.start(context, record.id)
-                        },
-                        onOpenPreview = {
-                            ClipboardPreviewActivity.start(context, record.id)
-                        },
-                        onTogglePin = {
-                            scope.launch(Dispatchers.IO) {
-                                dbHelper.updatePinned(record.id, !record.pinned)
-                                loadRecords()
-                            }
-                        },
-                        onOpenLink = {
-                            when {
-                                urls.isEmpty() -> {}
-                                urls.size == 1 -> openUrl(context, urls.first())
-                                else -> linkPickerUrls = urls
-                            }
-                        },
-                        onDelete = {
-                            scope.launch(Dispatchers.IO) {
-                                if (record.notificationPinned) {
-                                    record.notificationId?.let { nid ->
-                                        ClipboardNotificationHelper.unpinNotification(
-                                            context,
-                                            nid
-                                        )
-                                    }
-                                }
-                                dbHelper.deleteById(record.id)
-                                launch(Dispatchers.Main) { loadRecords() }
-                            }
-                        },
-                        onClick = {
-                            if (isPureUrl && urls.size == 1) {
-                                openUrl(context, urls.first())
-                            } else {
-                                ClipboardDetailActivity.start(context, record.id)
-                            }
-                        }
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (records.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "暂无剪贴板记录",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                ) {
+                    itemsIndexed(
+                        items = records,
+                        key = { _, record -> record.id }
+                    ) { _, record ->
+                        val urls = remember(record.content) { extractUrls(record.content) }
+                        val isPureUrl = remember(record.content) { isSingleUrl(record.content) }
+
+                        ClipboardRecordCard(
+                            record = record,
+                            urls = urls,
+                            isPureUrl = isPureUrl,
+                            onCopy = { copyRecord(record) },
+                            onOpenDetail = {
+                                ClipboardDetailActivity.start(context, record.id)
+                            },
+                            onOpenPreview = {
+                                ClipboardPreviewActivity.start(context, record.id)
+                            },
+                            onTogglePin = {
+                                scope.launch(Dispatchers.IO) {
+                                    dbHelper.updatePinned(record.id, !record.pinned)
+                                    loadRecords()
+                                }
+                            },
+                            onOpenLink = {
+                                when {
+                                    urls.isEmpty() -> {}
+                                    urls.size == 1 -> openUrl(context, urls.first())
+                                    else -> linkPickerUrls = urls
+                                }
+                            },
+                            onDelete = {
+                                scope.launch(Dispatchers.IO) {
+                                    if (record.notificationPinned) {
+                                        record.notificationId?.let { nid ->
+                                            ClipboardNotificationHelper.unpinNotification(
+                                                context,
+                                                nid
+                                            )
+                                        }
+                                    }
+                                    dbHelper.deleteById(record.id)
+                                    launch(Dispatchers.Main) { loadRecords() }
+                                }
+                            },
+                            onClick = {
+                                if (isPureUrl && urls.size == 1) {
+                                    openUrl(context, urls.first())
+                                } else {
+                                    ClipboardDetailActivity.start(context, record.id)
+                                }
+                            }
+                        )
+                    }
+                }
             }
+        }
+
+        // Floating search FAB + bottom search bar
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = 16.dp)
+        ) {
+            FloatingSearchBar(
+                visible = showSearchBar,
+                keyword = searchKeyword,
+                onKeywordChange = { searchKeyword = it },
+                onRequestShow = { showSearchBar = true },
+                onRequestHide = {
+                    showSearchBar = false
+                    searchKeyword = ""
+                },
+                placeholder = "搜索内容..."
+            )
         }
     }
 

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
@@ -1134,11 +1135,13 @@ fun ComponentDetailSheet(
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text(
-                text = component.details.ifEmpty { "无详细信息" },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            SelectionContainer {
+                Text(
+                    text = component.details.ifEmpty { "无详细信息" },
+                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -1180,7 +1183,7 @@ private fun StatusItem(
     }
 }
 
-private fun getComponentIcon(type: ComponentType): ImageVector {
+fun getComponentIcon(type: ComponentType): ImageVector {
     return when (type) {
         ComponentType.LINK -> Icons.Default.Star
         ComponentType.HTTP_INPUT -> Icons.Default.PlayArrow

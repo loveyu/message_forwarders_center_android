@@ -274,114 +274,134 @@ fun NotifyHistoryContent(
         }
     ) {
         // Main content
-        Column(modifier = Modifier.fillMaxSize().padding(contentPadding)) {
-            NotifySearchBar(keyword = searchKeyword, onKeywordChange = { searchKeyword = it })
-
-            if (showTimeFilter) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    TimeRangeChip("全部", selectedTimeRange == TimeRange.ALL) { selectedTimeRange = TimeRange.ALL; loadRecords() }
-                    TimeRangeChip("今日", selectedTimeRange == TimeRange.TODAY) { selectedTimeRange = TimeRange.TODAY; loadRecords() }
-                    TimeRangeChip("7天", selectedTimeRange == TimeRange.WEEK) { selectedTimeRange = TimeRange.WEEK; loadRecords() }
-                    TimeRangeChip("30天", selectedTimeRange == TimeRange.MONTH) { selectedTimeRange = TimeRange.MONTH; loadRecords() }
-                }
-            }
-
-            val hasActiveFilter = selectedSourceRule != null || selectedOutputName != null || (showTimeFilter && selectedTimeRange != TimeRange.ALL)
-            if (hasActiveFilter) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    selectedSourceRule?.let {
-                        FilterIndicatorChip("来源: $it") {
-                            selectedSourceRule = null
-                            loadRecords()
-                        }
-                    }
-                    selectedOutputName?.let {
-                        FilterIndicatorChip("输出: $it") {
-                            selectedOutputName = null
-                            loadRecords()
-                        }
-                    }
-                    if (showTimeFilter && selectedTimeRange != TimeRange.ALL) {
-                        val label = when (selectedTimeRange) {
-                            TimeRange.TODAY -> "今日"
-                            TimeRange.WEEK -> "7天"
-                            TimeRange.MONTH -> "30天"
-                            TimeRange.ALL -> "全部"
-                        }
-                        FilterIndicatorChip("时间: $label") {
-                            selectedTimeRange = TimeRange.ALL
-                            loadRecords()
-                        }
+        var showSearchBar by remember { mutableStateOf(false) }
+        Box(modifier = Modifier.fillMaxSize().padding(contentPadding)) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                if (showTimeFilter) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        TimeRangeChip("全部", selectedTimeRange == TimeRange.ALL) { selectedTimeRange = TimeRange.ALL; loadRecords() }
+                        TimeRangeChip("今日", selectedTimeRange == TimeRange.TODAY) { selectedTimeRange = TimeRange.TODAY; loadRecords() }
+                        TimeRangeChip("7天", selectedTimeRange == TimeRange.WEEK) { selectedTimeRange = TimeRange.WEEK; loadRecords() }
+                        TimeRangeChip("30天", selectedTimeRange == TimeRange.MONTH) { selectedTimeRange = TimeRange.MONTH; loadRecords() }
                     }
                 }
-            }
 
-            if (hasActiveFilter && totalCount > 0) {
-                Text(
-                    text = "共 $totalCount 条记录",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                )
-            }
-
-            if (isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                val hasActiveFilter = selectedSourceRule != null || selectedOutputName != null || (showTimeFilter && selectedTimeRange != TimeRange.ALL)
+                if (hasActiveFilter) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        selectedSourceRule?.let {
+                            FilterIndicatorChip("来源: $it") {
+                                selectedSourceRule = null
+                                loadRecords()
+                            }
+                        }
+                        selectedOutputName?.let {
+                            FilterIndicatorChip("输出: $it") {
+                                selectedOutputName = null
+                                loadRecords()
+                            }
+                        }
+                        if (showTimeFilter && selectedTimeRange != TimeRange.ALL) {
+                            val label = when (selectedTimeRange) {
+                                TimeRange.TODAY -> "今日"
+                                TimeRange.WEEK -> "7天"
+                                TimeRange.MONTH -> "30天"
+                                TimeRange.ALL -> "全部"
+                            }
+                            FilterIndicatorChip("时间: $label") {
+                                selectedTimeRange = TimeRange.ALL
+                                loadRecords()
+                            }
+                        }
+                    }
                 }
-            } else if (records.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+
+                if (hasActiveFilter && totalCount > 0) {
                     Text(
-                        text = "暂无通知记录",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "共 $totalCount 条记录",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                     )
                 }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
-                ) {
-                    itemsIndexed(items = records, key = { _, record -> record.id }) { _, record ->
-                        val urls = remember(record.content) { extractUrls(record.content) }
-                        NotifyRecordCard(
-                            record = record,
-                            urls = urls,
-                            isHighlighted = record.id == highlightId,
-                            onClick = { NotifyDetailActivity.start(context, record.id) },
-                            onCopy = {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(ClipData.newPlainText("通知内容", record.content))
-                                Toast.makeText(context, "已复制内容", Toast.LENGTH_SHORT).show()
-                            },
-                            onOpenLink = {
-                                when {
-                                    urls.isEmpty() -> {}
-                                    urls.size == 1 -> openUrl(context, urls.first())
-                                    else -> linkPickerUrls = urls
-                                }
-                            },
-                            onDelete = {
-                                scope.launch(Dispatchers.IO) {
-                                    dbHelper.deleteById(record.id)
-                                    launch(Dispatchers.Main) { loadRecords() }
-                                }
-                            }
+
+                if (isLoading) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else if (records.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "暂无通知记录",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                    ) {
+                        itemsIndexed(items = records, key = { _, record -> record.id }) { _, record ->
+                            val urls = remember(record.content) { extractUrls(record.content) }
+                            NotifyRecordCard(
+                                record = record,
+                                urls = urls,
+                                isHighlighted = record.id == highlightId,
+                                onClick = { NotifyDetailActivity.start(context, record.id) },
+                                onCopy = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("通知内容", record.content))
+                                    Toast.makeText(context, "已复制内容", Toast.LENGTH_SHORT).show()
+                                },
+                                onOpenLink = {
+                                    when {
+                                        urls.isEmpty() -> {}
+                                        urls.size == 1 -> openUrl(context, urls.first())
+                                        else -> linkPickerUrls = urls
+                                    }
+                                },
+                                onDelete = {
+                                    scope.launch(Dispatchers.IO) {
+                                        dbHelper.deleteById(record.id)
+                                        launch(Dispatchers.Main) { loadRecords() }
+                                    }
+                                }
+                            )
+                        }
+                    }
                 }
+            }
+
+            // Floating search FAB + bottom search bar
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 16.dp)
+            ) {
+                FloatingSearchBar(
+                    visible = showSearchBar,
+                    keyword = searchKeyword,
+                    onKeywordChange = { searchKeyword = it },
+                    onRequestShow = { showSearchBar = true },
+                    onRequestHide = {
+                        showSearchBar = false
+                        searchKeyword = ""
+                    },
+                    placeholder = "搜索标题、内容..."
+                )
             }
         }
     }

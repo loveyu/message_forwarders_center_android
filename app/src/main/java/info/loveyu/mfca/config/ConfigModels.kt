@@ -394,7 +394,11 @@ data class PipelineStep(
  */
 data class OutputFormatStep(
     val target: String,
-    val template: String
+    val template: String,
+    /**
+     * 原始解析的模板值（可能是 String / List / Map），用于支持 delete 等非字符串操作
+     */
+    val raw: Any? = null
 )
 
 data class TransformConfig(
