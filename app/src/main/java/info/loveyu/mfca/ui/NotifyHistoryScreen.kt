@@ -352,7 +352,12 @@ fun NotifyHistoryContent(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        contentPadding = PaddingValues(
+                            start = 4.dp,
+                            top = 4.dp,
+                            end = 4.dp,
+                            bottom = if (showSearchBar) 76.dp else 4.dp
+                        )
                     ) {
                         itemsIndexed(items = records, key = { _, record -> record.id }) { _, record ->
                             val urls = remember(record.content) { extractUrls(record.content) }

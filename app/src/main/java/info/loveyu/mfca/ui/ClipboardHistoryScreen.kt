@@ -155,7 +155,12 @@ fun ClipboardHistoryContent(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                    contentPadding = PaddingValues(
+                        start = 8.dp,
+                        top = 6.dp,
+                        end = 8.dp,
+                        bottom = if (showSearchBar) 76.dp else 6.dp
+                    )
                 ) {
                     itemsIndexed(
                         items = records,
