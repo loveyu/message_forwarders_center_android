@@ -26,11 +26,11 @@
 #   {data}           - 原始数据（字符串）
 #   {data.field}     - JSON 路径提取
 #   $headers.X-Key   - 请求头
-#   {rule}           - 规则名称
-#   {source}         - 来源输入名
-#   {timestamp}      - 秒级时间戳（整数）
-#   {unix}           - 毫秒级时间戳
-#   {receivedAt}     - X-ReceivedAt 毫秒时间戳（InputManager 注入）
+#   {$rule}          - 规则名称
+#   {$source}        - 来源输入名
+#   {$timestamp}     - 秒级时间戳（整数）
+#   {$unix}          - 毫秒级时间戳
+#   {$receivedAt}    - X-ReceivedAt 毫秒时间戳（InputManager 注入）
 #   now()            - 当前秒级时间（整数）
 #   now(3)           - 当前时间（保留3位小数）
 #   uuidv4()         - 随机 UUID
@@ -47,7 +47,7 @@ outputs:
       role: producer
       topic: output/wrapped
       qos: 1
-      format: '{"data":"{base64Encode(data)}","type":"text","ts":now(3)}'
+      format: '{"data":"{base64Encode(data)}","type":"text","ts":"{now(3)}"}'
 
     # 多字段示例：data 是 JSON，分别设置字段后再发送
     - name: mqtt_enriched
@@ -58,7 +58,7 @@ outputs:
       format:
         - $data.deviceId: '{deviceId()}'
         - $data.sentAt: '{now(6)}'
-        - $data.rule: '{rule}'
+        - $data.rule: '{$rule}'
 
     # Header 示例：为 HTTP 输出添加签名 header
   http:
@@ -74,7 +74,7 @@ outputs:
     - name: http_json_envelope
       url: https://api.example.com/event
       method: POST
-      format: '{"payload":"{jsonEncode(data)}","source":"{source}","ts":now(3),"id":"uuidv4()"}'
+      format: '{"payload":"{jsonEncode(data)}","source":"{$source}","ts":"{now(3)}","id":"{uuidv4()}"}'
 
   internal:
     # 剪贴板：截取 JSON 中的 content 字段写入
@@ -92,16 +92,15 @@ outputs:
         - $data: '{data.message}'
 
 links:
-  - name: mqtt_broker
-    protocol: mqtt
-    broker: mqtt://broker.example.com:1883
-    clientId: mfca-device
+  - id: mqtt_broker
+    dsn: mqtt://broker.example.com:1883?clientId=mfca-device
 
 inputs:
   http:
     - name: http_in
-      path: /in
-      methods: [POST]
+      dsn: "http://0.0.0.0:8080"
+      paths:
+        - /in
 
 rules:
   # pipeline 中 format 不变，output 上的 format 独立封装
@@ -109,7 +108,7 @@ rules:
     from: http_in
     pipeline:
       - transform:
-          filter: 'len(data) > 0'
+          filter: 'length(data) > 0'
         to: [mqtt_wrapped, http_json_envelope]
 
   # pipeline 中提取字段，output 再追加 meta 字段

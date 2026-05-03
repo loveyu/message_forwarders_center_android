@@ -152,7 +152,7 @@ outputs:
   link:
     - name: mqtt_out
       ...
-      format: '{"data":"{base64Encode(data)}","type":"text","ts":now(3)}'
+      format: '{"data":"{base64Encode(data)}","type":"text","ts":"{now(3)}"}'
 ```
 等同于一步 `$data` 替换。
 
@@ -175,11 +175,11 @@ format:
 |------|------|
 | `{data}` | 原始数据字符串 |
 | `{data.field}` | JSON 路径提取 |
-| `{rule}` | 规则名称 |
-| `{source}` | 来源输入名 |
-| `{timestamp}` | 秒级时间戳 |
-| `{unix}` | 毫秒时间戳 |
-| `{receivedAt}` | 输入接收毫秒时间戳 |
+| `{$rule}` | 规则名称 |
+| `{$source}` | 来源输入名 |
+| `{$timestamp}` | 秒级时间戳 |
+| `{$unix}` | 毫秒时间戳 |
+| `{$receivedAt}` | 输入接收毫秒时间戳 |
 | `now()` / `now(3)` | 当前时间（可选小数位） |
 | `uuidv4()` | 随机 UUID |
 | `deviceId()` | Android ID |
@@ -197,12 +197,12 @@ format:
 - `"base64Decode(content)"` - Base64 解码
 
 ### 过滤 (filter)
-- `"len(path) > N"` - 数组/字符串长度
+- `"length(path) > N"` - 数组/字符串长度
 - `"path == value"` - 相等比较
 - `"path != value"` - 不等比较
 - `"path > N"` - 数值比较
 - `"$headers.mqtt_topic == topic"` - Headers 访问（MQTT Topic 等）
-- `"$headers.mqtt_topic startsWith topic/prefix"` - 前缀匹配
+- `"contains($headers.mqtt_topic, topic/prefix)"` - 包含匹配
 
 ### 检测 (detect)
 - `"image"` - PNG/JPEG/GIF/BMP/WebP

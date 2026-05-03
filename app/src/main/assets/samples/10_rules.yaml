@@ -55,7 +55,7 @@ rules:
     pipeline:
       - transform:
           extract: "data.devices"
-          filter: "len(data.devices) > 0"  # 只处理有设备的
+          filter: "length(data.devices) > 0"  # 只处理有设备的
         to: [api_server]
 
   # 示例3：字段值比较过滤
@@ -105,7 +105,7 @@ rules:
     from: filtered_clipboard
     pipeline:
       - transform:
-          filter: "$headers.mqtt_topic startsWith phone-clipboard/user"  # 只处理用户剪贴板
+          filter: "contains($headers.mqtt_topic, phone-clipboard/user)"  # 只处理用户剪贴板
         to: [clipboard_out]
 
   # 示例9：Headers 过滤 - 排除特定 Topic
