@@ -142,8 +142,8 @@ rules:
     from: http_webhook
     pipeline:
       - transform:
-          extract: "data"           # 提取 data 字段
           filter: "{length(data)} > 0"   # 过滤空数据
+          extract: "data"           # 提取 data 字段
         to: [cloud_api, raw_data_log]
 
   # 处理 MQTT 传感器数据
@@ -151,8 +151,8 @@ rules:
     from: mqtt_sensors
     pipeline:
       - transform:
-          extract: "temperature"
           filter: "{temperature} > 0"
+          extract: "temperature"
         to: [cloud_api, debug_clipboard]
     onError:
       - to: [raw_data_log]

@@ -50,10 +50,12 @@ rules:
   - name: clipboard_text_write
     from: mqtt_clipboard
     pipeline:
-      # Step 1: 解码 base64，过滤仅处理文本类型，写入系统剪贴板
+      # Step 1: 先过滤仅处理文本类型，再解码 base64，写入系统剪贴板
+      # exitPipeline: true 表示过滤失败时退出整个管道，不再执行 Step 2
       - transform:
-          extract: "base64Decode(content)"
           filter: "\"{type}\" == \"text\""
+          extract: "base64Decode(content)"
+          exitPipeline: true
         to:
           - clipboard_write
 

@@ -101,11 +101,14 @@ protocol://[username:password@]host:port[?param1=value1&param2=value2...]
 
 ## 规则引擎语法
 
-- extract: GJSON 路径提取（`"data.temperature"`, `"$raw"`, `"base64Decode(content)"`）
-- filter: 表达式过滤（`"len(data.items) > 0"`, `"path == value"`, `"startsWith"`, `"$headers.X"`）
+执行顺序：`detect → enrich → filter → extract → format → output`
+
 - detect: 类型检测（`image`, `json`, `text`）
-- format: 模板格式化（`"{headers}\n{data}"`, `"{data.field}"`）、字段删除（`$delete: ["field"]`）
 - enrich: 数据富化（`"gotifyIcon:<linkId>"`）
+- filter: 表达式过滤（`"len(data.items) > 0"`, `"path == value"`, `"startsWith"`, `"$headers.X"`）
+- extract: GJSON 路径提取（`"data.temperature"`, `"$raw"`, `"base64Decode(content)"`）
+- format: 模板格式化（`"{headers}\n{data}"`, `"{data.field}"`）、字段删除（`$delete: ["field"]`）
+- exitPipeline: 过滤失败时是否退出整个管道（默认 `false`）
 - onError: 错误处理管道（每条规则可选）
 
 ## 提交规范

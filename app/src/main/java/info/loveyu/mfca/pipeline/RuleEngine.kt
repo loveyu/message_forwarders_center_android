@@ -195,20 +195,7 @@ class RuleEngine(
                 }
             }
 
-            // Apply transform if present
-            if (!skipStep && transform != null) {
-                val transformed = applyTransform(transform, currentData, currentJson, inputMessage, rule.name)
-                if (transformed == null) {
-                    LogManager.logDebug("RULE", "Rule [${rule.name}] extract [${transform.extract}] -> null, SKIPPED")
-                    skipStep = true
-                } else if (transformed !== currentData) {
-                    // 数据实际发生了变化，重新解析 JSON
-                    currentData = transformed
-                    currentJson = parseJson(currentData)
-                }
-            }
-
-            // Apply filter if present (复用 currentJson，无需重新解析)
+            // Apply filter before extract (先过滤，再提取)
             if (!skipStep && transform?.filter != null) {
                 val passed = withContext(Dispatchers.Default) {
                     expressionEngine.executeTwoPhaseFilter(transform.filter!!, currentJson, currentData, inputMessage.headers)
@@ -221,7 +208,24 @@ class RuleEngine(
                 }
             }
 
+            // Apply extract + format if present (过滤通过后再提取)
+            if (!skipStep && transform != null) {
+                val transformed = applyTransform(transform, currentData, currentJson, inputMessage, rule.name)
+                if (transformed == null) {
+                    LogManager.logDebug("RULE", "Rule [${rule.name}] extract [${transform.extract}] -> null, SKIPPED")
+                    skipStep = true
+                } else if (transformed !== currentData) {
+                    // 数据实际发生了变化，重新解析 JSON
+                    currentData = transformed
+                    currentJson = parseJson(currentData)
+                }
+            }
+
             if (skipStep) {
+                if (transform?.exitPipeline == true) {
+                    LogManager.logDebug("RULE", "Rule [${rule.name}] exitPipeline: breaking pipeline")
+                    break
+                }
                 continue
             }
 
@@ -291,7 +295,17 @@ class RuleEngine(
                 }
             }
 
-            // Apply transform if present
+            // Apply filter before extract (先过滤，再提取)
+            if (!skipStep && transform?.filter != null) {
+                if (!expressionEngine.executeTwoPhaseFilter(transform.filter!!, currentJson, currentData, inputMessage.headers)) {
+                    LogManager.logDebug("RULE", "Rule [${rule.name}] filter [${transform.filter}] -> REJECTED")
+                    skipStep = true
+                } else if (transform.filter!!.contains("clipboardUpdateBefore")) {
+                    ClipboardHistoryDbHelper.updateLastPassedTime(String(currentData))
+                }
+            }
+
+            // Apply extract + format if present (过滤通过后再提取)
             if (!skipStep && transform != null) {
                 val transformed = applyTransform(transform, currentData, currentJson, inputMessage, rule.name)
                 if (transformed == null) {
@@ -303,17 +317,11 @@ class RuleEngine(
                 }
             }
 
-            // Apply filter if present
-            if (!skipStep && transform?.filter != null) {
-                if (!expressionEngine.executeTwoPhaseFilter(transform.filter!!, currentJson, currentData, inputMessage.headers)) {
-                    LogManager.logDebug("RULE", "Rule [${rule.name}] filter [${transform.filter}] -> REJECTED")
-                    skipStep = true
-                } else if (transform.filter!!.contains("clipboardUpdateBefore")) {
-                    ClipboardHistoryDbHelper.updateLastPassedTime(String(currentData))
-                }
-            }
-
             if (skipStep) {
+                if (transform?.exitPipeline == true) {
+                    LogManager.logDebug("RULE", "Rule [${rule.name}] exitPipeline: breaking pipeline")
+                    break
+                }
                 continue
             }
 

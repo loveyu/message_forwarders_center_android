@@ -1,6 +1,18 @@
 # 规则引擎示例
 # 演示：JSON 数据提取、过滤、媒体类型检测、Headers 访问、Base64 解码
 #
+# transform 执行顺序：detect → enrich → filter → extract → format → output
+#   filter 在 extract 之前执行，过滤失败则跳过提取
+#
+# exitPipeline 属性（默认 false）：
+#   设为 true 时，当前步骤过滤失败将终止整个管道，不再执行后续步骤
+#   示例:
+#     - transform:
+#         filter: "\"{type}\" == \"text\""
+#         extract: "base64Decode(content)"
+#         exitPipeline: true
+#       to: [output]
+#
 # filter 过滤语法（两阶段）：
 #   Phase 1: {…} 模板占位符解析为字面值（支持函数、路径、headers）
 #   Phase 2: 解析后的纯布尔表达式求值
@@ -61,13 +73,13 @@ rules:
           extract: "data.temperature"    # 提取 JSON 路径
         to: [api_server]
 
-  # 示例2：提取后过滤（数组长度）
+  # 示例2：先过滤再提取（数组长度）
   - name: filter_by_array_length
     from: sensor_data
     pipeline:
       - transform:
-          extract: "data.devices"
           filter: "{length(data.devices)} > 0"  # 只处理有设备的
+          extract: "data.devices"
         to: [api_server]
 
   # 示例3：字段值比较过滤
@@ -75,8 +87,8 @@ rules:
     from: sensor_data
     pipeline:
       - transform:
-          extract: "$raw"                # $raw 表示整个 JSON 对象
           filter: "\"{data.status}\" == \"active\""  # 只处理 active 状态
+          extract: "$raw"                # $raw 表示整个 JSON 对象
         to: [api_server]
 
   # 示例4：数值比较过滤
@@ -84,8 +96,8 @@ rules:
     from: sensor_data
     pipeline:
       - transform:
-          extract: "data.temperature"
           filter: "{data.temperature} > 25"   # 温度大于 25
+          extract: "data.temperature"
         to: [clipboard_out]
 
   # 示例5：多媒体类型检测
@@ -128,25 +140,25 @@ rules:
           filter: "\"{\$headers.mqtt_topic}\" != \"phone-clipboard/system\""  # 排除系统剪贴板
         to: [clipboard_out]
 
-  # 示例10：完整变换链（提取 -> 过滤 -> 发送）
+  # 示例10：完整变换链（检测 -> 过滤 -> 提取 -> 发送）
   - name: full_pipeline
     from: sensor_data
     pipeline:
       - transform:
-          extract: "data.payload"
-          filter: "\"{data.type}\" == \"sensor\""
           detect: "json"
+          filter: "\"{data.type}\" == \"sensor\""
+          extract: "data.payload"
         to: [api_server, clipboard_out]
 
-  # 示例11：剪贴板内容读取（type=text + base64 decode）
+  # 示例11：剪贴板内容读取（先过滤 type，再 base64 decode）
   # 输入消息格式: {"type": "text", "content": "base64编码内容"}
-  # filter 过滤 type!=text 的消息，extract 使用 base64Decode 函数解码 content 后写入剪贴板
+  # 先 filter 过滤 type!=text 的消息，再 extract 使用 base64Decode 函数解码 content 后写入剪贴板
   - name: clipboard_text_write
     from: filtered_clipboard
     pipeline:
       - transform:
-          extract: "base64Decode(content)"
           filter: "\"{type}\" == \"text\""
+          extract: "base64Decode(content)"
         to: [clipboard_out]
 
   # 示例12：直接从 content 字段提取（不解码）
@@ -154,8 +166,8 @@ rules:
     from: filtered_clipboard
     pipeline:
       - transform:
-          extract: "content"
           filter: "\"{type}\" == \"text\""
+          extract: "content"
         to: [clipboard_out]
 
   # 示例13：错误处理链
@@ -180,7 +192,7 @@ rules:
   #       to: [gotify_notification]
 
   # 示例15：enrich 与其他 transform 组合使用
-  # enrich 在 detect 之后、extract/filter 之前执行
+  # 执行顺序：detect → enrich → filter → extract → format → output
   # - name: gotify_enrich_then_extract
   #   from: gotify_input
   #   pipeline:

@@ -409,7 +409,13 @@ data class TransformConfig(
     val format: String? = null,
     /** 数组格式，与 format 互斥，优先级高于 format */
     val formatSteps: List<OutputFormatStep>? = null,
-    val enrich: String? = null  // "enricherType:parameter", e.g., "gotifyIcon:gotify_link"
+    val enrich: String? = null,  // "enricherType:parameter", e.g., "gotifyIcon:gotify_link"
+    /**
+     * 过滤失败时是否退出整个管道流程。
+     * 默认 false：过滤失败仅跳过当前步骤，继续执行后续管道步骤。
+     * 设为 true：过滤失败时终止整个管道，不再执行后续步骤。
+     */
+    val exitPipeline: Boolean = false
 )
 
 /**
