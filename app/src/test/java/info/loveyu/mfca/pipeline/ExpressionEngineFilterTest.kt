@@ -277,4 +277,298 @@ class ExpressionEngineFilterTest : ExpressionEngineBaseTest() {
         assertTrue(engine.executeFilter("x > 0", data))
         assertTrue(engine.executeFilter("y == \"test\"", data))
     }
+
+    // ── clipboardNew deduplication simulation ───────────────────
+
+    @Test
+    fun `clipboardNew simulation - first call passes`() {
+        val lastPassed = mutableMapOf<String, Long>()
+        engine.registerRawDataFunction(
+            "simClipboardNew",
+            ExpressionEngine.RawDataFunction("simClipboardNew") { data, args ->
+                val maxAgeMs = (args.getOrNull(0) as? Number)?.toLong()?.times(1000L) ?: 10_000L
+                val text = String(data)
+                val now = System.currentTimeMillis()
+                val last = lastPassed[text]
+                if (last != null && (now - last) <= maxAgeMs) false
+                else { lastPassed[text] = now; true }
+            }
+        )
+        val data = "hello clipboard".toByteArray()
+        assertTrue(engine.executeFilter("simClipboardNew(30)", data))
+    }
+
+    @Test
+    fun `clipboardNew simulation - repeated call blocked`() {
+        val lastPassed = mutableMapOf<String, Long>()
+        engine.registerRawDataFunction(
+            "simClipboardNew2",
+            ExpressionEngine.RawDataFunction("simClipboardNew2") { data, args ->
+                val maxAgeMs = (args.getOrNull(0) as? Number)?.toLong()?.times(1000L) ?: 10_000L
+                val text = String(data)
+                val now = System.currentTimeMillis()
+                val last = lastPassed[text]
+                if (last != null && (now - last) <= maxAgeMs) false
+                else { lastPassed[text] = now; true }
+            }
+        )
+        val data = "repeated content".toByteArray()
+        // First call passes
+        assertTrue(engine.executeFilter("simClipboardNew2(30)", data))
+        // Immediate second call is blocked (in-memory cache prevents window reset)
+        assertFalse(engine.executeFilter("simClipboardNew2(30)", data))
+    }
+
+    @Test
+    fun `clipboardNew simulation - different content passes independently`() {
+        val lastPassed = mutableMapOf<String, Long>()
+        engine.registerRawDataFunction(
+            "simClipboardNew3",
+            ExpressionEngine.RawDataFunction("simClipboardNew3") { data, args ->
+                val maxAgeMs = (args.getOrNull(0) as? Number)?.toLong()?.times(1000L) ?: 10_000L
+                val text = String(data)
+                val now = System.currentTimeMillis()
+                val last = lastPassed[text]
+                if (last != null && (now - last) <= maxAgeMs) false
+                else { lastPassed[text] = now; true }
+            }
+        )
+        // First content passes
+        assertTrue(engine.executeFilter("simClipboardNew3(30)", "content A".toByteArray()))
+        // Second different content also passes independently
+        assertTrue(engine.executeFilter("simClipboardNew3(30)", "content B".toByteArray()))
+        // Repeating first content is still blocked
+        assertFalse(engine.executeFilter("simClipboardNew3(30)", "content A".toByteArray()))
+    }
+
+    // ── and/or/not keyword operators ─────────────────────────────
+
+    @Test
+    fun `filter - and keyword both true`() {
+        val data = """{"a":1,"b":1}""".toByteArray()
+        assertTrue(engine.executeFilter("a > 0 and b > 0", data))
+    }
+
+    @Test
+    fun `filter - and keyword one false`() {
+        val data = """{"a":1,"b":-1}""".toByteArray()
+        assertFalse(engine.executeFilter("a > 0 and b > 0", data))
+    }
+
+    @Test
+    fun `filter - or keyword one true`() {
+        val data = """{"a":1,"b":-1}""".toByteArray()
+        assertTrue(engine.executeFilter("a > 0 or b > 0", data))
+    }
+
+    @Test
+    fun `filter - or keyword both false`() {
+        val data = """{"a":-1,"b":-1}""".toByteArray()
+        assertFalse(engine.executeFilter("a > 0 or b > 0", data))
+    }
+
+    @Test
+    fun `filter - not keyword negates true`() {
+        val data = """{"a":5}""".toByteArray()
+        assertFalse(engine.executeFilter("not a > 0", data))
+    }
+
+    @Test
+    fun `filter - not keyword negates false`() {
+        val data = """{"a":-1}""".toByteArray()
+        assertTrue(engine.executeFilter("not a > 0", data))
+    }
+
+    @Test
+    fun `filter - not keyword with parens`() {
+        val data = """{"a":1}""".toByteArray()
+        assertFalse(engine.executeFilter("not (1 == 1 and 2 == 2)", data))
+    }
+
+    @Test
+    fun `filter - not keyword with or`() {
+        val data = """{"a":1}""".toByteArray()
+        assertTrue(engine.executeFilter("not (1 == 2 and 1 == 3)", data))
+    }
+
+    @Test
+    fun `filter - negative number comparison`() {
+        val data = """{"x":-1}""".toByteArray()
+        assertTrue(engine.executeFilter("-1 < 0", data))
+    }
+
+    // ── Two-phase filter (with {…} template) ────────────────────
+
+    @Test
+    fun `two-phase - numeric comparison`() {
+        val data = """{"temperature":30}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("{temperature} > 25", data))
+    }
+
+    @Test
+    fun `two-phase - numeric comparison false`() {
+        val data = """{"temperature":20}""".toByteArray()
+        assertFalse(engine.executeTwoPhaseFilter("{temperature} > 25", data))
+    }
+
+    @Test
+    fun `two-phase - string comparison`() {
+        val data = """{"type":"text"}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("\"{type}\" == \"text\"", data))
+    }
+
+    @Test
+    fun `two-phase - string comparison false`() {
+        val data = """{"type":"json"}""".toByteArray()
+        assertFalse(engine.executeTwoPhaseFilter("\"{type}\" == \"text\"", data))
+    }
+
+    @Test
+    fun `two-phase - function in template`() {
+        val data = """{"items":[1,2,3]}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("{length(items)} > 0", data))
+    }
+
+    @Test
+    fun `two-phase - function in template empty array`() {
+        val data = """{"items":[]}""".toByteArray()
+        assertFalse(engine.executeTwoPhaseFilter("{length(items)} > 0", data))
+    }
+
+    @Test
+    fun `two-phase - clipboardUpdateBefore with or`() {
+        var callCount = 0
+        engine.clipboardUpdateBeforeFn = { _ ->
+            callCount++
+            if (callCount <= 1) 60L else -1L
+        }
+        val data = """{"data":"hello"}""".toByteArray()
+        // 60 > 30 => true
+        assertTrue(engine.executeTwoPhaseFilter("{clipboardUpdateBefore(data)} > 30 or {clipboardUpdateBefore(data)} < 0", data))
+    }
+
+    @Test
+    fun `two-phase - clipboardUpdateBefore new content`() {
+        engine.clipboardUpdateBeforeFn = { _ -> -1L }
+        val data = """{"data":"new"}""".toByteArray()
+        // -1 < 0 => true
+        assertTrue(engine.executeTwoPhaseFilter("{clipboardUpdateBefore(data)} > 30 or {clipboardUpdateBefore(data)} < 0", data))
+    }
+
+    @Test
+    fun `two-phase - clipboardUpdateBefore recent content rejected`() {
+        engine.clipboardUpdateBeforeFn = { _ -> 5L }
+        val data = """{"data":"recent"}""".toByteArray()
+        // 5 > 30 = false, 5 < 0 = false => overall false
+        assertFalse(engine.executeTwoPhaseFilter("{clipboardUpdateBefore(data)} > 30 or {clipboardUpdateBefore(data)} < 0", data))
+    }
+
+    @Test
+    fun `two-phase - not with template`() {
+        val data = """{"status":"inactive"}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("not \"{status}\" == \"active\"", data))
+    }
+
+    @Test
+    fun `two-phase - compound and with templates`() {
+        val data = """{"data":{"type":"sensor","temperature":25}}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("\"{data.type}\" == \"sensor\" and {data.temperature} > 20", data))
+    }
+
+    @Test
+    fun `two-phase - compound and false`() {
+        val data = """{"data":{"type":"sensor","temperature":15}}""".toByteArray()
+        assertFalse(engine.executeTwoPhaseFilter("\"{data.type}\" == \"sensor\" and {data.temperature} > 20", data))
+    }
+
+    @Test
+    fun `two-phase - pre-parsed json overload`() {
+        val json = org.json.JSONObject("""{"temperature":30}""")
+        val data = """{"temperature":30}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("{temperature} > 25", json, data))
+    }
+
+    // ── Backward compatibility ──────────────────────────────────
+
+    @Test
+    fun `backward compat - legacy filter still works`() {
+        val data = """{"type":"text"}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("type == \"text\"", data))
+    }
+
+    @Test
+    fun `backward compat - clipboardNew raw data function still works`() {
+        engine.registerRawDataFunction(
+            "testClipboardNewCompat",
+            ExpressionEngine.RawDataFunction("testClipboardNewCompat") { _, _ -> true }
+        )
+        val data = "hello".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("testClipboardNewCompat(10)", data))
+    }
+
+    // ── Sample pattern conversions ──────────────────────────────
+
+    @Test
+    fun `sample pattern - type check`() {
+        val data = """{"type":"text"}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("\"{type}\" == \"text\"", data))
+    }
+
+    @Test
+    fun `sample pattern - nested temperature`() {
+        val data = """{"data":{"temperature":30}}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("{data.temperature} > 25", data))
+    }
+
+    @Test
+    fun `sample pattern - nested status`() {
+        val data = """{"data":{"status":"active"}}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("\"{data.status}\" == \"active\"", data))
+    }
+
+    @Test
+    fun `sample pattern - length of nested array`() {
+        val data = """{"data":{"devices":["a","b"]}}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("{length(data.devices)} > 0", data))
+    }
+
+    @Test
+    fun `sample pattern - length of array`() {
+        val data = """{"data":[1,2,3]}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("{length(data)} > 0", data))
+    }
+
+    @Test
+    fun `sample pattern - contains in template`() {
+        val data = """{"topic":"sensor/temperature"}""".toByteArray()
+        val headers = mapOf("mqtt_topic" to "sensor/temperature")
+        assertTrue(engine.executeTwoPhaseFilter("\"{\$headers.mqtt_topic}\" == \"sensor/temperature\"", data, headers))
+    }
+
+    @Test
+    fun `sample pattern - header not equals`() {
+        val data = """{"msg":"test"}""".toByteArray()
+        val headers = mapOf("mqtt_topic" to "sensor/data")
+        assertTrue(engine.executeTwoPhaseFilter("\"{\$headers.mqtt_topic}\" != \"sensor/other\"", data, headers))
+    }
+
+    @Test
+    fun `sample pattern - header id type check`() {
+        val data = """{"msg":"test"}""".toByteArray()
+        val headers = mapOf("X-IdType" to "mqtt_failures")
+        assertTrue(engine.executeTwoPhaseFilter("\"{\$headers.X-IdType}\" == \"mqtt_failures\"", data, headers))
+    }
+
+    @Test
+    fun `sample pattern - temperature greater than zero`() {
+        val data = """{"temperature":25}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("{temperature} > 0", data))
+    }
+
+    @Test
+    fun `sample pattern - escape double brace`() {
+        val data = """{"x":1}""".toByteArray()
+        // {{ should resolve to literal {
+        assertTrue(engine.executeTwoPhaseFilter("{{not-a-placeholder}}", data))
+    }
 }

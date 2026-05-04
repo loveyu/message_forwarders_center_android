@@ -1,6 +1,18 @@
 # 规则引擎示例
 # 演示：JSON 数据提取、过滤、媒体类型检测、Headers 访问、Base64 解码
 #
+# filter 过滤语法（两阶段）：
+#   Phase 1: {…} 模板占位符解析为字面值（支持函数、路径、headers）
+#   Phase 2: 解析后的纯布尔表达式求值
+#   示例：
+#     "{type}" == "text"                  字符串比较
+#     {data.temperature} > 25             数值比较
+#     {length(items)} > 0                 函数结果比较
+#     "{$headers.topic}" != "sys"         Header 比较
+#     not "{status}" == "active"          否定
+#     {a} > 0 and {b} > 0                逻辑组合
+#   旧语法（无 {…}）仍兼容：type == "text", length(items) > 0
+#
 # from 支持字符串或数组：
 #   from: sensor_data                     # 单个输入源（字符串）
 #   from: [sensor_data, filtered_clipboard]  # 多个输入源（数组，任一输入源匹配时触发）
@@ -55,7 +67,7 @@ rules:
     pipeline:
       - transform:
           extract: "data.devices"
-          filter: "length(data.devices) > 0"  # 只处理有设备的
+          filter: "{length(data.devices)} > 0"  # 只处理有设备的
         to: [api_server]
 
   # 示例3：字段值比较过滤
@@ -64,7 +76,7 @@ rules:
     pipeline:
       - transform:
           extract: "$raw"                # $raw 表示整个 JSON 对象
-          filter: "data.status == 'active'"  # 只处理 active 状态
+          filter: "\"{data.status}\" == \"active\""  # 只处理 active 状态
         to: [api_server]
 
   # 示例4：数值比较过滤
@@ -73,7 +85,7 @@ rules:
     pipeline:
       - transform:
           extract: "data.temperature"
-          filter: "data.temperature > 25"   # 温度大于 25
+          filter: "{data.temperature} > 25"   # 温度大于 25
         to: [clipboard_out]
 
   # 示例5：多媒体类型检测
@@ -105,7 +117,7 @@ rules:
     from: filtered_clipboard
     pipeline:
       - transform:
-          filter: "contains($headers.mqtt_topic, phone-clipboard/user)"  # 只处理用户剪贴板
+          filter: "\"{\$headers.mqtt_topic}\" == \"phone-clipboard/user\""  # 只处理用户剪贴板
         to: [clipboard_out]
 
   # 示例9：Headers 过滤 - 排除特定 Topic
@@ -113,7 +125,7 @@ rules:
     from: filtered_clipboard
     pipeline:
       - transform:
-          filter: "$headers.mqtt_topic != phone-clipboard/system"  # 排除系统剪贴板
+          filter: "\"{\$headers.mqtt_topic}\" != \"phone-clipboard/system\""  # 排除系统剪贴板
         to: [clipboard_out]
 
   # 示例10：完整变换链（提取 -> 过滤 -> 发送）
@@ -122,7 +134,7 @@ rules:
     pipeline:
       - transform:
           extract: "data.payload"
-          filter: "data.type == 'sensor'"
+          filter: "\"{data.type}\" == \"sensor\""
           detect: "json"
         to: [api_server, clipboard_out]
 
@@ -134,7 +146,7 @@ rules:
     pipeline:
       - transform:
           extract: "base64Decode(content)"
-          filter: "type == 'text'"
+          filter: "\"{type}\" == \"text\""
         to: [clipboard_out]
 
   # 示例12：直接从 content 字段提取（不解码）
@@ -143,7 +155,7 @@ rules:
     pipeline:
       - transform:
           extract: "content"
-          filter: "type == 'text'"
+          filter: "\"{type}\" == \"text\""
         to: [clipboard_out]
 
   # 示例13：错误处理链
@@ -175,7 +187,7 @@ rules:
   #     - transform:
   #         enrich: "gotifyIcon:gotify_link"
   #         extract: "$raw"
-  #         filter: "appid > 0"
+  #         filter: "{appid} > 0"
   #       to: [gotify_notification]
 
   # 示例16：from 使用数组，匹配多个输入源

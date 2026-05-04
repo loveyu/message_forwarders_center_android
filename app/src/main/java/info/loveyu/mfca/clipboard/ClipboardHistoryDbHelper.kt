@@ -37,16 +37,91 @@ class ClipboardHistoryDbHelper(context: Context) :
         private val sha1Digest by lazy { MessageDigest.getInstance("SHA-1") }
 
         /**
-         * 检查内容是否为新内容，或者距离上次更新已超过指定时长
+         * 记录 clipboardNew 过滤函数最近一次通过（返回 true）的时间戳
+         * Key: contentHash, Value: 通过时的 System.currentTimeMillis()
+         *
+         * 仅在过滤通过时更新，被拒绝的消息不会刷新此时间戳，
+         * 避免被拒绝消息的历史写入（updatedAt 刷新）导致窗口无限延长。
+         */
+        private val lastPassedTime = mutableMapOf<String, Long>()
+
+        /**
+         * 获取距上次更新（通过过滤）的秒数
+         * 用于 clipboardUpdateBefore 模板函数
+         *
+         * @return 距上次通过的秒数，不存在则返回 -1
+         */
+        fun getSecondsSinceLastUpdate(context: Context, text: String): Long {
+            if (text.isEmpty()) return -1L
+            val hash = sha1(text)
+            val now = System.currentTimeMillis()
+
+            // 优先检查内存缓存
+            val lastPassed = lastPassedTime[hash]
+            if (lastPassed != null) {
+                return (now - lastPassed) / 1000L
+            }
+
+            // 回退到数据库查询（应用重启后缓存丢失的场景）
+            val helper = ClipboardHistoryDbHelper(context.applicationContext)
+            return try {
+                val db = helper.readableDatabase
+                val cursor = db.query(
+                    TABLE_NAME,
+                    arrayOf(COL_UPDATED_AT),
+                    "$COL_CONTENT_HASH = ?",
+                    arrayOf(hash),
+                    null, null, null, "1"
+                )
+                if (!cursor.moveToFirst()) {
+                    cursor.close()
+                    -1L // 不在历史中
+                } else {
+                    val updatedAt = cursor.getLong(0)
+                    cursor.close()
+                    (now - updatedAt) / 1000L
+                }
+            } catch (_: Exception) {
+                -1L
+            } finally {
+                helper.close()
+            }
+        }
+
+        /**
+         * 更新 lastPassedTime 缓存，记录当前时间为通过时间
+         */
+        fun updateLastPassedTime(text: String) {
+            if (text.isEmpty()) return
+            val hash = sha1(text)
+            lastPassedTime[hash] = System.currentTimeMillis()
+        }
+
+        /**
+         * 检查内容是否为新内容，或者距离上次通过过滤已超过指定时长
          * 用于 clipboardNew 过滤函数，确保在写入历史之前调用
          *
-         * @return true 表示内容是新的（未在历史中）或者上次更新时间超过 maxAgeMs 毫秒
+         * 判断逻辑：
+         *   1. 优先检查内存缓存（lastPassedTime）：仅记录过滤通过的时间，
+         *      被拒绝消息不会刷新，确保时间窗口基于上次实际通过的时间
+         *   2. 回退到数据库查询：用于应用重启后缓存丢失的场景
+         *
+         * @return true 表示内容是新的（未在历史中）或者距上次通过已超过 maxAgeMs 毫秒
          */
         fun isNotRecentlyUpdated(context: Context, text: String, maxAgeMs: Long = 10_000L): Boolean {
             if (text.isEmpty()) return false
             val hash = sha1(text)
+            val now = System.currentTimeMillis()
+
+            // 优先检查内存缓存：仅当过滤通过时才更新，避免被拒绝消息刷新时间窗口
+            val lastPassed = lastPassedTime[hash]
+            if (lastPassed != null && (now - lastPassed) <= maxAgeMs) {
+                return false // 近期已通过过滤，拒绝
+            }
+
+            // 回退到数据库查询（应用重启后缓存丢失的场景）
             val helper = ClipboardHistoryDbHelper(context.applicationContext)
-            return try {
+            val result = try {
                 val db = helper.readableDatabase
                 val cursor = db.query(
                     TABLE_NAME,
@@ -61,7 +136,6 @@ class ClipboardHistoryDbHelper(context: Context) :
                 } else {
                     val updatedAt = cursor.getLong(0)
                     cursor.close()
-                    val now = System.currentTimeMillis()
                     (now - updatedAt) > maxAgeMs // 超过时间窗口才认为是新内容
                 }
             } catch (e: Exception) {
@@ -69,6 +143,19 @@ class ClipboardHistoryDbHelper(context: Context) :
             } finally {
                 helper.close()
             }
+
+            // 过滤通过时更新缓存
+            if (result) {
+                lastPassedTime[hash] = now
+                // 简单清理：超过 1000 条时移除过期条目
+                if (lastPassedTime.size > 1000) {
+                    val expiredKeys = lastPassedTime.entries
+                        .filter { (now - it.value) > maxAgeMs * 2 }
+                        .map { it.key }
+                    expiredKeys.forEach { lastPassedTime.remove(it) }
+                }
+            }
+            return result
         }
 
         @Synchronized

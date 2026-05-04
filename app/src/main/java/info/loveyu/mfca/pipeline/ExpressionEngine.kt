@@ -41,6 +41,9 @@ class ExpressionEngine {
     // 原始数据函数（可访问原始字节数据，适用于非 JSON 数据场景）
     private val rawDataFunctions = ConcurrentHashMap<String, RawDataFunction>()
 
+    // 剪贴板更新时间检查函数（由外部设置，如 RuleEngine 通过 Android Context 注入）
+    var clipboardUpdateBeforeFn: ((String) -> Long)? = null
+
     init {
         registerBuiltinFunctions()
     }
@@ -384,6 +387,12 @@ class ExpressionEngine {
         builtinFunctions["isNull"] = BuiltinFunction("isNull", 1) { args ->
             args.getOrNull(0) == null
         }
+
+        // 剪贴板更新时间检查: clipboardUpdateBefore(text) -> 距上次更新的秒数，不存在则返回 -1
+        builtinFunctions["clipboardUpdateBefore"] = BuiltinFunction("clipboardUpdateBefore", 1) { args ->
+            val text = args.getOrNull(0)?.toString() ?: ""
+            clipboardUpdateBeforeFn?.invoke(text) ?: -1L
+        }
     }
 
     /**
@@ -673,10 +682,12 @@ class ExpressionEngine {
                         i++
                     }
                     val word = expr.substring(start, i)
-                    if (word in listOf("true", "false", "null")) {
-                        tokens.add(FilterToken(FilterTokenType.BOOLEAN, word))
-                    } else {
-                        tokens.add(FilterToken(FilterTokenType.IDENT, word))
+                    when {
+                        word == "and" -> tokens.add(FilterToken(FilterTokenType.LOGICAL, "&&"))
+                        word == "or" -> tokens.add(FilterToken(FilterTokenType.LOGICAL, "||"))
+                        word == "not" -> tokens.add(FilterToken(FilterTokenType.NOT, "not"))
+                        word in listOf("true", "false", "null") -> tokens.add(FilterToken(FilterTokenType.BOOLEAN, word))
+                        else -> tokens.add(FilterToken(FilterTokenType.IDENT, word))
                     }
                 }
                 c.isDigit() -> {
@@ -685,6 +696,20 @@ class ExpressionEngine {
                         i++
                     }
                     tokens.add(FilterToken(FilterTokenType.NUMBER, expr.substring(start, i)))
+                }
+                c == '-' && i + 1 < expr.length && expr[i + 1].isDigit() -> {
+                    // Negative number: only when '-' precedes a digit and is not preceded by IDENT/NUMBER
+                    val prev = tokens.lastOrNull()
+                    if (prev == null || prev.type != FilterTokenType.IDENT && prev.type != FilterTokenType.NUMBER && prev.type != FilterTokenType.STRING && prev.type != FilterTokenType.BOOLEAN) {
+                        val start = i
+                        i++ // skip '-'
+                        while (i < expr.length && (expr[i].isDigit() || expr[i] == '.')) {
+                            i++
+                        }
+                        tokens.add(FilterToken(FilterTokenType.NUMBER, expr.substring(start, i)))
+                    } else {
+                        i++
+                    }
                 }
                 else -> i++
             }
@@ -741,8 +766,18 @@ class ExpressionEngine {
                     Pair(expr, remaining)
                 }
             }
+            token.type == FilterTokenType.NOT -> {
+                val (operand, rest) = parsePrimary(remaining, mutableListOf())
+                Pair(ParsedFilter(ParsedNodeType.NOT, left = operand), rest)
+            }
             token.type == FilterTokenType.IDENT -> {
                 parseComparison(token.value, remaining)
+            }
+            token.type == FilterTokenType.NUMBER -> {
+                parseLiteralComparison(token.value, remaining)
+            }
+            token.type == FilterTokenType.STRING -> {
+                parseLiteralComparison(token.value, remaining)
             }
             token.type == FilterTokenType.BOOLEAN -> {
                 Pair(ParsedFilter(ParsedNodeType.CONSTANT, token.value.toBoolean()), remaining)
@@ -786,6 +821,53 @@ class ExpressionEngine {
         }
 
         return Pair(ParsedFilter(ParsedNodeType.PATH, path = path), tokens)
+    }
+
+    /**
+     * 解析字面量值比较（用于两阶段过滤器 Phase 2）
+     * 左侧是字面量值（数字或字符串），不需要 JSON 路径提取
+     */
+    private fun parseLiteralComparison(literalValue: String, tokens: List<FilterToken>): Pair<ParsedFilter, List<FilterToken>> {
+        if (tokens.isEmpty()) {
+            val numVal = literalValue.toDoubleOrNull()
+            return if (numVal != null) {
+                Pair(ParsedFilter(ParsedNodeType.CONSTANT, numVal != 0.0), tokens)
+            } else {
+                Pair(ParsedFilter(ParsedNodeType.CONSTANT, literalValue.isNotEmpty()), tokens)
+            }
+        }
+
+        val op = tokens.first()
+        if (op.type == FilterTokenType.OPERATOR) {
+            val remaining = tokens.drop(1)
+            if (remaining.isNotEmpty()) {
+                val value = remaining.first()
+                val valueStr = when (value.type) {
+                    FilterTokenType.STRING -> value.value
+                    FilterTokenType.NUMBER -> value.value
+                    FilterTokenType.BOOLEAN -> value.value
+                    FilterTokenType.IDENT -> value.value
+                    else -> value.value
+                }
+                return Pair(
+                    ParsedFilter(
+                        ParsedNodeType.LITERAL_COMPARISON,
+                        path = literalValue,
+                        operator = op.value,
+                        value = valueStr
+                    ),
+                    remaining.drop(1)
+                )
+            }
+        }
+
+        // No operator following — treat as truthy check
+        val numVal = literalValue.toDoubleOrNull()
+        return if (numVal != null) {
+            Pair(ParsedFilter(ParsedNodeType.CONSTANT, numVal != 0.0), tokens)
+        } else {
+            Pair(ParsedFilter(ParsedNodeType.CONSTANT, literalValue.isNotEmpty()), tokens)
+        }
     }
 
     private fun parseFunctionCall(name: String, tokens: List<FilterToken>): Pair<ParsedFilter, List<FilterToken>> {
@@ -851,6 +933,94 @@ class ExpressionEngine {
         return evaluateCompiledFilter(compiled.parsed!!, json, data, headers)
     }
 
+    /**
+     * 两阶段过滤器执行：
+     * Phase 1: 解析 {…} 模板占位符为字面值（复用模板引擎）
+     * Phase 2: 对解析后的纯布尔表达式求值（无变量访问）
+     *
+     * 不含 {…} 的表达式走原有的 executeFilter() 路径（向后兼容）
+     */
+    fun executeTwoPhaseFilter(expression: String, data: ByteArray, headers: Map<String, String>? = null): Boolean {
+        if (!expression.contains("{")) {
+            return executeFilter(expression, data, headers)
+        }
+
+        val dataStr = String(data)
+        val json = try { JSONObject(dataStr) } catch (_: Exception) { null }
+        val resolved = resolveFilterTemplate(expression, dataStr, json, headers ?: emptyMap())
+        return executeFilter(resolved, json, data, headers)
+    }
+
+    /**
+     * 两阶段过滤器执行（复用已解析的 JSONObject）
+     */
+    fun executeTwoPhaseFilter(expression: String, preParsedJson: JSONObject?, data: ByteArray, headers: Map<String, String>? = null): Boolean {
+        if (!expression.contains("{")) {
+            return executeFilter(expression, preParsedJson, data, headers)
+        }
+
+        val dataStr = String(data)
+        val json = preParsedJson ?: try { JSONObject(dataStr) } catch (_: Exception) { null }
+        val resolved = resolveFilterTemplate(expression, dataStr, json, headers ?: emptyMap())
+        return executeFilter(resolved, json, data, headers)
+    }
+
+    /**
+     * 解析过滤模板中的 {…} 占位符，返回纯文本表达式
+     * 复用 resolveFormatExpression() 逻辑，{{ 转义为 {
+     */
+    private fun resolveFilterTemplate(
+        expression: String,
+        dataStr: String,
+        json: JSONObject?,
+        headers: Map<String, String>
+    ): String {
+        val result = StringBuilder()
+        var i = 0
+        while (i < expression.length) {
+            if (expression[i] == '{') {
+                if (i + 1 < expression.length && expression[i + 1] == '{') {
+                    result.append('{')
+                    i += 2
+                    continue
+                }
+                val closeIdx = expression.indexOf('}', i + 1)
+                if (closeIdx < 0) {
+                    result.append(expression[i])
+                    i++
+                    continue
+                }
+                val expr = expression.substring(i + 1, closeIdx).trim()
+                val resolved = resolveFormatExpression(expr, dataStr, json, headers)
+                val resolvedDouble = resolved.toDoubleOrNull()
+                // Check if the {…} block is wrapped in quotes (e.g. "{type}")
+                val prevChar = if (result.isNotEmpty()) result[result.length - 1] else ' '
+                val nextIdx = closeIdx + 1
+                val nextChar = if (nextIdx < expression.length) expression[nextIdx] else ' '
+                val isQuoted = (prevChar == '"' && nextChar == '"') || (prevChar == '\'' && nextChar == '\'')
+                if (isQuoted) {
+                    // Inside quotes — insert raw value, keep surrounding quotes
+                    result.append(resolved.replace("\"", "\\\""))
+                    // Append the closing quote and skip past it
+                    result.append(nextChar)
+                    i = closeIdx + 2
+                } else if (resolvedDouble != null) {
+                    // Numeric value — no quotes needed
+                    result.append(resolved)
+                    i = closeIdx + 1
+                } else {
+                    // String value not in quotes — auto-quote for Phase 2
+                    result.append("\"").append(resolved.replace("\"", "\\\"")).append("\"")
+                    i = closeIdx + 1
+                }
+            } else {
+                result.append(expression[i])
+                i++
+            }
+        }
+        return result.toString()
+    }
+
     private fun evaluateCompiledFilter(filter: ParsedFilter, json: JSONObject?, data: ByteArray, headers: Map<String, String>?): Boolean {
         return when (filter.type) {
             ParsedNodeType.CONSTANT -> filter.constantValue == true
@@ -874,6 +1044,22 @@ class ExpressionEngine {
                     else -> true
                 }
             }
+            ParsedNodeType.LITERAL_COMPARISON -> {
+                val left = filter.path ?: ""
+                val right = filter.value ?: ""
+                val leftNum = left.toDoubleOrNull()
+                val rightNum = right.toDoubleOrNull()
+
+                when (filter.operator) {
+                    "==" -> left == right
+                    "!=" -> left != right
+                    ">" -> if (leftNum != null && rightNum != null) leftNum > rightNum else left > right
+                    "<" -> if (leftNum != null && rightNum != null) leftNum < rightNum else left < right
+                    ">=" -> if (leftNum != null && rightNum != null) leftNum >= rightNum else left >= right
+                    "<=" -> if (leftNum != null && rightNum != null) leftNum <= rightNum else left <= right
+                    else -> true
+                }
+            }
             ParsedNodeType.AND -> {
                 val left = filter.left?.let { evaluateCompiledFilter(it, json, data, headers) } ?: true
                 val right = filter.right?.let { evaluateCompiledFilter(it, json, data, headers) } ?: true
@@ -883,6 +1069,10 @@ class ExpressionEngine {
                 val left = filter.left?.let { evaluateCompiledFilter(it, json, data, headers) } ?: false
                 val right = filter.right?.let { evaluateCompiledFilter(it, json, data, headers) } ?: false
                 left || right
+            }
+            ParsedNodeType.NOT -> {
+                val operand = filter.left?.let { evaluateCompiledFilter(it, json, data, headers) } ?: true
+                !operand
             }
             ParsedNodeType.FUNCTION -> {
                 // 优先检查原始数据函数（支持非 JSON 数据）
@@ -1272,7 +1462,7 @@ class ExpressionEngine {
     }
 
     enum class FilterTokenType {
-        IDENT, STRING, NUMBER, BOOLEAN, OPERATOR, LOGICAL, PAREN, COMMA
+        IDENT, STRING, NUMBER, BOOLEAN, OPERATOR, LOGICAL, NOT, PAREN, COMMA
     }
 
     data class FilterToken(
@@ -1281,7 +1471,7 @@ class ExpressionEngine {
     )
 
     enum class ParsedNodeType {
-        CONSTANT, PATH, COMPARISON, AND, OR, FUNCTION
+        CONSTANT, PATH, COMPARISON, LITERAL_COMPARISON, AND, OR, NOT, FUNCTION
     }
 
     data class ParsedFilter(

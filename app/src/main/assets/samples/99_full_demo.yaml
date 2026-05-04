@@ -143,7 +143,7 @@ rules:
     pipeline:
       - transform:
           extract: "data"           # 提取 data 字段
-          filter: "length(data) > 0"   # 过滤空数据
+          filter: "{length(data)} > 0"   # 过滤空数据
         to: [cloud_api, raw_data_log]
 
   # 处理 MQTT 传感器数据
@@ -152,7 +152,7 @@ rules:
     pipeline:
       - transform:
           extract: "temperature"
-          filter: "temperature > 0"
+          filter: "{temperature} > 0"
         to: [cloud_api, debug_clipboard]
     onError:
       - to: [raw_data_log]

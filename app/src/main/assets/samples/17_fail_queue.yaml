@@ -105,7 +105,7 @@ rules:
     pipeline:
       - transform:
           # 过滤条件：只处理真正的 mqtt_failures 类型（冗余安全）
-          filter: "$headers.X-IdType == 'mqtt_failures'"
+          filter: "\"{\$headers.X-IdType}\" == \"mqtt_failures\""
           # 可选：在 header 中附加重试标记
           format: "{data}"
         to: [http_fallback]

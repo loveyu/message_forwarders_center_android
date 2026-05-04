@@ -61,6 +61,12 @@ class RuleEngine(
         // Register raw data functions that need Android context
         context?.let { ctx ->
             val appCtx = ctx.applicationContext
+
+            // clipboardUpdateBefore 函数：获取距上次更新的秒数
+            expressionEngine.clipboardUpdateBeforeFn = { text ->
+                ClipboardHistoryDbHelper.getSecondsSinceLastUpdate(appCtx, text)
+            }
+
             // clipboardNew(seconds): 检查当前数据是否为新内容，或距上次更新已超过指定秒数
             // 用于剪贴板去重同步，在写入历史之前调用
             expressionEngine.registerRawDataFunction(
@@ -74,7 +80,9 @@ class RuleEngine(
                         else -> 10_000L
                     }
                     val text = String(data)
-                    ClipboardHistoryDbHelper.isNotRecentlyUpdated(appCtx, text, maxAgeMs)
+                    val sec = expressionEngine.clipboardUpdateBeforeFn?.invoke(text) ?: -1L
+                    // sec < 0: content not in history (new), sec*1000 > maxAgeMs: expired
+                    sec < 0 || sec * 1000 > maxAgeMs
                 }
             )
 
@@ -203,11 +211,13 @@ class RuleEngine(
             // Apply filter if present (复用 currentJson，无需重新解析)
             if (!skipStep && transform?.filter != null) {
                 val passed = withContext(Dispatchers.Default) {
-                    expressionEngine.executeFilter(transform.filter!!, currentJson, currentData, inputMessage.headers)
+                    expressionEngine.executeTwoPhaseFilter(transform.filter!!, currentJson, currentData, inputMessage.headers)
                 }
                 if (!passed) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] filter [${transform.filter}] -> REJECTED")
                     skipStep = true
+                } else if (transform.filter!!.contains("clipboardUpdateBefore")) {
+                    ClipboardHistoryDbHelper.updateLastPassedTime(String(currentData))
                 }
             }
 
@@ -295,9 +305,11 @@ class RuleEngine(
 
             // Apply filter if present
             if (!skipStep && transform?.filter != null) {
-                if (!expressionEngine.executeFilter(transform.filter!!, currentJson, currentData, inputMessage.headers)) {
+                if (!expressionEngine.executeTwoPhaseFilter(transform.filter!!, currentJson, currentData, inputMessage.headers)) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] filter [${transform.filter}] -> REJECTED")
                     skipStep = true
+                } else if (transform.filter!!.contains("clipboardUpdateBefore")) {
+                    ClipboardHistoryDbHelper.updateLastPassedTime(String(currentData))
                 }
             }
 
@@ -412,7 +424,7 @@ class RuleEngine(
     }
 
     private fun evaluateFilter(filter: String, data: ByteArray, headers: Map<String, String>?): Boolean {
-        return expressionEngine.executeFilter(filter, data, headers)
+        return expressionEngine.executeTwoPhaseFilter(filter, data, headers)
     }
 
     private fun detectMedia(data: ByteArray, type: String): Boolean {

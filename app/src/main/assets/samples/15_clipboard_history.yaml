@@ -8,12 +8,13 @@
 #   clipboard        - 将文本写入系统剪贴板（仅在亮屏时立即生效，熄屏时缓冲）
 #   link (producer)  - 发布到 MQTT，用于多设备剪贴板同步
 #
-# 核心过滤函数 clipboardNew(seconds):
-#   对当前数据（pipeline 中已解码的文本）进行去重判断：
-#     - 内容从未出现在本地历史中 → 通过（新内容）
-#     - 内容存在于历史，但距上次更新已超过 seconds 秒 → 通过（长时间未出现，视为新）
-#     - 内容存在且在 seconds 秒内刚刚更新 → 拒绝（重复，跳过 MQTT 发布）
-#   注意：clipboardNew 检查必须在 clipboardHistory 写入之前执行，
+# 核心过滤函数 clipboardUpdateBefore(text):
+#   返回距上次过滤通过的秒数，不存在则返回 -1
+#   用法：{clipboardUpdateBefore(data)} > 30 or {clipboardUpdateBefore(data)} < 0
+#     - 返回 -1 → 内容从未出现在历史中 → 通过（新内容）
+#     - 返回值 > 30 → 距上次通过已超过 30 秒 → 通过（长时间未出现，视为新）
+#     - 返回值 <= 30 → 近期已通过 → 拒绝（重复，跳过 MQTT 发布）
+#   注意：clipboardUpdateBefore 检查必须在 clipboardHistory 写入之前执行，
 #         以确保检查的是"当前消息到达前"的历史状态。
 #
 # pipeline 执行顺序保证:
@@ -60,14 +61,14 @@ rules:
       # Step 1: 解码 base64，写入系统剪贴板（不过滤，始终执行）
       - transform:
           extract: "base64Decode(base64)"
-          filter: "type == 'text'"
+          filter: "\"{type}\" == \"text\""
         to: [clipboard_write]
 
       # Step 2: 过滤去重，仅当内容是新增或距上次同步超过 30 秒时才同步到 MQTT
       #         注意：此步骤必须在 Step 3（历史写入）之前，
-      #               clipboardNew 检查的是写入前的历史状态
+      #               clipboardUpdateBefore 检查的是写入前的历史状态
       - transform:
-          filter: "clipboardNew(30)"
+          filter: "{clipboardUpdateBefore(data)} > 30 or {clipboardUpdateBefore(data)} < 0"
         to: [clipboard_sync]
 
       # Step 3: 始终写入本地历史（无论 Step 2 是否过滤，均记录）

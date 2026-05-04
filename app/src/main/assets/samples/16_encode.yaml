@@ -116,7 +116,7 @@ rules:
     from: http_in
     pipeline:
       - transform:
-          filter: "type == 'text'"
+          filter: "\"{type}\" == \"text\""
           format: '{{"data":"{base64Encode(content)}","type":"{type}"}'
         to: [mqtt_publish]
 
@@ -223,7 +223,7 @@ rules:
     from: http_in
     pipeline:
       - transform:
-          filter: "type == 'text'"
+          filter: "\"{type}\" == \"text\""
           format: '{{"data":"{base64Encode(content)}","type":"{type}"}'
         to: [mqtt_publish]
 

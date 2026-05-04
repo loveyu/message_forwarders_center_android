@@ -108,7 +108,7 @@ rules:
     from: http_in
     pipeline:
       - transform:
-          filter: 'length(data) > 0'
+          filter: "{length(data)} > 0"
         to: [mqtt_wrapped, http_json_envelope]
 
   # pipeline 中提取字段，output 再追加 meta 字段
