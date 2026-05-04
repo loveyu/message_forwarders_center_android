@@ -49,6 +49,9 @@ object LogManager {
     private val _logLevel = MutableStateFlow(LogLevel.INFO)
     val logLevelFlow: StateFlow<LogLevel> = _logLevel.asStateFlow()
 
+    /** 当为 true 时使用 println 输出（单元测试环境） */
+    var logToStdout = false
+
     private var isPaused = false
     private var currentLogLevel: LogLevel
         get() = _logLevel.value
@@ -117,7 +120,11 @@ object LogManager {
 
         if (isAllLogcatEnabled || level.androidPriority >= Log.WARN) {
             val logcatMsg = if (contextJson != null) "$message $contextJson" else message
-            Log.println(level.androidPriority, tag, logcatMsg)
+            if (logToStdout) {
+                println("[${level.tag}:$tag] $logcatMsg")
+            } else {
+                Log.println(level.androidPriority, tag, logcatMsg)
+            }
         }
 
         // 构造 LogEntry（level 解析完毕，UI 层直接使用）

@@ -24,8 +24,9 @@ Message Forwarders Center Android - Android 消息转发中心，基于 Android 
 **提交前必须执行**：
 1. `./gradlew spotlessApply` — 格式化所有 Kotlin 文件
 2. `./gradlew assembleDebug` — 验证编译通过
+3. `./gradlew testDebugUnitTest` — 运行单元测试，确保全部通过
 
-禁止提交存在 ktlint/ktfmt 违规的代码。CI 会拒绝违规的 PR。
+禁止提交存在 ktlint/ktfmt 违规的代码，或单元测试失败的代码。CI 会拒绝违规的 PR。
 
 详细规范见 `.editorconfig` 和 `app/build.gradle.kts` 中的 spotless 配置。
 

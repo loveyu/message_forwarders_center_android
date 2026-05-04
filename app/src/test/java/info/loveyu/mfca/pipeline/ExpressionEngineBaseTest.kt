@@ -1,5 +1,6 @@
 package info.loveyu.mfca.pipeline
 
+import info.loveyu.mfca.util.LogManager
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Before
@@ -14,7 +15,9 @@ abstract class ExpressionEngineBaseTest {
 
     @Before
     open fun setUp() {
+        LogManager.logToStdout = true
         engine = ExpressionEngine()
+        engine.deviceIdValue = "test-device-id"
         // Override base64 functions with java.util.Base64 for non-Android JUnit
         engine.registerCustomFunction(
             "base64Decode",

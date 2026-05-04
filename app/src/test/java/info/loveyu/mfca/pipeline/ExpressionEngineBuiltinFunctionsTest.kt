@@ -218,6 +218,8 @@ class ExpressionEngineBuiltinFunctionsTest : ExpressionEngineBaseTest() {
         val nowSec = System.currentTimeMillis() / 1000.0
         assertTrue(floatVal <= nowSec + 1)
     }
+
+    @Test
     fun `nowMs - returns milliseconds timestamp`() {
         val json = json("""{"dummy":1}""")
         val result = engine.evaluateExtractExpression(json, "nowMs()")
@@ -269,6 +271,23 @@ class ExpressionEngineBuiltinFunctionsTest : ExpressionEngineBaseTest() {
         val result = engine.evaluateExtractExpression(json, "msToSec(ms)")
         assertNotNull(result)
         assertTrue(String(result!!).startsWith("12.345"))
+    }
+
+    @Test
+    fun `msToSec - with literal number args`() {
+        val json = json("""{"dummy":1}""")
+        val result = engine.evaluateExtractExpression(json, "msToSec(12345, 6)")
+        assertNotNull(result)
+        val s = String(result!!)
+        assertTrue(s.startsWith("12.345"))
+    }
+
+    @Test
+    fun `msToSec - with literal ms only`() {
+        val json = json("""{"dummy":1}""")
+        val result = engine.evaluateExtractExpression(json, "msToSec(12000)")
+        assertNotNull(result)
+        assertEquals("12.000", String(result!!))
     }
 
     // ── UUID functions ─────────────────────────────────────────
@@ -342,6 +361,16 @@ class ExpressionEngineBuiltinFunctionsTest : ExpressionEngineBaseTest() {
         val r1 = String(engine.evaluateExtractExpression(json, "randStr(len)")!!)
         val r2 = String(engine.evaluateExtractExpression(json, "randStr(len)")!!)
         assertTrue(r1 != r2)
+    }
+
+    @Test
+    fun `randStr - with literal number arg`() {
+        val json = json("""{"dummy":1}""")
+        val result = engine.evaluateExtractExpression(json, "randStr(16)")
+        assertNotNull(result)
+        val s = String(result!!)
+        assertEquals(16, s.length)
+        assertTrue(s.all { it.isLetterOrDigit() })
     }
 
     // ── String manipulation ────────────────────────────────────

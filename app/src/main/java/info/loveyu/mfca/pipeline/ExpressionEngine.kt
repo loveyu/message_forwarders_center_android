@@ -32,6 +32,9 @@ class ExpressionEngine {
     // 预编译表达式缓存
     private val compiledFilters = ConcurrentHashMap<String, CompiledFilter>()
 
+    // 设备 ID（由外部设置，如 RuleEngine 通过 Android Settings.Secure 获取）
+    var deviceIdValue: String = ""
+
     // 内置函数
     private val builtinFunctions = ConcurrentHashMap<String, BuiltinFunction>()
 
@@ -253,6 +256,10 @@ class ExpressionEngine {
                 }
                 results.joinToString(",")
             } catch (_: Exception) { "" }
+        }
+
+        builtinFunctions["deviceId"] = BuiltinFunction("deviceId", 0) { _ ->
+            deviceIdValue
         }
 
         builtinFunctions["msToDate"] = BuiltinFunction("msToDate", 2) { args ->
@@ -1027,8 +1034,14 @@ class ExpressionEngine {
                     inQuote = false
                     current.append(c)
                 }
-                c == '(' && !inQuote -> depth++
-                c == ')' && !inQuote -> depth--
+                c == '(' && !inQuote -> {
+                    depth++
+                    current.append(c)
+                }
+                c == ')' && !inQuote -> {
+                    depth--
+                    current.append(c)
+                }
                 c == ',' && depth == 0 && !inQuote -> {
                     args.add(current.toString())
                     current = StringBuilder()

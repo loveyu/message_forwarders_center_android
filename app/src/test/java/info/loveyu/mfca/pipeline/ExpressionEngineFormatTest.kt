@@ -578,4 +578,161 @@ class ExpressionEngineFormatTest : ExpressionEngineBaseTest() {
         assertEquals(3, arr.length())
         assertEquals(1, arr.getInt(0))
     }
+
+    // ── Nested / recursive function calls in format templates ───
+
+    @Test
+    fun `nested - jsonEncode of base64Encode data`() {
+        val data = "hello world".toByteArray()
+        val result = engine.evaluateFormatTemplate("{jsonEncode(base64Encode(data))}", data, emptyMap())
+        val s = String(result)
+        // base64Encode("hello world") = "aGVsbG8gd29ybGQ="
+        // jsonEncode returns quoted string: "aGVsbG8gd29ybGQ="
+        assertEquals(""""aGVsbG8gd29ybGQ="""", s)
+    }
+
+    @Test
+    fun `nested - jsonEncode of base64Encode with special chars`() {
+        val data = """he said "hello"""".toByteArray()
+        val result = engine.evaluateFormatTemplate("{jsonEncode(base64Encode(data))}", data, emptyMap())
+        val s = String(result)
+        // Should be a quoted string (base64 of the input)
+        assertTrue(s.startsWith("\""))
+        assertTrue(s.endsWith("\""))
+    }
+
+    @Test
+    fun `nested - base64Encode of data via format template`() {
+        val data = "hello".toByteArray()
+        val result = engine.evaluateFormatTemplate("{base64Encode(data)}", data, emptyMap())
+        assertEquals("aGVsbG8=", String(result))
+    }
+
+    @Test
+    fun `nested - urlEncode of base64Encode data`() {
+        val data = "hello world".toByteArray()
+        val result = engine.evaluateFormatTemplate("{urlEncode(base64Encode(data))}", data, emptyMap())
+        val s = String(result)
+        // base64Encode produces "aGVsbG8gd29ybGQ=", urlEncode should encode the = sign
+        assertTrue(s.contains("aGVsbG8gd29ybGQ"))
+    }
+
+    @Test
+    fun `nested - toUpperCase of trim via format template`() {
+        val data = """{"name":"  hello  "}""".toByteArray()
+        val result = engine.evaluateFormatTemplate("{toUpperCase(trim(name))}", data, emptyMap())
+        assertEquals("HELLO", String(result))
+    }
+
+    @Test
+    fun `nested - jsonEncode of toUpperCase data`() {
+        val data = """{"msg":"hello"}""".toByteArray()
+        val result = engine.evaluateFormatTemplate("{jsonEncode(toUpperCase(msg))}", data, emptyMap())
+        val s = String(result)
+        assertEquals(""""HELLO"""", s)
+    }
+
+    @Test
+    fun `nested - base64Encode of jsonEncode data`() {
+        val data = """hello""".toByteArray()
+        val result = engine.evaluateFormatTemplate("{base64Encode(jsonEncode(data))}", data, emptyMap())
+        val s = String(result)
+        // jsonEncode("hello") = "\"hello\"" (a quoted string)
+        // base64Encode of that quoted string
+        val expected = java.util.Base64.getEncoder()
+            .encodeToString(""""hello""""
+                .toByteArray(Charsets.UTF_8))
+        assertEquals(expected, s)
+    }
+
+    @Test
+    fun `nested - jsonEncode with non-JSON data`() {
+        val data = "plain text".toByteArray()
+        val result = engine.evaluateFormatTemplate("{jsonEncode(data)}", data, emptyMap())
+        val s = String(result)
+        assertEquals(""""plain text"""", s)
+    }
+
+    @Test
+    fun `nested - base64Encode with non-JSON data`() {
+        val data = "plain text".toByteArray()
+        val result = engine.evaluateFormatTemplate("{base64Encode(data)}", data, emptyMap())
+        assertEquals("cGxhaW4gdGV4dA==", String(result))
+    }
+
+    @Test
+    fun `nested - jsonEncode of base64Encode non-JSON data`() {
+        val data = "plain text".toByteArray()
+        val result = engine.evaluateFormatTemplate("{jsonEncode(base64Encode(data))}", data, emptyMap())
+        val s = String(result)
+        // base64Encode("plain text") = "cGxhaW4gdGV4dA=="
+        // jsonEncode returns: "cGxhaW4gdGV4dA=="
+        assertEquals(""""cGxhaW4gdGV4dA=="""", s)
+    }
+
+    @Test
+    fun `nested - triple nesting jsonEncode urlEncode base64Encode`() {
+        val data = "hello".toByteArray()
+        val result = engine.evaluateFormatTemplate("{jsonEncode(urlEncode(base64Encode(data)))}", data, emptyMap())
+        val s = String(result)
+        // base64Encode("hello") = "aGVsbG8="
+        // urlEncode("aGVsbG8=") = "aGVsbG8%3D"
+        // jsonEncode("aGVsbG8%3D") = "\"aGVsbG8%3D\""
+        assertTrue(s.startsWith("\""))
+        assertTrue(s.contains("aGVsbG8"))
+        assertTrue(s.endsWith("\""))
+    }
+
+    // ── jsonEncode in JSON template context (with {{ escaping) ──
+
+    @Test
+    fun `jsonEncode in json template with double brace escape`() {
+        val data = "hello world".toByteArray()
+        val template = """{{"payload":{jsonEncode(base64Encode(data))}}}"""
+        val result = engine.evaluateFormatTemplate(template, data, emptyMap())
+        val s = String(result)
+        // Should produce valid JSON: {"payload":"aGVsbG8gd29ybGQ="}
+        val parsed = JSONObject(s)
+        assertEquals("aGVsbG8gd29ybGQ=", parsed.getString("payload"))
+    }
+
+    @Test
+    fun `jsonEncode special chars in json template`() {
+        val data = """he said "hello"""".toByteArray()
+        val template = """{{"message":{jsonEncode(data)}}}"""
+        val result = engine.evaluateFormatTemplate(template, data, emptyMap())
+        val s = String(result)
+        // Should produce valid JSON with escaped quotes
+        val parsed = JSONObject(s)
+        assertEquals("""he said "hello"""", parsed.getString("message"))
+    }
+
+    // ── Functions with literal number args in format templates ──
+
+    @Test
+    fun `now with literal 3 in format template`() {
+        val data = "test".toByteArray()
+        val result = engine.evaluateFormatTemplate("{now(3)}", data, emptyMap())
+        val s = String(result)
+        assertTrue(s.contains("."))
+        assertEquals(3, s.split(".")[1].length)
+    }
+
+    @Test
+    fun `randStr with literal 8 in format template`() {
+        val data = "test".toByteArray()
+        val result = engine.evaluateFormatTemplate("{randStr(8)}", data, emptyMap())
+        val s = String(result)
+        assertEquals(8, s.length)
+        assertTrue(s.all { it.isLetterOrDigit() })
+    }
+
+    @Test
+    fun `msToSec with literal number args in format template`() {
+        val data = "test".toByteArray()
+        val result = engine.evaluateFormatTemplate("{msToSec(12345, 6)}", data, emptyMap())
+        val s = String(result)
+        assertTrue(s.startsWith("12.345"))
+        assertEquals(6, s.split(".")[1].length)
+    }
 }

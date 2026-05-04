@@ -79,11 +79,8 @@ class RuleEngine(
             )
 
             // deviceId(): 返回设备 ANDROID_ID（每个应用签名+设备唯一）
-            val androidId = Settings.Secure.getString(appCtx.contentResolver, Settings.Secure.ANDROID_ID) ?: ""
-            expressionEngine.registerCustomFunction(
-                "deviceId",
-                ExpressionEngine.BuiltinFunction("deviceId", 0) { _ -> androidId }
-            )
+            expressionEngine.deviceIdValue =
+                Settings.Secure.getString(appCtx.contentResolver, Settings.Secure.ANDROID_ID) ?: ""
         }
 
         // 预编译所有规则中的表达式
