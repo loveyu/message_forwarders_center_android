@@ -108,7 +108,7 @@ protocol://[username:password@]host:port[?param1=value1&param2=value2...]
 - filter: 表达式过滤（`"len(data.items) > 0"`, `"path == value"`, `"startsWith"`, `"$headers.X"`）
 - extract: GJSON 路径提取（`"data.temperature"`, `"$raw"`, `"base64Decode(content)"`）
 - format: 模板格式化（`"{headers}\n{data}"`, `"{data.field}"`）、字段删除（`$delete: ["field"]`）
-- exitPipeline: 过滤失败时是否退出整个管道（默认 `false`）
+- breakOnReject: 过滤拒绝时是否中断整个管道（默认 `false`）
 - onError: 错误处理管道（每条规则可选）
 
 ## 提交规范

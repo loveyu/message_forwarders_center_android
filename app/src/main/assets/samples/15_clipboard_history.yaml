@@ -59,11 +59,11 @@ rules:
     from: fcitx5_clipboard
     pipeline:
       # Step 1: 先过滤仅处理文本类型，再解码 base64，写入系统剪贴板
-      # exitPipeline: true 表示过滤失败时退出整个管道，不再执行 Step 2/3
+      # breakOnReject: true 表示过滤失败时退出整个管道，不再执行 Step 2/3
       - transform:
           filter: "\"{type}\" == \"text\""
           extract: "base64Decode(base64)"
-          exitPipeline: true
+          breakOnReject: true
         to: [clipboard_write]
 
       # Step 2: 过滤去重，仅当内容是新增或距上次同步超过 30 秒时才同步到 MQTT

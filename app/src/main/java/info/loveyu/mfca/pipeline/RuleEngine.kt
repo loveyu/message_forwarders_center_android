@@ -222,8 +222,8 @@ class RuleEngine(
             }
 
             if (skipStep) {
-                if (transform?.exitPipeline == true) {
-                    LogManager.logDebug("RULE", "Rule [${rule.name}] exitPipeline: breaking pipeline")
+                if (transform?.breakOnReject == true) {
+                    LogManager.logDebug("RULE", "Rule [${rule.name}] breakOnReject: breaking pipeline")
                     break
                 }
                 continue
@@ -318,8 +318,8 @@ class RuleEngine(
             }
 
             if (skipStep) {
-                if (transform?.exitPipeline == true) {
-                    LogManager.logDebug("RULE", "Rule [${rule.name}] exitPipeline: breaking pipeline")
+                if (transform?.breakOnReject == true) {
+                    LogManager.logDebug("RULE", "Rule [${rule.name}] breakOnReject: breaking pipeline")
                     break
                 }
                 continue

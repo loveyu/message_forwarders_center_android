@@ -4,13 +4,13 @@
 # transform 执行顺序：detect → enrich → filter → extract → format → output
 #   filter 在 extract 之前执行，过滤失败则跳过提取
 #
-# exitPipeline 属性（默认 false）：
-#   设为 true 时，当前步骤过滤失败将终止整个管道，不再执行后续步骤
+# breakOnReject 属性（默认 false）：
+#   设为 true 时，当前步骤过滤拒绝将中断整个管道，不再执行后续步骤
 #   示例:
 #     - transform:
 #         filter: "\"{type}\" == \"text\""
 #         extract: "base64Decode(content)"
-#         exitPipeline: true
+#         breakOnReject: true
 #       to: [output]
 #
 # filter 过滤语法（两阶段）：

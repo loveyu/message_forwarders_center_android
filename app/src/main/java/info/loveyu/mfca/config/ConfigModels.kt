@@ -411,11 +411,11 @@ data class TransformConfig(
     val formatSteps: List<OutputFormatStep>? = null,
     val enrich: String? = null,  // "enricherType:parameter", e.g., "gotifyIcon:gotify_link"
     /**
-     * 过滤失败时是否退出整个管道流程。
-     * 默认 false：过滤失败仅跳过当前步骤，继续执行后续管道步骤。
-     * 设为 true：过滤失败时终止整个管道，不再执行后续步骤。
+     * 过滤拒绝时是否中断整个管道流程。
+     * 默认 false：过滤拒绝仅跳过当前步骤，继续执行后续管道步骤。
+     * 设为 true：过滤拒绝时中断整个管道，不再执行后续步骤。
      */
-    val exitPipeline: Boolean = false
+    val breakOnReject: Boolean = false
 )
 
 /**
