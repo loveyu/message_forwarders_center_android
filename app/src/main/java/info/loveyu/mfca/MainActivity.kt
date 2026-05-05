@@ -249,6 +249,10 @@ private fun MainContent(
         remember { androidx.compose.material3.DrawerState(androidx.compose.material3.DrawerValue.Closed) }
     val notifyScope = rememberCoroutineScope()
 
+    var cleanByTimeTrigger by remember { mutableIntStateOf(0) }
+    var cleanPasswordsTrigger by remember { mutableIntStateOf(0) }
+    var cleanVerificationCodesTrigger by remember { mutableIntStateOf(0) }
+
     Scaffold(
         topBar = {
             when (selectedTab) {
@@ -258,7 +262,11 @@ private fun MainContent(
                         notifyScope.launch { notifyDrawerState.open() }
                     }
                 )
-                BottomTab.CLIPBOARD_HISTORY -> ClipboardHistoryTopBar()
+                BottomTab.CLIPBOARD_HISTORY -> ClipboardHistoryTopBar(
+                    onCleanByTime = { cleanByTimeTrigger++ },
+                    onCleanPasswords = { cleanPasswordsTrigger++ },
+                    onCleanVerificationCodes = { cleanVerificationCodesTrigger++ }
+                )
             }
         },
         bottomBar = {
@@ -315,7 +323,15 @@ private fun MainContent(
 
             BottomTab.CLIPBOARD_HISTORY -> ClipboardHistoryContent(
                 contentPadding = innerPadding,
-                refreshTrigger = refreshTrigger
+                refreshTrigger = refreshTrigger,
+                cleanByTimeTrigger = cleanByTimeTrigger,
+                cleanPasswordsTrigger = cleanPasswordsTrigger,
+                cleanVerificationCodesTrigger = cleanVerificationCodesTrigger,
+                onCleanTriggerConsumed = {
+                    cleanByTimeTrigger = 0
+                    cleanPasswordsTrigger = 0
+                    cleanVerificationCodesTrigger = 0
+                }
             )
         }
     }

@@ -395,6 +395,57 @@ class ClipboardHistoryDbHelper(context: Context) :
         return deleted
     }
 
+    fun deleteOlderThan(cutoffMs: Long): Int {
+        val db = writableDatabase
+        val deleted = db.delete(
+            TABLE_NAME,
+            "$COL_UPDATED_AT < ? AND $COL_PINNED = 0",
+            arrayOf(cutoffMs.toString())
+        )
+        if (deleted > 0) _changeVersion.value += 1
+        return deleted
+    }
+
+    fun deleteAllUnpinned(): Int {
+        val db = writableDatabase
+        val deleted = db.delete(TABLE_NAME, "$COL_PINNED = 0", null)
+        if (deleted > 0) _changeVersion.value += 1
+        return deleted
+    }
+
+    fun deleteByPattern(patterns: List<Regex>): Int {
+        if (patterns.isEmpty()) return 0
+        val db = readableDatabase
+        val cursor = db.query(
+            TABLE_NAME,
+            arrayOf(COL_ID, COL_CONTENT),
+            "$COL_PINNED = 0",
+            null, null, null, null
+        )
+        val idsToDelete = mutableListOf<Long>()
+        while (cursor.moveToNext()) {
+            val id = cursor.getLong(0)
+            val content = cursor.getString(1)
+            if (patterns.any { it.containsMatchIn(content) }) {
+                idsToDelete.add(id)
+            }
+        }
+        cursor.close()
+        if (idsToDelete.isEmpty()) return 0
+        val dbw = writableDatabase
+        var totalDeleted = 0
+        idsToDelete.chunked(500).forEach { chunk ->
+            val placeholders = chunk.joinToString(",") { "?" }
+            totalDeleted += dbw.delete(
+                TABLE_NAME,
+                "$COL_ID IN ($placeholders)",
+                chunk.map { it.toString() }.toTypedArray()
+            )
+        }
+        if (totalDeleted > 0) _changeVersion.value += 1
+        return totalDeleted
+    }
+
     fun cleanupOldRecords(maxRecords: Int = DEFAULT_MAX_RECORDS): Int {
         val db = writableDatabase
         val cursor = db.rawQuery(
