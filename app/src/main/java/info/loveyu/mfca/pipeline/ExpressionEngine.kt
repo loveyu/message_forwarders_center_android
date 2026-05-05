@@ -127,6 +127,11 @@ class ExpressionEngine {
             val json =
                 when (arg) {
                     is JSONObject -> arg
+                    is Map<*, *> -> {
+                        val obj = JSONObject()
+                        arg.forEach { (k, v) -> obj.put(k?.toString() ?: "", v) }
+                        obj
+                    }
                     is String ->
                         try {
                             JSONObject(arg)
@@ -348,19 +353,28 @@ class ExpressionEngine {
         }
 
         builtinFunctions["has"] = BuiltinFunction("has", 2) { args ->
-            val json = args.getOrNull(0) as? JSONObject ?: return@BuiltinFunction false
             val key = args.getOrNull(1)?.toString() ?: return@BuiltinFunction false
-            json.has(key)
+            when (val v = args.getOrNull(0)) {
+                is JSONObject -> v.has(key)
+                is Map<*, *> -> v.containsKey(key)
+                else -> false
+            }
         }
 
         builtinFunctions["keys"] = BuiltinFunction("keys", 1) { args ->
-            val json = args.getOrNull(0) as? JSONObject ?: return@BuiltinFunction emptyList<Any>()
-            json.keys().asSequence().toList()
+            when (val v = args.getOrNull(0)) {
+                is JSONObject -> v.keys().asSequence().toList()
+                is Map<*, *> -> v.keys.toList()
+                else -> emptyList<Any>()
+            }
         }
 
         builtinFunctions["values"] = BuiltinFunction("values", 1) { args ->
-            val json = args.getOrNull(0) as? JSONObject ?: return@BuiltinFunction emptyList<Any>()
-            json.keys().asSequence().map { json.opt(it) }.toList()
+            when (val v = args.getOrNull(0)) {
+                is JSONObject -> v.keys().asSequence().map { v.opt(it) }.toList()
+                is Map<*, *> -> v.values.toList()
+                else -> emptyList<Any>()
+            }
         }
 
         // 类型检查函数
@@ -377,11 +391,11 @@ class ExpressionEngine {
         }
 
         builtinFunctions["isArray"] = BuiltinFunction("isArray", 1) { args ->
-            args.getOrNull(0) is JSONArray
+            args.getOrNull(0)?.let { it is JSONArray || it is List<*> } == true
         }
 
         builtinFunctions["isObject"] = BuiltinFunction("isObject", 1) { args ->
-            args.getOrNull(0) is JSONObject
+            args.getOrNull(0)?.let { it is JSONObject || it is Map<*, *> } == true
         }
 
         builtinFunctions["isNull"] = BuiltinFunction("isNull", 1) { args ->
@@ -404,8 +418,8 @@ class ExpressionEngine {
                         // JSON string literal — use JSONTokener to properly unquote and unescape
                         org.json.JSONTokener(trimmed).nextValue()?.toString() ?: str
                     }
-                    trimmed.startsWith("{") -> JSONObject(trimmed)
-                    trimmed.startsWith("[") -> JSONArray(trimmed)
+                    trimmed.startsWith("{") -> jsonToMap(JSONObject(trimmed))
+                    trimmed.startsWith("[") -> jsonToList(JSONArray(trimmed))
                     trimmed == "true" -> true
                     trimmed == "false" -> false
                     trimmed == "null" -> null
@@ -502,6 +516,8 @@ class ExpressionEngine {
             return when (json) {
                 is JSONObject -> json.toString()
                 is JSONArray -> json.toString()
+                is Map<*, *> -> JSONObject(json).toString()
+                is List<*> -> JSONArray(json).toString()
                 else -> json.toString()
             }
         }
@@ -515,6 +531,8 @@ class ExpressionEngine {
         return when (json) {
             is JSONObject -> extractFromObject(json, trimmedPath)
             is JSONArray -> extractFromArray(json, trimmedPath)
+            is Map<*, *> -> extractFromMap(json, trimmedPath)
+            is List<*> -> extractFromList(json, trimmedPath)
             else -> null
         }
     }
@@ -581,12 +599,107 @@ class ExpressionEngine {
         return null
     }
 
+    private fun extractFromMap(json: Map<*, *>, path: String): Any? {
+        // Handle modifiers
+        if (path.startsWith("@")) {
+            return handleModifier(json, path)
+        }
+
+        // Check wildcard path
+        if (path.contains("[*]") || path.contains("[*].")) {
+            return extractWildcardFromMap(json, path)
+        }
+
+        // Normal path parsing
+        val parts = parsePathParts(path)
+        var current: Any? = json
+
+        for (part in parts) {
+            current = when {
+                part.isArrayAccess -> {
+                    val obj = if (part.objectPath.isEmpty()) current else navigateMap(current, part.objectPath)
+                    val arr = obj as? List<*> ?: return null
+                    arr.getOrNull(part.arrayIndex ?: 0)
+                }
+                else -> {
+                    navigateMap(current, part.path)
+                }
+            }
+            if (current == null) break
+        }
+
+        return current
+    }
+
+    private fun extractFromList(json: List<*>, path: String): Any? {
+        // Handle modifiers
+        if (path.startsWith("@")) {
+            return handleModifier(json, path)
+        }
+
+        // Check wildcard
+        if (path == "[*]") {
+            return json.toList()
+        }
+
+        if (path.startsWith("[*].")) {
+            val subPath = path.substring(4)
+            return json.mapNotNull { extractPath(it, subPath) }
+        }
+
+        // Array index access
+        val arrayMatch = ARRAY_ACCESS_REGEX.find(path)
+        if (arrayMatch != null) {
+            val index = arrayMatch.groupValues[1].toIntOrNull() ?: return null
+            val remaining = arrayMatch.groupValues[2]
+            val element = json.getOrNull(index) ?: return null
+            return if (remaining.isEmpty()) element else extractPath(element, remaining)
+        }
+
+        return null
+    }
+
+    private fun navigateMap(obj: Any?, path: String): Any? {
+        if (path.isEmpty()) return obj
+        if (obj is Map<*, *>) return obj[path]
+        return null
+    }
+
+    private fun extractWildcardFromMap(json: Map<*, *>, path: String): List<Any?> {
+        val result = mutableListOf<Any?>()
+        val parts = path.split("[*]", limit = 2)
+        if (parts.size != 2) return result
+
+        val basePath = parts[0].trimEnd('.')
+        val remaining = parts[1].trimStart('.')
+
+        val array = if (basePath.isEmpty()) {
+            null
+        } else {
+            extractFromMap(json, basePath) as? List<*>
+        }
+
+        if (array != null) {
+            for (element in array) {
+                if (remaining.isEmpty()) {
+                    result.add(element)
+                } else {
+                    result.add(extractPath(element, remaining))
+                }
+            }
+        }
+
+        return result
+    }
+
     private fun handleModifier(json: Any?, modifier: String): Any? {
         return when (modifier) {
             "@keys" -> {
                 when (json) {
                     is JSONObject -> json.keys().asSequence().toList()
                     is JSONArray -> (0 until json.length()).map { it.toString() }
+                    is Map<*, *> -> json.keys.toList()
+                    is List<*> -> json.indices.map { it.toString() }
                     else -> emptyList<Any>()
                 }
             }
@@ -594,6 +707,8 @@ class ExpressionEngine {
                 when (json) {
                     is JSONObject -> json.keys().asSequence().map { json.opt(it) }.toList()
                     is JSONArray -> (0 until json.length()).map { json.opt(it) }
+                    is Map<*, *> -> json.values.toList()
+                    is List<*> -> json.toList()
                     else -> emptyList<Any>()
                 }
             }
@@ -609,6 +724,27 @@ class ExpressionEngine {
             }
             "@this" -> json
             else -> null
+        }
+    }
+
+    private fun jsonToMap(obj: JSONObject): Map<String, Any?> {
+        val map = mutableMapOf<String, Any?>()
+        for (key in obj.keys()) {
+            map[key] = convertJsonValue(obj.opt(key))
+        }
+        return map
+    }
+
+    private fun jsonToList(arr: JSONArray): List<Any?> {
+        return (0 until arr.length()).map { convertJsonValue(arr.opt(it)) }
+    }
+
+    private fun convertJsonValue(value: Any?): Any? {
+        return when (value) {
+            is JSONObject -> jsonToMap(value)
+            is JSONArray -> jsonToList(value)
+            JSONObject.NULL -> null
+            else -> value
         }
     }
 
@@ -1256,7 +1392,8 @@ class ExpressionEngine {
             is Boolean -> extracted.toString().toByteArray()
             is JSONArray -> extracted.toString().toByteArray()
             is JSONObject -> extracted.toString().toByteArray()
-            is List<*> -> extracted.toString().toByteArray()
+            is Map<*, *> -> JSONObject(extracted).toString().toByteArray()
+            is List<*> -> JSONArray(extracted).toString().toByteArray()
             else -> extracted.toString().toByteArray()
         }
     }
@@ -1325,14 +1462,47 @@ class ExpressionEngine {
     }
 
     /**
-     * 评估提取表达式，支持函数调用
-     * 例如: base64Decode(content), toUpperCase(name)
+     * 评估提取表达式（旧签名，向后兼容）
      */
     fun evaluateExtractExpression(json: Any?, expression: String, headers: Map<String, String>? = null): ByteArray? {
+        val data = json?.toString()?.toByteArray() ?: ByteArray(0)
+        val preParsedJson = json as? JSONObject
+        return evaluateExtractExpression(data, preParsedJson, expression, headers)
+    }
+
+    /**
+     * 评估提取表达式，支持函数调用、data/$data、$headers.X、context 变量
+     * 例如: base64Decode(content), base64Decode(data), toUpperCase(name), $headers.X-Topic
+     */
+    fun evaluateExtractExpression(
+        data: ByteArray,
+        preParsedJson: JSONObject?,
+        expression: String,
+        headers: Map<String, String>? = null,
+        context: Map<String, String> = emptyMap()
+    ): ByteArray? {
+        val dataStr = String(data)
+        val json = preParsedJson ?: try {
+            JSONObject(dataStr)
+        } catch (_: Exception) {
+            null
+        }
+        val trimmed = expression.trim()
+        val result = evaluateExtractExpr(dataStr, json, trimmed, headers, context)
+        return resultToByteArray(result)
+    }
+
+    private fun evaluateExtractExpr(
+        dataStr: String,
+        json: JSONObject?,
+        expression: String,
+        headers: Map<String, String>?,
+        context: Map<String, String>
+    ): Any? {
         val trimmed = expression.trim()
         val debugEnabled = LogManager.isDebugEnabled()
 
-        // 检查是否是函数调用
+        // 1. Function call
         val funcMatch = FUNC_CALL_REGEX.find(trimmed)
         if (funcMatch != null) {
             val funcName = funcMatch.groupValues[1]
@@ -1340,9 +1510,8 @@ class ExpressionEngine {
             val fn = builtinFunctions[funcName]
 
             if (fn != null) {
-                // 解析参数
                 val args = parseFunctionArgs(argsStr).map { arg ->
-                    resolveExtractArg(json, arg.trim(), headers)
+                    resolveExtractArgFull(dataStr, json, arg.trim(), headers, context)
                 }.toTypedArray()
 
                 if (debugEnabled) {
@@ -1352,51 +1521,109 @@ class ExpressionEngine {
                 if (debugEnabled) {
                     LogManager.logDebug("EXPR", "Extract FN $funcName -> result=${truncateForLog(result)}")
                 }
-                return when (result) {
-                    is String -> result.toByteArray()
-                    is Number -> result.toString().toByteArray()
-                    is Boolean -> result.toString().toByteArray()
-                    null -> null
-                    else -> result.toString().toByteArray()
-                }
+                return result
             }
         }
 
-        // 否则作为普通路径处理
-        if (debugEnabled) {
-            LogManager.logDebug("EXPR", "Extract PATH $trimmed")
+        // 2. $raw
+        if (trimmed == "\$raw") return dataStr
+
+        // 3. data / $data
+        if (trimmed == "data" || trimmed == "\$data") return dataStr
+
+        // 4. $headers.X / headers.X
+        if (trimmed.startsWith("\$headers.")) {
+            return headers?.get(trimmed.substring(9))
         }
-        return extractAndTransform(json, trimmed)
+        if (trimmed.startsWith("headers.") && !trimmed.startsWith("\$headers.")) {
+            return headers?.get(trimmed.substring(8))
+        }
+
+        // 5. $ context variable
+        if (trimmed.startsWith("$") && !trimmed.startsWith("\$headers.") && trimmed.length > 1) {
+            val varName = trimmed.substring(1)
+            context[varName]?.let { return it }
+        }
+
+        // 6. GJSON path extraction
+        if (json != null) {
+            val pathResult = extractPath(json, trimmed, headers)
+            if (pathResult != null) return pathResult
+        }
+
+        // 7. Numeric literal fallback
+        trimmed.toIntOrNull()?.let { return it }
+        trimmed.toLongOrNull()?.let { return it }
+        trimmed.toDoubleOrNull()?.let { return it }
+
+        if (debugEnabled) {
+            LogManager.logDebug("EXPR", "Extract PATH $trimmed -> null")
+        }
+        return null
     }
 
-    private fun resolveExtractArg(
-        json: Any?,
+    private fun resolveExtractArgFull(
+        dataStr: String,
+        json: JSONObject?,
         arg: String,
-        headers: Map<String, String>?
+        headers: Map<String, String>?,
+        context: Map<String, String>
     ): Any? {
-        // Strip surrounding quotes for literal string args
-        val stripped =
-            if (
-                arg.length >= 2 &&
-                    ((arg.startsWith('"') && arg.endsWith('"')) ||
-                        (arg.startsWith('\'') && arg.endsWith('\'')))
-            ) {
-                return arg.substring(1, arg.length - 1)
-            } else {
-                arg
-            }
-        // Nested function call
-        if (FUNC_CALL_REGEX.matches(stripped)) {
-            return evaluateExtractExpression(json, stripped, headers)?.let { String(it) }
+        // 1. Quoted string literal
+        if (
+            arg.length >= 2 &&
+                ((arg.startsWith('"') && arg.endsWith('"')) ||
+                    (arg.startsWith('\'') && arg.endsWith('\'')))
+        ) {
+            return arg.substring(1, arg.length - 1)
         }
-        // Try JSON path extraction first
-        val pathResult = extractPath(json, stripped, headers)
-        if (pathResult != null) return pathResult
-        // Fallback: literal number
-        stripped.toIntOrNull()?.let { return it }
-        stripped.toLongOrNull()?.let { return it }
-        stripped.toDoubleOrNull()?.let { return it }
+
+        // 2. Nested function call
+        if (FUNC_CALL_REGEX.matches(arg)) {
+            return evaluateExtractExpr(dataStr, json, arg, headers, context)
+        }
+
+        // 3. data / $data
+        if (arg == "data" || arg == "\$data") return dataStr
+
+        // 4. $headers.X / headers.X
+        if (arg.startsWith("\$headers.")) {
+            return headers?.get(arg.substring(9))
+        }
+        if (arg.startsWith("headers.") && !arg.startsWith("\$headers.")) {
+            return headers?.get(arg.substring(8))
+        }
+
+        // 5. $ context variable
+        if (arg.startsWith("$") && !arg.startsWith("\$headers.") && arg.length > 1) {
+            val varName = arg.substring(1)
+            context[varName]?.let { return it }
+        }
+
+        // 6. GJSON path
+        if (json != null) {
+            val pathResult = extractPath(json, arg, headers)
+            if (pathResult != null) return pathResult
+        }
+
+        // 7. Numeric literal
+        arg.toIntOrNull()?.let { return it }
+        arg.toLongOrNull()?.let { return it }
+        arg.toDoubleOrNull()?.let { return it }
+
         return null
+    }
+
+    private fun resultToByteArray(result: Any?): ByteArray? {
+        return when (result) {
+            is String -> result.toByteArray()
+            is Number -> result.toString().toByteArray()
+            is Boolean -> result.toString().toByteArray()
+            is Map<*, *> -> JSONObject(result).toString().toByteArray()
+            is List<*> -> JSONArray(result).toString().toByteArray()
+            null -> null
+            else -> result.toString().toByteArray()
+        }
     }
 
     private fun parseFunctionArgs(argsStr: String): List<String> {

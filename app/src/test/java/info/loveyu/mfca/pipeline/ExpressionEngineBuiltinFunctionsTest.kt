@@ -643,4 +643,127 @@ class ExpressionEngineBuiltinFunctionsTest : ExpressionEngineBaseTest() {
         assertTrue(fns.containsKey("localIp"))
         assertTrue(fns.containsKey("localIps"))
     }
+
+    // ── jsonDecode returns Map/List ────────────────────────────
+
+    @Test
+    fun `jsonDecode - object returns Map`() {
+        val fn = engine.getBuiltinFunctions()["jsonDecode"]!!
+        val result = fn.invoke(arrayOf("""{"key":"value","num":42}"""))
+        assertTrue(result is Map<*, *>)
+        val map = result as Map<*, *>
+        assertEquals("value", map["key"])
+        assertEquals(42, map["num"])
+    }
+
+    @Test
+    fun `jsonDecode - array returns List`() {
+        val fn = engine.getBuiltinFunctions()["jsonDecode"]!!
+        val result = fn.invoke(arrayOf("[1,2,3]"))
+        assertTrue(result is List<*>)
+        assertEquals(listOf(1, 2, 3), result)
+    }
+
+    @Test
+    fun `jsonDecode - nested object produces nested Map`() {
+        val fn = engine.getBuiltinFunctions()["jsonDecode"]!!
+        val result = fn.invoke(arrayOf("""{"outer":{"inner":1}}"""))
+        assertTrue(result is Map<*, *>)
+        val outer = result as Map<*, *>
+        assertTrue(outer["outer"] is Map<*, *>)
+        assertEquals(1, (outer["outer"] as Map<*, *>)["inner"])
+    }
+
+    @Test
+    fun `jsonDecode - nested array produces nested List`() {
+        val fn = engine.getBuiltinFunctions()["jsonDecode"]!!
+        val result = fn.invoke(arrayOf("""[[1,2],[3,4]]"""))
+        assertTrue(result is List<*>)
+        val list = result as List<*>
+        assertTrue(list[0] is List<*>)
+        assertEquals(listOf(1, 2), list[0])
+    }
+
+    // ── isObject accepts Map ───────────────────────────────────
+
+    @Test
+    fun `isObject - true for Map via direct invocation`() {
+        val fn = engine.getBuiltinFunctions()["isObject"]!!
+        val result = fn.invoke(arrayOf(mapOf("a" to 1)))
+        assertEquals(true, result)
+    }
+
+    @Test
+    fun `isObject - false for List via direct invocation`() {
+        val fn = engine.getBuiltinFunctions()["isObject"]!!
+        val result = fn.invoke(arrayOf(listOf(1, 2)))
+        assertEquals(false, result)
+    }
+
+    // ── isArray accepts List ───────────────────────────────────
+
+    @Test
+    fun `isArray - true for List via direct invocation`() {
+        val fn = engine.getBuiltinFunctions()["isArray"]!!
+        val result = fn.invoke(arrayOf(listOf(1, 2, 3)))
+        assertEquals(true, result)
+    }
+
+    @Test
+    fun `isArray - false for Map via direct invocation`() {
+        val fn = engine.getBuiltinFunctions()["isArray"]!!
+        val result = fn.invoke(arrayOf(mapOf("a" to 1)))
+        assertEquals(false, result)
+    }
+
+    // ── has with Map input ─────────────────────────────────────
+
+    @Test
+    fun `has - key exists in Map`() {
+        val fn = engine.getBuiltinFunctions()["has"]!!
+        val result = fn.invoke(arrayOf(mapOf("key" to "value"), "key"))
+        assertEquals(true, result)
+    }
+
+    @Test
+    fun `has - key missing in Map`() {
+        val fn = engine.getBuiltinFunctions()["has"]!!
+        val result = fn.invoke(arrayOf(mapOf("key" to "value"), "missing"))
+        assertEquals(false, result)
+    }
+
+    // ── keys/values with Map input ─────────────────────────────
+
+    @Test
+    fun `keys - with Map input`() {
+        val fn = engine.getBuiltinFunctions()["keys"]!!
+        val result = fn.invoke(arrayOf(mapOf("a" to 1, "b" to 2)))
+        assertTrue(result is List<*>)
+        val keys = result as List<*>
+        assertEquals(2, keys.size)
+        assertTrue(keys.contains("a"))
+        assertTrue(keys.contains("b"))
+    }
+
+    @Test
+    fun `values - with Map input`() {
+        val fn = engine.getBuiltinFunctions()["values"]!!
+        val result = fn.invoke(arrayOf(mapOf("a" to 1, "b" to 2)))
+        assertTrue(result is List<*>)
+        val values = result as List<*>
+        assertEquals(2, values.size)
+        assertTrue(values.contains(1))
+        assertTrue(values.contains(2))
+    }
+
+    // ── httpBuildQuery with Map input ──────────────────────────
+
+    @Test
+    fun `httpBuildQuery - with Map input`() {
+        val fn = engine.getBuiltinFunctions()["httpBuildQuery"]!!
+        val result = fn.invoke(arrayOf(mapOf("key1" to "val1", "key2" to "val2")))
+        val s = result.toString()
+        assertTrue(s.contains("key1=val1"))
+        assertTrue(s.contains("key2=val2"))
+    }
 }

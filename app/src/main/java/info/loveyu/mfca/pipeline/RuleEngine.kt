@@ -461,14 +461,16 @@ class RuleEngine(
 
         val json = preParsedJson ?: try {
             JSONObject(String(data))
-        } catch (e: Exception) {
-            if (transform.extract != null) return null
+        } catch (_: Exception) {
             null
         }
 
         // Extract using GJSON path or function expression
-        if (json != null && transform.extract != null) {
-            val extracted = expressionEngine.evaluateExtractExpression(json, transform.extract, inputMessage.headers)
+        if (transform.extract != null) {
+            val context = buildRuleContext(ruleName, inputMessage)
+            val extracted = expressionEngine.evaluateExtractExpression(
+                data, json, transform.extract, inputMessage.headers, context
+            )
             if (extracted != null) {
                 currentData = extracted
             } else {

@@ -231,4 +231,37 @@ class ExpressionEngineDecodeTest : ExpressionEngineBaseTest() {
         assertNotNull(decoded)
         assertEquals(original, String(decoded!!))
     }
+
+    // ── jsonDecode returns Map but pipeline output is valid JSON ByteArray ──
+
+    @Test
+    fun `jsonDecode in pipeline produces valid JSON ByteArray output`() {
+        val data = """{"name":"test","value":42}""".toByteArray()
+        val result = engine.evaluateDecodePipeline("jsonDecode", data)
+        assertNotNull(result)
+        // Verify the output is valid JSON
+        val json = JSONObject(String(result!!))
+        assertEquals("test", json.getString("name"))
+        assertEquals(42, json.getInt("value"))
+    }
+
+    @Test
+    fun `jsonDecode array in pipeline produces valid JSON ByteArray output`() {
+        val data = """[1,2,3]""".toByteArray()
+        val result = engine.evaluateDecodePipeline("jsonDecode", data)
+        assertNotNull(result)
+        val arr = JSONArray(String(result!!))
+        assertEquals(3, arr.length())
+    }
+
+    @Test
+    fun `base64Decode|jsonDecode pipeline still produces valid JSON`() {
+        val original = """{"nested":{"key":"val"}}"""
+        val b64 = java.util.Base64.getEncoder().encodeToString(original.toByteArray())
+        val data = b64.toByteArray()
+        val result = engine.evaluateDecodePipeline("base64Decode|jsonDecode", data)
+        assertNotNull(result)
+        val json = JSONObject(String(result!!))
+        assertEquals("val", json.getJSONObject("nested").getString("key"))
+    }
 }

@@ -1,18 +1,61 @@
 package info.loveyu.mfca.pipeline
 
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 /**
  * Tests for GJSON path extraction: extractPath, extract, extractAndTransform,
  * evaluateExtractExpression, parseFunctionArgs.
+ *
+ * Also covers Map/List input support and new extract expression features:
+ * data/$data, $headers.X, context variables, nested function calls.
  */
 class ExpressionEngineExtractTest : ExpressionEngineBaseTest() {
+
+    @Before
+    override fun setUp() {
+        super.setUp()
+        // Override gzEncode/gzDecode to use java.util.Base64 instead of android.util.Base64
+        engine.registerCustomFunction(
+            "gzEncode",
+            ExpressionEngine.BuiltinFunction("gzEncode", 1) { args ->
+                val str = args.getOrNull(0)?.toString() ?: return@BuiltinFunction ""
+                try {
+                    val bos = ByteArrayOutputStream()
+                    GZIPOutputStream(bos).use { gzip ->
+                        gzip.write(str.toByteArray(Charsets.UTF_8))
+                    }
+                    java.util.Base64.getEncoder().encodeToString(bos.toByteArray())
+                } catch (e: Exception) {
+                    ""
+                }
+            }
+        )
+        engine.registerCustomFunction(
+            "gzDecode",
+            ExpressionEngine.BuiltinFunction("gzDecode", 1) { args ->
+                val str = args.getOrNull(0)?.toString() ?: return@BuiltinFunction ""
+                try {
+                    val compressed = java.util.Base64.getDecoder().decode(str)
+                    GZIPInputStream(ByteArrayInputStream(compressed)).use { gzip ->
+                        gzip.readBytes().toString(Charsets.UTF_8)
+                    }
+                } catch (e: Exception) {
+                    ""
+                }
+            }
+        )
+    }
 
     // ── Basic path extraction ──────────────────────────────────
 
@@ -365,5 +408,229 @@ class ExpressionEngineExtractTest : ExpressionEngineBaseTest() {
         val arr = jsonArray("""[10,20,30]""")
         val result = engine.extractPath(arr, "[*]")
         assertEquals(listOf(10, 20, 30), result)
+    }
+
+    // ── extractPath with Map/List inputs ───────────────────────
+
+    @Test
+    fun `extractPath - Map simple key`() {
+        val map = mapOf("name" to "hello", "age" to 30)
+        assertEquals("hello", engine.extractPath(map, "name"))
+    }
+
+    @Test
+    fun `extractPath - Map nested path`() {
+        val map = mapOf("data" to mapOf("temperature" to 25.5))
+        val result = engine.extractPath(map, "data.temperature")
+        assertEquals(25.5, result)
+    }
+
+    @Test
+    fun `extractPath - Map missing key returns null`() {
+        val map = mapOf("name" to "hello")
+        assertNull(engine.extractPath(map, "missing"))
+    }
+
+    @Test
+    fun `extractPath - Map with List value and array access`() {
+        val map = mapOf("items" to listOf("a", "b", "c"))
+        assertEquals("a", engine.extractPath(map, "items[0]"))
+        assertEquals("c", engine.extractPath(map, "items[2]"))
+    }
+
+    @Test
+    fun `extractPath - Map wildcard on nested list`() {
+        val map = mapOf("items" to listOf(mapOf("name" to "a"), mapOf("name" to "b")))
+        val result = engine.extractPath(map, "items[*].name")
+        assertTrue(result is List<*>)
+        assertEquals(listOf("a", "b"), result)
+    }
+
+    @Test
+    fun `extractPath - Map @keys modifier`() {
+        val map = mapOf("a" to 1, "b" to 2, "c" to 3)
+        val result = engine.extractPath(map, "@keys")
+        assertTrue(result is List<*>)
+        val keys = (result as List<*>).toSet()
+        assertEquals(setOf("a", "b", "c"), keys)
+    }
+
+    @Test
+    fun `extractPath - Map @values modifier`() {
+        val map = mapOf("a" to 1, "b" to 2)
+        val result = engine.extractPath(map, "@values")
+        assertTrue(result is List<*>)
+        assertEquals(listOf(1, 2), result)
+    }
+
+    @Test
+    fun `extractPath - Map @len modifier`() {
+        val map = mapOf("a" to 1, "b" to 2, "c" to 3)
+        assertEquals(3L, engine.extractPath(map, "@len"))
+    }
+
+    @Test
+    fun `extractPath - Map $raw returns JSON string`() {
+        val map = mapOf("key" to "value")
+        val result = engine.extractPath(map, "\$raw")
+        assertTrue(result is String)
+        val parsed = JSONObject(result as String)
+        assertEquals("value", parsed.getString("key"))
+    }
+
+    @Test
+    fun `extractPath - List index access`() {
+        val list = listOf("x", "y", "z")
+        assertEquals("y", engine.extractPath(list, "[1]"))
+    }
+
+    @Test
+    fun `extractPath - List wildcard`() {
+        val list = listOf(10, 20, 30)
+        val result = engine.extractPath(list, "[*]")
+        assertEquals(listOf(10, 20, 30), result)
+    }
+
+    @Test
+    fun `extractPath - List @len modifier`() {
+        val list = listOf(1, 2, 3, 4)
+        assertEquals(4L, engine.extractPath(list, "@len"))
+    }
+
+    @Test
+    fun `extractPath - List out of bounds returns null`() {
+        val list = listOf("a", "b")
+        assertNull(engine.extractPath(list, "[5]"))
+    }
+
+    // ── evaluateExtractExpression with new signature ───────────
+
+    @Test
+    fun `evaluateExtractExpression - data keyword references raw data`() {
+        val data = """{"content":"ignored"}""".toByteArray()
+        val json = json("""{"content":"ignored"}""")
+        val result = engine.evaluateExtractExpression(data, json, "data")
+        assertNotNull(result)
+        assertEquals("""{"content":"ignored"}""", String(result!!))
+    }
+
+    @Test
+    fun `evaluateExtractExpression - dollar-data references raw data`() {
+        val data = """{"content":"ignored"}""".toByteArray()
+        val json = json("""{"content":"ignored"}""")
+        val result = engine.evaluateExtractExpression(data, json, "\$data")
+        assertNotNull(result)
+        assertEquals("""{"content":"ignored"}""", String(result!!))
+    }
+
+    @Test
+    fun `evaluateExtractExpression - dollar-headers access`() {
+        val data = """{"key":"value"}""".toByteArray()
+        val json = json("""{"key":"value"}""")
+        val headers = mapOf("X-Topic" to "sensor/data", "X-QoS" to "1")
+        val result = engine.evaluateExtractExpression(data, json, "\$headers.X-Topic", headers)
+        assertNotNull(result)
+        assertEquals("sensor/data", String(result!!))
+    }
+
+    @Test
+    fun `evaluateExtractExpression - headers-X access without dollar`() {
+        val data = """{"key":"value"}""".toByteArray()
+        val json = json("""{"key":"value"}""")
+        val headers = mapOf("X-Topic" to "test-value")
+        val result = engine.evaluateExtractExpression(data, json, "headers.X-Topic", headers)
+        assertNotNull(result)
+        assertEquals("test-value", String(result!!))
+    }
+
+    @Test
+    fun `evaluateExtractExpression - dollar-raw on data`() {
+        val data = """{"content":"hello"}""".toByteArray()
+        val json = json("""{"content":"hello"}""")
+        val result = engine.evaluateExtractExpression(data, json, "\$raw")
+        assertNotNull(result)
+        assertEquals("""{"content":"hello"}""", String(result!!))
+    }
+
+    @Test
+    fun `evaluateExtractExpression - context variable dollar-rule`() {
+        val data = """{"key":"value"}""".toByteArray()
+        val json = json("""{"key":"value"}""")
+        val context = mapOf("rule" to "my-rule", "source" to "mqtt-in")
+        val result = engine.evaluateExtractExpression(data, json, "\$rule", null, context)
+        assertNotNull(result)
+        assertEquals("my-rule", String(result!!))
+    }
+
+    @Test
+    fun `evaluateExtractExpression - context variable dollar-source`() {
+        val data = """{"key":"value"}""".toByteArray()
+        val json = json("""{"key":"value"}""")
+        val context = mapOf("source" to "http-in")
+        val result = engine.evaluateExtractExpression(data, json, "\$source", null, context)
+        assertNotNull(result)
+        assertEquals("http-in", String(result!!))
+    }
+
+    @Test
+    fun `evaluateExtractExpression - base64Decode with data for non-JSON input`() {
+        // base64Decode returns the original string on invalid input (by design)
+        val rawText = "hello non-json world"
+        val data = rawText.toByteArray()
+        val result = engine.evaluateExtractExpression(data, null, "base64Decode(data)")
+        assertNotNull(result)
+        assertEquals(rawText, String(result!!))
+
+        // Test with actual base64-encoded data
+        val encoded = java.util.Base64.getEncoder().encodeToString(rawText.toByteArray())
+        val data2 = encoded.toByteArray()
+        val result2 = engine.evaluateExtractExpression(data2, null, "base64Decode(data)")
+        assertNotNull(result2)
+        assertEquals(rawText, String(result2!!))
+    }
+
+    @Test
+    fun `evaluateExtractExpression - path extraction still works with new signature`() {
+        val data = """{"name":"test"}""".toByteArray()
+        val json = json("""{"name":"test"}""")
+        val result = engine.evaluateExtractExpression(data, json, "name")
+        assertEquals("test", String(result!!))
+    }
+
+    @Test
+    fun `evaluateExtractExpression - function call still works with new signature`() {
+        val data = """{"encoded":"aGVsbG8gd29ybGQ="}""".toByteArray()
+        val json = json("""{"encoded":"aGVsbG8gd29ybGQ="}""")
+        val result = engine.evaluateExtractExpression(data, json, "base64Decode(encoded)")
+        assertEquals("hello world", String(result!!))
+    }
+
+    @Test
+    fun `evaluateExtractExpression - nested function base64Decode of gzDecode of data`() {
+        val rawText = "compressed content"
+        val compressed = ByteArrayOutputStream()
+        GZIPOutputStream(compressed).use { it.write(rawText.toByteArray()) }
+        val b64Gz = java.util.Base64.getEncoder().encodeToString(compressed.toByteArray())
+
+        val data = b64Gz.toByteArray()
+        val result = engine.evaluateExtractExpression(data, null, "gzDecode(data)")
+        assertNotNull(result)
+        assertEquals(rawText, String(result!!))
+    }
+
+    // ── Old evaluateExtractExpression signature backward compat ──
+
+    @Test
+    fun `evaluateExtractExpression - old signature simple path`() {
+        val json = json("""{"content":"hello"}""")
+        val result = engine.evaluateExtractExpression(json, "content")
+        assertEquals("hello", String(result!!))
+    }
+
+    @Test
+    fun `evaluateExtractExpression - old signature function call`() {
+        val json = json("""{"encoded":"aGVsbG8gd29ybGQ="}""")
+        val result = engine.evaluateExtractExpression(json, "base64Decode(encoded)")
+        assertEquals("hello world", String(result!!))
     }
 }
