@@ -72,7 +72,7 @@ class ExpressionEngineFormatTest : ExpressionEngineBaseTest() {
 
     @Test
     fun `formatTemplate - nested json path`() {
-        val data = """{"data":{"temperature":25}}""".toByteArray()
+        val data = """{"temperature":25}""".toByteArray()
         val result = engine.evaluateFormatTemplate("Temp: {data.temperature}", data, emptyMap())
         assertEquals("Temp: 25", String(result))
     }

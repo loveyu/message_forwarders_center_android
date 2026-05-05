@@ -30,12 +30,12 @@ class YamlConfigDrivenTest : ExpressionEngineBaseTest() {
         //     from: mqtt_sensor
         //     pipeline:
         //       - transform:
-        //           extract: data.temperature
+        //           extract: temperature
         //         to: [http_output]
-        val inputData = """{"data":{"temperature":25.5,"humidity":60,"sensorId":"S001"}}"""
+        val inputData = """{"temperature":25.5,"humidity":60,"sensorId":"S001"}"""
         val json = JSONObject(inputData)
 
-        val result = engine.evaluateExtractExpression(json, "data.temperature")
+        val result = engine.evaluateExtractExpression(json, "temperature")
         assertNotNull(result)
         assertEquals("25.5", String(result!!))
     }
@@ -43,8 +43,8 @@ class YamlConfigDrivenTest : ExpressionEngineBaseTest() {
     @Test
     fun `scenario - mqtt sensor filter by threshold`() {
         // filter: data.temperature > 20
-        val hotData = """{"data":{"temperature":25.5}}""".toByteArray()
-        val coldData = """{"data":{"temperature":15.0}}""".toByteArray()
+        val hotData = """{"temperature":25.5}""".toByteArray()
+        val coldData = """{"temperature":15.0}""".toByteArray()
 
         assertTrue(engine.executeFilter("data.temperature > 20", hotData))
         assertFalse(engine.executeFilter("data.temperature > 20", coldData))
@@ -53,7 +53,7 @@ class YamlConfigDrivenTest : ExpressionEngineBaseTest() {
     @Test
     fun `scenario - mqtt sensor format message`() {
         // format: "Sensor {data.sensorId}: {data.temperature}°C"
-        val data = """{"data":{"sensorId":"S001","temperature":25.5}}""".toByteArray()
+        val data = """{"sensorId":"S001","temperature":25.5}""".toByteArray()
         val result = engine.evaluateFormatTemplate(
             "Sensor {data.sensorId}: {data.temperature}°C",
             data,
@@ -247,9 +247,9 @@ class YamlConfigDrivenTest : ExpressionEngineBaseTest() {
     @Test
     fun `scenario - complex filter - temperature and humidity`() {
         // filter: data.temperature > 20 && data.humidity < 80
-        val goodData = """{"data":{"temperature":25,"humidity":60}}""".toByteArray()
-        val badTemp = """{"data":{"temperature":15,"humidity":60}}""".toByteArray()
-        val badHumidity = """{"data":{"temperature":25,"humidity":90}}""".toByteArray()
+        val goodData = """{"temperature":25,"humidity":60}""".toByteArray()
+        val badTemp = """{"temperature":15,"humidity":60}""".toByteArray()
+        val badHumidity = """{"temperature":25,"humidity":90}""".toByteArray()
 
         assertTrue(engine.executeFilter("data.temperature > 20 && data.humidity < 80", goodData))
         assertFalse(engine.executeFilter("data.temperature > 20 && data.humidity < 80", badTemp))
@@ -295,16 +295,16 @@ class YamlConfigDrivenTest : ExpressionEngineBaseTest() {
 
     @Test
     fun `scenario - full pipeline extract filter format`() {
-        // 1. Input data
-        val inputData = """{"data":{"sensorId":"S001","temperature":28.5,"humidity":45}}"""
+        // 1. Input data (flat structure - no nested "data" key)
+        val inputData = """{"sensorId":"S001","temperature":28.5,"humidity":45}"""
 
-        // 2. Extract
+        // 2. Extract (GJSON path - direct field access)
         val json = JSONObject(inputData)
-        val extracted = engine.evaluateExtractExpression(json, "data.temperature")
+        val extracted = engine.evaluateExtractExpression(json, "temperature")
         assertNotNull(extracted)
         assertEquals("28.5", String(extracted!!))
 
-        // 3. Filter (check temperature > 25)
+        // 3. Filter (check temperature > 25) — data.xxx = root field access
         val filterData = inputData.toByteArray()
         assertTrue(engine.executeFilter("data.temperature > 25", filterData))
 
@@ -319,10 +319,10 @@ class YamlConfigDrivenTest : ExpressionEngineBaseTest() {
 
     @Test
     fun `scenario - full pipeline with format steps`() {
-        val inputData = """{"data":{"user":"alice","pass":"secret","msg":"hello"}}"""
+        val inputData = """{"user":"alice","pass":"secret","msg":"hello"}"""
         val dataBytes = inputData.toByteArray()
 
-        // Filter: user == "alice"
+        // Filter: data.user == "alice" (data.xxx = root field access)
         assertTrue(engine.executeFilter("data.user == \"alice\"", dataBytes))
 
         // Format steps: delete password, add timestamp
@@ -331,7 +331,7 @@ class YamlConfigDrivenTest : ExpressionEngineBaseTest() {
             OutputFormatStep(
                 target = "\$data",
                 template = "",
-                raw = mapOf("delete" to listOf("data.pass"))
+                raw = mapOf("delete" to listOf("pass"))
             ),
             OutputFormatStep(target = "\$data.processedAt", template = "{\$receivedAt}"),
             OutputFormatStep(target = "\$header.X-Processed-By", template = "{\$rule}")
@@ -339,8 +339,8 @@ class YamlConfigDrivenTest : ExpressionEngineBaseTest() {
         val (newData, newHeaders) = engine.applyFormatSteps(steps, dataBytes, emptyMap(), context)
 
         val json = JSONObject(String(newData))
-        assertEquals("alice", json.getJSONObject("data").getString("user"))
-        assertFalse(json.getJSONObject("data").has("pass"))
+        assertEquals("alice", json.getString("user"))
+        assertFalse(json.has("pass"))
         assertEquals(1704067200000L, json.getLong("processedAt"))
         assertEquals("auth_rule", newHeaders["X-Processed-By"])
     }

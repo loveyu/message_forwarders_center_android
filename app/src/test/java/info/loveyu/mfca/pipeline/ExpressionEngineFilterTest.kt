@@ -140,7 +140,7 @@ class ExpressionEngineFilterTest : ExpressionEngineBaseTest() {
 
     @Test
     fun `filter - nested path exists`() {
-        val data = """{"data":{"temperature":25}}""".toByteArray()
+        val data = """{"temperature":25}""".toByteArray()
         assertTrue(engine.executeFilter("data.temperature", data))
     }
 
@@ -402,37 +402,37 @@ class ExpressionEngineFilterTest : ExpressionEngineBaseTest() {
     @Test
     fun `two-phase - numeric comparison`() {
         val data = """{"temperature":30}""".toByteArray()
-        assertTrue(engine.executeTwoPhaseFilter("{temperature} > 25", data))
+        assertTrue(engine.executeTwoPhaseFilter("{data.temperature} > 25", data))
     }
 
     @Test
     fun `two-phase - numeric comparison false`() {
         val data = """{"temperature":20}""".toByteArray()
-        assertFalse(engine.executeTwoPhaseFilter("{temperature} > 25", data))
+        assertFalse(engine.executeTwoPhaseFilter("{data.temperature} > 25", data))
     }
 
     @Test
     fun `two-phase - string comparison`() {
         val data = """{"type":"text"}""".toByteArray()
-        assertTrue(engine.executeTwoPhaseFilter("\"{type}\" == \"text\"", data))
+        assertTrue(engine.executeTwoPhaseFilter("\"{data.type}\" == \"text\"", data))
     }
 
     @Test
     fun `two-phase - string comparison false`() {
         val data = """{"type":"json"}""".toByteArray()
-        assertFalse(engine.executeTwoPhaseFilter("\"{type}\" == \"text\"", data))
+        assertFalse(engine.executeTwoPhaseFilter("\"{data.type}\" == \"text\"", data))
     }
 
     @Test
     fun `two-phase - function in template`() {
         val data = """{"items":[1,2,3]}""".toByteArray()
-        assertTrue(engine.executeTwoPhaseFilter("{length(items)} > 0", data))
+        assertTrue(engine.executeTwoPhaseFilter("{length(data.items)} > 0", data))
     }
 
     @Test
     fun `two-phase - function in template empty array`() {
         val data = """{"items":[]}""".toByteArray()
-        assertFalse(engine.executeTwoPhaseFilter("{length(items)} > 0", data))
+        assertFalse(engine.executeTwoPhaseFilter("{length(data.items)} > 0", data))
     }
 
     @Test
@@ -466,18 +466,18 @@ class ExpressionEngineFilterTest : ExpressionEngineBaseTest() {
     @Test
     fun `two-phase - not with template`() {
         val data = """{"status":"inactive"}""".toByteArray()
-        assertTrue(engine.executeTwoPhaseFilter("not \"{status}\" == \"active\"", data))
+        assertTrue(engine.executeTwoPhaseFilter("not \"{data.status}\" == \"active\"", data))
     }
 
     @Test
     fun `two-phase - compound and with templates`() {
-        val data = """{"data":{"type":"sensor","temperature":25}}""".toByteArray()
+        val data = """{"type":"sensor","temperature":25}""".toByteArray()
         assertTrue(engine.executeTwoPhaseFilter("\"{data.type}\" == \"sensor\" and {data.temperature} > 20", data))
     }
 
     @Test
     fun `two-phase - compound and false`() {
-        val data = """{"data":{"type":"sensor","temperature":15}}""".toByteArray()
+        val data = """{"type":"sensor","temperature":15}""".toByteArray()
         assertFalse(engine.executeTwoPhaseFilter("\"{data.type}\" == \"sensor\" and {data.temperature} > 20", data))
     }
 
@@ -485,7 +485,7 @@ class ExpressionEngineFilterTest : ExpressionEngineBaseTest() {
     fun `two-phase - pre-parsed json overload`() {
         val json = org.json.JSONObject("""{"temperature":30}""")
         val data = """{"temperature":30}""".toByteArray()
-        assertTrue(engine.executeTwoPhaseFilter("{temperature} > 25", json, data))
+        assertTrue(engine.executeTwoPhaseFilter("{data.temperature} > 25", json, data))
     }
 
     // ── Backward compatibility ──────────────────────────────────
@@ -511,58 +511,58 @@ class ExpressionEngineFilterTest : ExpressionEngineBaseTest() {
     @Test
     fun `sample pattern - type check`() {
         val data = """{"type":"text"}""".toByteArray()
-        assertTrue(engine.executeTwoPhaseFilter("\"{type}\" == \"text\"", data))
+        assertTrue(engine.executeTwoPhaseFilter("\"{data.type}\" == \"text\"", data))
     }
 
     @Test
     fun `sample pattern - nested temperature`() {
-        val data = """{"data":{"temperature":30}}""".toByteArray()
+        val data = """{"temperature":30}""".toByteArray()
         assertTrue(engine.executeTwoPhaseFilter("{data.temperature} > 25", data))
     }
 
     @Test
     fun `sample pattern - nested status`() {
-        val data = """{"data":{"status":"active"}}""".toByteArray()
+        val data = """{"status":"active"}""".toByteArray()
         assertTrue(engine.executeTwoPhaseFilter("\"{data.status}\" == \"active\"", data))
     }
 
     @Test
     fun `sample pattern - length of nested array`() {
-        val data = """{"data":{"devices":["a","b"]}}""".toByteArray()
+        val data = """{"devices":["a","b"]}""".toByteArray()
         assertTrue(engine.executeTwoPhaseFilter("{length(data.devices)} > 0", data))
     }
 
     @Test
     fun `sample pattern - length of array`() {
-        val data = """{"data":[1,2,3]}""".toByteArray()
-        assertTrue(engine.executeTwoPhaseFilter("{length(data)} > 0", data))
+        val data = """{"items":[1,2,3]}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("{length(data.items)} > 0", data))
     }
 
     @Test
     fun `sample pattern - contains in template`() {
         val data = """{"topic":"sensor/temperature"}""".toByteArray()
         val headers = mapOf("mqtt_topic" to "sensor/temperature")
-        assertTrue(engine.executeTwoPhaseFilter("\"{\$headers.mqtt_topic}\" == \"sensor/temperature\"", data, headers))
+        assertTrue(engine.executeTwoPhaseFilter("\"{headers.mqtt_topic}\" == \"sensor/temperature\"", data, headers))
     }
 
     @Test
     fun `sample pattern - header not equals`() {
         val data = """{"msg":"test"}""".toByteArray()
         val headers = mapOf("mqtt_topic" to "sensor/data")
-        assertTrue(engine.executeTwoPhaseFilter("\"{\$headers.mqtt_topic}\" != \"sensor/other\"", data, headers))
+        assertTrue(engine.executeTwoPhaseFilter("\"{headers.mqtt_topic}\" != \"sensor/other\"", data, headers))
     }
 
     @Test
     fun `sample pattern - header id type check`() {
         val data = """{"msg":"test"}""".toByteArray()
         val headers = mapOf("X-IdType" to "mqtt_failures")
-        assertTrue(engine.executeTwoPhaseFilter("\"{\$headers.X-IdType}\" == \"mqtt_failures\"", data, headers))
+        assertTrue(engine.executeTwoPhaseFilter("\"{headers.X-IdType}\" == \"mqtt_failures\"", data, headers))
     }
 
     @Test
     fun `sample pattern - temperature greater than zero`() {
         val data = """{"temperature":25}""".toByteArray()
-        assertTrue(engine.executeTwoPhaseFilter("{temperature} > 0", data))
+        assertTrue(engine.executeTwoPhaseFilter("{data.temperature} > 0", data))
     }
 
     @Test
@@ -570,5 +570,65 @@ class ExpressionEngineFilterTest : ExpressionEngineBaseTest() {
         val data = """{"x":1}""".toByteArray()
         // {{ should resolve to literal {
         assertTrue(engine.executeTwoPhaseFilter("{{not-a-placeholder}}", data))
+    }
+
+    // ── data/headers variable support ──────────────────────────
+
+    @Test
+    fun `variable - data prefix flat json string template`() {
+        val data = """{"type":"text","content":"hello"}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("\"{data.type}\" == \"text\"", data))
+    }
+
+    @Test
+    fun `variable - data prefix flat json number template`() {
+        val data = """{"temperature":30}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("{data.temperature} > 25", data))
+    }
+
+    @Test
+    fun `variable - data prefix flat json direct filter`() {
+        val data = """{"type":"text"}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("data.type == \"text\"", data))
+    }
+
+    @Test
+    fun `variable - data prefix flat json false`() {
+        val data = """{"type":"json"}""".toByteArray()
+        assertFalse(engine.executeTwoPhaseFilter("\"{data.type}\" == \"text\"", data))
+    }
+
+    @Test
+    fun `variable - data prefix function arg flat json`() {
+        val data = """{"items":["a","b","c"]}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("{length(data.items)} > 0", data))
+    }
+
+    @Test
+    fun `variable - headers access template`() {
+        val data = """{"msg":"test"}""".toByteArray()
+        val headers = mapOf("mqtt_topic" to "test/topic")
+        assertTrue(engine.executeTwoPhaseFilter("\"{headers.mqtt_topic}\" == \"test/topic\"", data, headers))
+    }
+
+    @Test
+    fun `variable - headers access direct filter`() {
+        val data = """{"msg":"test"}""".toByteArray()
+        val headers = mapOf("mqtt_topic" to "test/topic")
+        assertTrue(engine.executeTwoPhaseFilter("headers.mqtt_topic == \"test/topic\"", data, headers))
+    }
+
+    @Test
+    fun `variable - headers access direct filter false`() {
+        val data = """{"msg":"test"}""".toByteArray()
+        val headers = mapOf("mqtt_topic" to "other/topic")
+        assertFalse(engine.executeTwoPhaseFilter("headers.mqtt_topic == \"test/topic\"", data, headers))
+    }
+
+    @Test
+    fun `variable - clipboard real world flat json`() {
+        // reproduce the user's actual use case
+        val data = """{"time":1777971130.38,"uuid":"abc","deviceName":"linux","mime":"text/plain","type":"text","content":"Y2xpcGJvYXJkVXBkYXRlQmVmb3Jl","sendTime":1777971130.38}""".toByteArray()
+        assertTrue(engine.executeTwoPhaseFilter("\"{data.type}\" == \"text\"", data))
     }
 }

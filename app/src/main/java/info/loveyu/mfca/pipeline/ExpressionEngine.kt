@@ -1246,13 +1246,33 @@ class ExpressionEngine {
         return result.toString()
     }
 
+    /**
+     * 解析过滤器和格式模板中的变量路径值：
+     * - `headers.xxx` / `$headers.xxx` → 从 headers 提取
+     * - `data.xxx` → 从根数据对象提取字段 xxx
+     * - 其他路径 → 标准 GJSON 路径提取
+     */
+    private fun resolvePathValue(path: String, json: JSONObject?, headers: Map<String, String>?): Any? {
+        when {
+            path.startsWith("\$headers.") -> return headers?.get(path.substring(9))
+            path.startsWith("headers.") -> return headers?.get(path.substring(8))
+        }
+        if (json == null) return null
+        if (path.startsWith("data.")) {
+            return extractPath(json, path.substring(5), headers)
+        }
+        return extractPath(json, path, headers)
+    }
+
     private fun evaluateCompiledFilter(filter: ParsedFilter, json: JSONObject?, data: ByteArray, headers: Map<String, String>?): Boolean {
         val debugEnabled = LogManager.isDebugEnabled()
         return when (filter.type) {
             ParsedNodeType.CONSTANT -> filter.constantValue == true
             ParsedNodeType.PATH -> {
-                if (json == null) return true // 非 JSON 数据默认通过
-                val extracted = extractPath(json, filter.path ?: "", headers)
+                val path = filter.path ?: ""
+                val isHeadersPath = path.startsWith("headers.") || path.startsWith("\$headers.")
+                if (json == null && !isHeadersPath) return true // 非 JSON 数据默认通过
+                val extracted = resolvePathValue(path, json, headers)
                 val result = extracted != null && extracted != JSONObject.NULL
                 if (debugEnabled) {
                     LogManager.logDebug("EXPR", "Filter PATH [${filter.path}] -> extracted=${truncateForLog(extracted)}, result=$result")
@@ -1260,8 +1280,10 @@ class ExpressionEngine {
                 result
             }
             ParsedNodeType.COMPARISON -> {
-                if (json == null) return true // 非 JSON 数据默认通过
-                val extracted = extractPath(json, filter.path ?: "", headers)
+                val path = filter.path ?: ""
+                val isHeadersPath = path.startsWith("headers.") || path.startsWith("\$headers.")
+                if (json == null && !isHeadersPath) return true // 非 JSON 数据默认通过
+                val extracted = resolvePathValue(path, json, headers)
                 val value = filter.value ?: ""
 
                 val result = when (filter.operator) {
@@ -1359,7 +1381,7 @@ class ExpressionEngine {
     private fun evaluateFunction(name: String, args: List<String>, json: JSONObject, headers: Map<String, String>?): Boolean {
         val fn = builtinFunctions[name] ?: return true
         val evaluatedArgs = args.map { arg ->
-            extractPath(json, arg, headers)
+            resolvePathValue(arg, json, headers)
         }.toTypedArray()
 
         val result = fn.invoke(evaluatedArgs)
@@ -2112,6 +2134,13 @@ class ExpressionEngine {
 
         // GJSON path extraction (needs JSON)
         if (json != null) {
+            if (normalizedExpr.startsWith("data.")) {
+                val extracted = extractPath(json, normalizedExpr.substring(5), headers)
+                if (extracted != null && extracted != JSONObject.NULL) {
+                    return extracted.toString()
+                }
+                return ""
+            }
             val extracted = extractPath(json, normalizedExpr, headers)
             if (extracted != null && extracted != JSONObject.NULL) {
                 return extracted.toString()
@@ -2156,8 +2185,15 @@ class ExpressionEngine {
                     }
             }
             stripped.startsWith("\$headers.") -> headers[stripped.substring(9)]
+            stripped.startsWith("headers.") -> headers[stripped.substring(8)]
             json != null -> {
-                val pathResult = extractPath(json, stripped, headers)
+                // data.xxx → always access field xxx from root JSON
+                val effectivePath = if (stripped.startsWith("data.")) {
+                    stripped.substring(5)
+                } else {
+                    stripped
+                }
+                val pathResult = extractPath(json, effectivePath, headers)
                 if (pathResult != null) pathResult
                 else {
                     stripped.toIntOrNull()
