@@ -268,7 +268,7 @@ class RuleEngine(
                         return@forEach
                     }
                     if (LogManager.isDebugEnabled()) {
-                        LogManager.logDebug("RULE", "Rule [${rule.name}] output -> $outputName: sending, data=${expressionEngine.truncateForLog(String(currentData))}, headers=$inputMessage.headers")
+                        LogManager.logDebug("RULE", "Rule [${rule.name}] output -> $outputName: sending, dataLen=${currentData.size}, headers=${expressionEngine.truncateForLog(inputMessage.headers.toString())}")
                     }
                     val ruleCtx = buildRuleContext(rule.name, inputMessage)
                     val (outData, outHeaders) =
@@ -395,7 +395,7 @@ class RuleEngine(
                         return@forEach
                     }
                     if (LogManager.isDebugEnabled()) {
-                        LogManager.logDebug("RULE", "Rule [${rule.name}] output -> $outputName: sending, data=${expressionEngine.truncateForLog(String(currentData))}, headers=$inputMessage.headers")
+                        LogManager.logDebug("RULE", "Rule [${rule.name}] output -> $outputName: sending, dataLen=${currentData.size}, headers=${expressionEngine.truncateForLog(inputMessage.headers.toString())}")
                     }
                     val ruleCtx = buildRuleContext(rule.name, inputMessage)
                     val (outData, outHeaders) =
