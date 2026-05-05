@@ -30,12 +30,12 @@ class YamlConfigDrivenTest : ExpressionEngineBaseTest() {
         //     from: mqtt_sensor
         //     pipeline:
         //       - transform:
-        //           extract: temperature
+        //           extract: data.temperature
         //         to: [http_output]
         val inputData = """{"temperature":25.5,"humidity":60,"sensorId":"S001"}"""
         val json = JSONObject(inputData)
 
-        val result = engine.evaluateExtractExpression(json, "temperature")
+        val result = engine.evaluateExtractExpression(json, "data.temperature")
         assertNotNull(result)
         assertEquals("25.5", String(result!!))
     }
@@ -298,9 +298,9 @@ class YamlConfigDrivenTest : ExpressionEngineBaseTest() {
         // 1. Input data (flat structure - no nested "data" key)
         val inputData = """{"sensorId":"S001","temperature":28.5,"humidity":45}"""
 
-        // 2. Extract (GJSON path - direct field access)
+        // 2. Extract (data.xxx = root field access, consistent with filter/format)
         val json = JSONObject(inputData)
-        val extracted = engine.evaluateExtractExpression(json, "temperature")
+        val extracted = engine.evaluateExtractExpression(json, "data.temperature")
         assertNotNull(extracted)
         assertEquals("28.5", String(extracted!!))
 

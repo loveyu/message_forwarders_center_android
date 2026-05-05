@@ -1569,7 +1569,7 @@ class ExpressionEngine {
 
         // 6. GJSON path extraction
         if (json != null) {
-            val pathResult = extractPath(json, trimmed, headers)
+            val pathResult = resolvePathValue(trimmed, json, headers)
             if (pathResult != null) return pathResult
         }
 
@@ -1624,7 +1624,7 @@ class ExpressionEngine {
 
         // 6. GJSON path
         if (json != null) {
-            val pathResult = extractPath(json, arg, headers)
+            val pathResult = resolvePathValue(arg, json, headers)
             if (pathResult != null) return pathResult
         }
 

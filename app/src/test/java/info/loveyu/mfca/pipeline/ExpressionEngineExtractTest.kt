@@ -618,19 +618,50 @@ class ExpressionEngineExtractTest : ExpressionEngineBaseTest() {
         assertEquals(rawText, String(result!!))
     }
 
-    // ── Old evaluateExtractExpression signature backward compat ──
+    // ── data/headers variable support in extract ───────────────
 
     @Test
-    fun `evaluateExtractExpression - old signature simple path`() {
-        val json = json("""{"content":"hello"}""")
-        val result = engine.evaluateExtractExpression(json, "content")
-        assertEquals("hello", String(result!!))
+    fun `evaluateExtractExpression - data prefix accesses root field`() {
+        val data = """{"type":"text","content":"hello"}""".toByteArray()
+        val json = json("""{"type":"text","content":"hello"}""")
+        val result = engine.evaluateExtractExpression(data, json, "data.type")
+        assertEquals("text", String(result!!))
     }
 
     @Test
-    fun `evaluateExtractExpression - old signature function call`() {
-        val json = json("""{"encoded":"aGVsbG8gd29ybGQ="}""")
-        val result = engine.evaluateExtractExpression(json, "base64Decode(encoded)")
+    fun `evaluateExtractExpression - data prefix with function arg`() {
+        // base64Decode(data.content) — data.content resolves to root "content" field
+        val encoded = java.util.Base64.getEncoder().encodeToString("hello world".toByteArray())
+        val jsonStr = """{"content":"$encoded"}"""
+        val data = jsonStr.toByteArray()
+        val result = engine.evaluateExtractExpression(data, null, "base64Decode(data.content)")
         assertEquals("hello world", String(result!!))
+    }
+
+    @Test
+    fun `evaluateExtractExpression - data prefix numeric field`() {
+        val data = """{"temperature":25.5}""".toByteArray()
+        val json = json("""{"temperature":25.5}""")
+        val result = engine.evaluateExtractExpression(data, json, "data.temperature")
+        assertNotNull(result)
+        assertEquals("25.5", String(result!!))
+    }
+
+    @Test
+    fun `evaluateExtractExpression - headers prefix accesses header`() {
+        val data = """{"msg":"test"}""".toByteArray()
+        val json = json("""{"msg":"test"}""")
+        val headers = mapOf("mqtt_topic" to "sensor/data")
+        val result = engine.evaluateExtractExpression(data, json, "headers.mqtt_topic", headers)
+        assertEquals("sensor/data", String(result!!))
+    }
+
+    @Test
+    fun `evaluateExtractExpression - real world clipboard use case`() {
+        // Matches the user's actual config: extract: base64Decode(data.content)
+        val payload = """{"type":"text","content":"Y2xpcGJvYXJkVXBkYXRlQmVmb3Jl","sendTime":1234567890}"""
+        val data = payload.toByteArray()
+        val result = engine.evaluateExtractExpression(data, null, "base64Decode(data.content)")
+        assertEquals("clipboardUpdateBefore", String(result!!))
     }
 }
