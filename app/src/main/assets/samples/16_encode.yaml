@@ -116,8 +116,8 @@ rules:
     from: http_in
     pipeline:
       - transform:
-          filter: "\"{type}\" == \"text\""
-          format: '{{"data":"{base64Encode(content)}","type":"{type}"}'
+          filter: "\"{data.type}\" == \"text\""
+          format: '{{"data":"{base64Encode(data.content)}","type":"{data.type}"}'
         to: [mqtt_publish]
 
   # 示例7: 利用 $receivedAt 获取消息接收时间，msToDate 转换为可读格式
@@ -223,8 +223,8 @@ rules:
     from: http_in
     pipeline:
       - transform:
-          filter: "\"{type}\" == \"text\""
-          format: '{{"data":"{base64Encode(content)}","type":"{type}"}'
+          filter: "\"{data.type}\" == \"text\""
+          format: '{{"data":"{base64Encode(data.content)}","type":"{data.type}"}'
         to: [mqtt_publish]
 
   # 示例7: 格式化当前时间戳

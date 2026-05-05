@@ -178,21 +178,21 @@ rules:
 
 | 选项 | 说明 | 示例 |
 |------|------|------|
-| `extract` | GJSON 路径提取 | `"data.temperature"`, `"$raw"`, `"base64Decode(content)"` |
-| `filter` | 表达式过滤 | `"len(data.items) > 0"`, `"path == value"` |
+| `extract` | GJSON 路径提取 | `"data.temperature"`, `"$raw"`, `"base64Decode(data.content)"` |
+| `filter` | 表达式过滤 | `"length(data.items) > 0"`, `"data.field == value"` |
 | `detect` | 类型检测 | `"image"`, `"json"`, `"text"` |
-| `format` | 模板格式化 | `"{headers}\n{data}"`, `"{data.field}"`, `"base64Decode(content)"`, `$delete: ["field"]` |
+| `format` | 模板格式化 | `"{headers}\n{data}"`, `"{data.field}"`, `"base64Decode(data.content)"`, `$delete: ["field"]` |
 | `enrich` | 数据富化 | `"gotifyIcon:<linkId>"` |
 
 #### Filter 支持的操作符
 
 | 操作符 | 示例 |
 |--------|------|
-| `==` / `!=` | `"path == value"` |
-| `>` / `<` / `>=` / `<=` | `"path > 10"` |
-| `startsWith` | `"$headers.mqtt_topic startsWith topic/prefix"` |
-| `len()` | `"len(data.items) > 0"` |
-| `$headers` | `"$headers.mqtt_topic == topic"` |
+| `==` / `!=` | `"data.field == value"` |
+| `>` / `<` / `>=` / `<=` | `"data.field > 10"` |
+| `startsWith` | `"headers.mqtt_topic startsWith topic/prefix"` |
+| `len()` | `"length(data.items) > 0"` |
+| `headers` | `"headers.mqtt_topic == topic"` |
 
 ### 调度器配置
 

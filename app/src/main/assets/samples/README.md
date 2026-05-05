@@ -190,19 +190,19 @@ format:
 ## 规则引擎语法
 
 ### 提取 (extract)
-- `"field"` - 提取字段
+- `"data.field"` - 提取字段
 - `"data.nested.field"` - 嵌套路径
 - `"data.list[0]"` - 数组索引
 - `"$raw"` - 整个 JSON 对象
-- `"base64Decode(content)"` - Base64 解码
+- `"base64Decode(data.content)"` - Base64 解码
 
 ### 过滤 (filter)
-- `"length(path) > N"` - 数组/字符串长度
-- `"path == value"` - 相等比较
-- `"path != value"` - 不等比较
-- `"path > N"` - 数值比较
-- `"$headers.mqtt_topic == topic"` - Headers 访问（MQTT Topic 等）
-- `"contains($headers.mqtt_topic, topic/prefix)"` - 包含匹配
+- `"length(data.field) > N"` - 数组/字符串长度
+- `"data.field == value"` - 相等比较
+- `"data.field != value"` - 不等比较
+- `"data.field > N"` - 数值比较
+- `"headers.mqtt_topic == topic"` - Headers 访问（MQTT Topic 等）
+- `"contains(headers.mqtt_topic, topic/prefix)"` - 包含匹配
 
 ### 检测 (detect)
 - `"image"` - PNG/JPEG/GIF/BMP/WebP
@@ -214,7 +214,7 @@ format:
 - `"{headers}"` - 所有 Headers（JSON 格式）
 - `"{headers.X}"` - 特定 Header 值
 - `"{data.field}"` - GJSON 路径提取
-- `"{base64Decode(content)}"` - 内置函数调用
+- `"{base64Decode(data.content)}"` - 内置函数调用
 - `"{jsonEncode(base64Encode(data))}"` - 嵌套函数调用
 - `"{{"` - 转义为字面量 `{`
 
@@ -227,7 +227,7 @@ format:
 | `{$timestamp}` | 当前秒级时间戳（整数） |
 | `{$unix}` | 当前毫秒级时间戳（整数） |
 | `{$receivedAt}` | 消息被接收时的毫秒时间戳（InputManager 自动注入） |
-| `{$headers.X-ReceivedAt}` | 同 `$receivedAt`，通过 header 访问 |
+| `{headers.X-ReceivedAt}` | 同 `$receivedAt`，通过 header 访问 |
 
 #### 内置函数列表
 

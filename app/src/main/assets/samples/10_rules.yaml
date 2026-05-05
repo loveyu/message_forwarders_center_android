@@ -8,8 +8,8 @@
 #   设为 true 时，当前步骤过滤拒绝将中断整个管道，不再执行后续步骤
 #   示例:
 #     - transform:
-#         filter: "\"{type}\" == \"text\""
-#         extract: "base64Decode(content)"
+#         filter: "\"{data.type}\" == \"text\""
+#         extract: "base64Decode(data.content)"
 #         breakOnReject: true
 #       to: [output]
 #
@@ -17,13 +17,12 @@
 #   Phase 1: {…} 模板占位符解析为字面值（支持函数、路径、headers）
 #   Phase 2: 解析后的纯布尔表达式求值
 #   示例：
-#     "{type}" == "text"                  字符串比较
+#     "{data.type}" == "text"             字符串比较（data.xxx 访问根 JSON 字段）
 #     {data.temperature} > 25             数值比较
-#     {length(items)} > 0                 函数结果比较
-#     "{$headers.topic}" != "sys"         Header 比较
-#     not "{status}" == "active"          否定
+#     {length(data.items)} > 0            函数结果比较
+#     "{headers.topic}" != "sys"          Header 比较（headers.xxx 访问请求头）
+#     not "{data.status}" == "active"     否定
 #     {a} > 0 and {b} > 0                逻辑组合
-#   旧语法（无 {…}）仍兼容：type == "text", length(items) > 0
 #
 # from 支持字符串或数组：
 #   from: sensor_data                     # 单个输入源（字符串）
@@ -157,8 +156,8 @@ rules:
     from: filtered_clipboard
     pipeline:
       - transform:
-          filter: "\"{type}\" == \"text\""
-          extract: "base64Decode(content)"
+          filter: "\"{data.type}\" == \"text\""
+          extract: "base64Decode(data.content)"
         to: [clipboard_out]
 
   # 示例12：直接从 content 字段提取（不解码）
@@ -166,8 +165,8 @@ rules:
     from: filtered_clipboard
     pipeline:
       - transform:
-          filter: "\"{type}\" == \"text\""
-          extract: "content"
+          filter: "\"{data.type}\" == \"text\""
+          extract: "data.content"
         to: [clipboard_out]
 
   # 示例13：错误处理链
@@ -199,7 +198,7 @@ rules:
   #     - transform:
   #         enrich: "gotifyIcon:gotify_link"
   #         extract: "$raw"
-  #         filter: "{appid} > 0"
+  #         filter: "{data.appid} > 0"
   #       to: [gotify_notification]
 
   # 示例16：from 使用数组，匹配多个输入源

@@ -116,7 +116,7 @@ rules:
     from: http_in
     pipeline:
       - transform:
-          extract: 'payload'
+          extract: 'data.payload'
         to: [mqtt_enriched]
 
   # output format 数组：先设 header 再格式化 data
