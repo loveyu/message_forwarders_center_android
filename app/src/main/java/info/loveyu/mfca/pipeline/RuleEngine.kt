@@ -191,6 +191,8 @@ class RuleEngine(
                 if (!detectMedia(currentData, transform.detect)) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] detect [${transform.detect}] -> SKIPPED")
                     skipStep = true
+                } else if (LogManager.isDebugEnabled()) {
+                    LogManager.logDebug("RULE", "Rule [${rule.name}] detect [${transform.detect}] -> PASS, dataLen=${currentData.size}")
                 }
             }
 
@@ -201,6 +203,9 @@ class RuleEngine(
                     if (enriched != null) {
                         currentData = enriched
                         currentJson = parseJson(currentData)
+                        if (LogManager.isDebugEnabled()) {
+                            LogManager.logDebug("RULE", "Rule [${rule.name}] enrich [${transform.enrich}] -> OK, dataLen=${currentData.size}, preview=${expressionEngine.truncateForLog(String(currentData))}")
+                        }
                     }
                 } catch (e: Exception) {
                     LogManager.logWarn("RULE", "Rule [${rule.name}] enrich [${transform.enrich}] failed: ${e.message}")
@@ -215,8 +220,13 @@ class RuleEngine(
                 if (!passed) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] filter [${transform.filter}] -> REJECTED")
                     skipStep = true
-                } else if (transform.filter!!.contains("clipboardUpdateBefore")) {
-                    ClipboardHistoryDbHelper.updateLastPassedTime(String(currentData))
+                } else {
+                    if (LogManager.isDebugEnabled()) {
+                        LogManager.logDebug("RULE", "Rule [${rule.name}] filter [${transform.filter}] -> PASS, json=${expressionEngine.truncateForLog(currentJson?.toString())}, data=${expressionEngine.truncateForLog(String(currentData))}")
+                    }
+                    if (transform.filter!!.contains("clipboardUpdateBefore")) {
+                        ClipboardHistoryDbHelper.updateLastPassedTime(String(currentData))
+                    }
                 }
             }
 
@@ -230,6 +240,13 @@ class RuleEngine(
                     // 数据实际发生了变化，重新解析 JSON
                     currentData = transformed
                     currentJson = parseJson(currentData)
+                    if (LogManager.isDebugEnabled()) {
+                        LogManager.logDebug("RULE", "Rule [${rule.name}] transform extract=[${transform.extract}], format=[${transform.format}] -> OK, dataLen=${currentData.size}, preview=${expressionEngine.truncateForLog(String(currentData))}")
+                    }
+                } else {
+                    if (LogManager.isDebugEnabled()) {
+                        LogManager.logDebug("RULE", "Rule [${rule.name}] transform extract=[${transform.extract}], format=[${transform.format}] -> unchanged")
+                    }
                 }
             }
 
@@ -249,6 +266,9 @@ class RuleEngine(
                     if (!ForwardService.isForwardingEnabled && output.type != OutputType.internal) {
                         LogManager.logDebug("RULE", "转发已暂停, 跳过输出: $outputName")
                         return@forEach
+                    }
+                    if (LogManager.isDebugEnabled()) {
+                        LogManager.logDebug("RULE", "Rule [${rule.name}] output -> $outputName: sending, data=${expressionEngine.truncateForLog(String(currentData))}, headers=$inputMessage.headers")
                     }
                     val ruleCtx = buildRuleContext(rule.name, inputMessage)
                     val (outData, outHeaders) =
@@ -301,6 +321,8 @@ class RuleEngine(
                 if (!detectMedia(currentData, transform.detect)) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] detect [${transform.detect}] -> SKIPPED")
                     skipStep = true
+                } else if (LogManager.isDebugEnabled()) {
+                    LogManager.logDebug("RULE", "Rule [${rule.name}] detect [${transform.detect}] -> PASS, dataLen=${currentData.size}")
                 }
             }
 
@@ -313,6 +335,9 @@ class RuleEngine(
                     if (enriched != null) {
                         currentData = enriched
                         currentJson = parseJson(currentData)
+                        if (LogManager.isDebugEnabled()) {
+                            LogManager.logDebug("RULE", "Rule [${rule.name}] enrich [${transform.enrich}] -> OK, dataLen=${currentData.size}, preview=${expressionEngine.truncateForLog(String(currentData))}")
+                        }
                     }
                 } catch (e: Exception) {
                     LogManager.logWarn("RULE", "Rule [${rule.name}] enrich [${transform.enrich}] failed: ${e.message}")
@@ -324,8 +349,13 @@ class RuleEngine(
                 if (!expressionEngine.executeTwoPhaseFilter(transform.filter!!, currentJson, currentData, inputMessage.headers)) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] filter [${transform.filter}] -> REJECTED")
                     skipStep = true
-                } else if (transform.filter!!.contains("clipboardUpdateBefore")) {
-                    ClipboardHistoryDbHelper.updateLastPassedTime(String(currentData))
+                } else {
+                    if (LogManager.isDebugEnabled()) {
+                        LogManager.logDebug("RULE", "Rule [${rule.name}] filter [${transform.filter}] -> PASS, json=${expressionEngine.truncateForLog(currentJson?.toString())}, data=${expressionEngine.truncateForLog(String(currentData))}")
+                    }
+                    if (transform.filter!!.contains("clipboardUpdateBefore")) {
+                        ClipboardHistoryDbHelper.updateLastPassedTime(String(currentData))
+                    }
                 }
             }
 
@@ -338,6 +368,13 @@ class RuleEngine(
                 } else if (transformed !== currentData) {
                     currentData = transformed
                     currentJson = parseJson(currentData)
+                    if (LogManager.isDebugEnabled()) {
+                        LogManager.logDebug("RULE", "Rule [${rule.name}] transform extract=[${transform.extract}], format=[${transform.format}] -> OK, dataLen=${currentData.size}, preview=${expressionEngine.truncateForLog(String(currentData))}")
+                    }
+                } else {
+                    if (LogManager.isDebugEnabled()) {
+                        LogManager.logDebug("RULE", "Rule [${rule.name}] transform extract=[${transform.extract}], format=[${transform.format}] -> unchanged")
+                    }
                 }
             }
 
@@ -356,6 +393,9 @@ class RuleEngine(
                     if (!ForwardService.isForwardingEnabled && output.type != OutputType.internal) {
                         LogManager.logDebug("RULE", "转发已暂停, 跳过输出: $outputName")
                         return@forEach
+                    }
+                    if (LogManager.isDebugEnabled()) {
+                        LogManager.logDebug("RULE", "Rule [${rule.name}] output -> $outputName: sending, data=${expressionEngine.truncateForLog(String(currentData))}, headers=$inputMessage.headers")
                     }
                     val ruleCtx = buildRuleContext(rule.name, inputMessage)
                     val (outData, outHeaders) =

@@ -1031,6 +1031,9 @@ class ExpressionEngine {
         val dataStr = String(data)
         val json = try { JSONObject(dataStr) } catch (_: Exception) { null }
         val resolved = resolveFilterTemplate(expression, dataStr, json, headers ?: emptyMap())
+        if (LogManager.isDebugEnabled()) {
+            LogManager.logDebug("EXPR", "TwoPhaseFilter: original=$expression, resolved=$resolved")
+        }
         return executeFilter(resolved, json, data, headers)
     }
 
@@ -1045,6 +1048,9 @@ class ExpressionEngine {
         val dataStr = String(data)
         val json = preParsedJson ?: try { JSONObject(dataStr) } catch (_: Exception) { null }
         val resolved = resolveFilterTemplate(expression, dataStr, json, headers ?: emptyMap())
+        if (LogManager.isDebugEnabled()) {
+            LogManager.logDebug("EXPR", "TwoPhaseFilter: original=$expression, resolved=$resolved")
+        }
         return executeFilter(resolved, json, data, headers)
     }
 
@@ -1105,19 +1111,24 @@ class ExpressionEngine {
     }
 
     private fun evaluateCompiledFilter(filter: ParsedFilter, json: JSONObject?, data: ByteArray, headers: Map<String, String>?): Boolean {
+        val debugEnabled = LogManager.isDebugEnabled()
         return when (filter.type) {
             ParsedNodeType.CONSTANT -> filter.constantValue == true
             ParsedNodeType.PATH -> {
                 if (json == null) return true // 非 JSON 数据默认通过
                 val extracted = extractPath(json, filter.path ?: "", headers)
-                extracted != null && extracted != JSONObject.NULL
+                val result = extracted != null && extracted != JSONObject.NULL
+                if (debugEnabled) {
+                    LogManager.logDebug("EXPR", "Filter PATH [${filter.path}] -> extracted=${truncateForLog(extracted)}, result=$result")
+                }
+                result
             }
             ParsedNodeType.COMPARISON -> {
                 if (json == null) return true // 非 JSON 数据默认通过
                 val extracted = extractPath(json, filter.path ?: "", headers)
                 val value = filter.value ?: ""
 
-                when (filter.operator) {
+                val result = when (filter.operator) {
                     "==" -> extracted?.toString() == value
                     "!=" -> extracted?.toString() != value
                     ">" -> (extracted as? Number)?.toDouble()?.let { it > (value.toDoubleOrNull() ?: 0.0) } ?: false
@@ -1126,6 +1137,10 @@ class ExpressionEngine {
                     "<=" -> (extracted as? Number)?.toDouble()?.let { it <= (value.toDoubleOrNull() ?: 0.0) } ?: false
                     else -> true
                 }
+                if (debugEnabled) {
+                    LogManager.logDebug("EXPR", "Filter CMP [${filter.path}] ${filter.operator} [${filter.value}] -> left=${truncateForLog(extracted)}, result=$result")
+                }
+                result
             }
             ParsedNodeType.LITERAL_COMPARISON -> {
                 val left = filter.path ?: ""
@@ -1133,7 +1148,7 @@ class ExpressionEngine {
                 val leftNum = left.toDoubleOrNull()
                 val rightNum = right.toDoubleOrNull()
 
-                when (filter.operator) {
+                val result = when (filter.operator) {
                     "==" -> left == right
                     "!=" -> left != right
                     ">" -> if (leftNum != null && rightNum != null) leftNum > rightNum else left > right
@@ -1142,20 +1157,36 @@ class ExpressionEngine {
                     "<=" -> if (leftNum != null && rightNum != null) leftNum <= rightNum else left <= right
                     else -> true
                 }
+                if (debugEnabled) {
+                    LogManager.logDebug("EXPR", "Filter LITERAL_CMP [$left] ${filter.operator} [$right] -> result=$result")
+                }
+                result
             }
             ParsedNodeType.AND -> {
                 val left = filter.left?.let { evaluateCompiledFilter(it, json, data, headers) } ?: true
                 val right = filter.right?.let { evaluateCompiledFilter(it, json, data, headers) } ?: true
-                left && right
+                val result = left && right
+                if (debugEnabled) {
+                    LogManager.logDebug("EXPR", "Filter AND -> left=$left, right=$right, result=$result")
+                }
+                result
             }
             ParsedNodeType.OR -> {
                 val left = filter.left?.let { evaluateCompiledFilter(it, json, data, headers) } ?: false
                 val right = filter.right?.let { evaluateCompiledFilter(it, json, data, headers) } ?: false
-                left || right
+                val result = left || right
+                if (debugEnabled) {
+                    LogManager.logDebug("EXPR", "Filter OR -> left=$left, right=$right, result=$result")
+                }
+                result
             }
             ParsedNodeType.NOT -> {
                 val operand = filter.left?.let { evaluateCompiledFilter(it, json, data, headers) } ?: true
-                !operand
+                val result = !operand
+                if (debugEnabled) {
+                    LogManager.logDebug("EXPR", "Filter NOT -> operand=$operand, result=$result")
+                }
+                result
             }
             ParsedNodeType.FUNCTION -> {
                 // 优先检查原始数据函数（支持非 JSON 数据）
@@ -1164,11 +1195,19 @@ class ExpressionEngine {
                     val evaluatedArgs = (filter.args ?: emptyList()).map { arg ->
                         parseRawArg(arg)
                     }.toTypedArray()
-                    val result = rawFn.invoke(data, evaluatedArgs)
-                    return result == true || (result is Number && result.toLong() != 0L)
+                    val fnResult = rawFn.invoke(data, evaluatedArgs)
+                    val result = fnResult == true || (fnResult is Number && fnResult.toLong() != 0L)
+                    if (debugEnabled) {
+                        LogManager.logDebug("EXPR", "Filter RAW_FN [${filter.path}](${filter.args?.joinToString(",") ?: ""}) -> result=${truncateForLog(fnResult)}")
+                    }
+                    return result
                 }
                 if (json == null) return true // 非 JSON 数据且无原始数据函数，默认通过
-                evaluateFunction(filter.path ?: "", filter.args ?: emptyList(), json, headers)
+                val fnResult = evaluateFunction(filter.path ?: "", filter.args ?: emptyList(), json, headers)
+                if (debugEnabled) {
+                    LogManager.logDebug("EXPR", "Filter FN [${filter.path}](${filter.args?.joinToString(",") ?: ""}) -> result=$fnResult")
+                }
+                fnResult
             }
         }
     }
@@ -1279,7 +1318,7 @@ class ExpressionEngine {
         }
     }
 
-    private fun truncateForLog(value: Any?, maxLen: Int = 200): String {
+    internal fun truncateForLog(value: Any?, maxLen: Int = 200): String {
         if (value == null) return "null"
         val s = value.toString()
         return if (s.length > maxLen) s.substring(0, maxLen) + "..." else s
@@ -1291,6 +1330,7 @@ class ExpressionEngine {
      */
     fun evaluateExtractExpression(json: Any?, expression: String, headers: Map<String, String>? = null): ByteArray? {
         val trimmed = expression.trim()
+        val debugEnabled = LogManager.isDebugEnabled()
 
         // 检查是否是函数调用
         val funcMatch = FUNC_CALL_REGEX.find(trimmed)
@@ -1305,7 +1345,13 @@ class ExpressionEngine {
                     resolveExtractArg(json, arg.trim(), headers)
                 }.toTypedArray()
 
+                if (debugEnabled) {
+                    LogManager.logDebug("EXPR", "Extract FN $funcName args=[${args.joinToString(", ") { truncateForLog(it) }}]")
+                }
                 val result = fn.invoke(args)
+                if (debugEnabled) {
+                    LogManager.logDebug("EXPR", "Extract FN $funcName -> result=${truncateForLog(result)}")
+                }
                 return when (result) {
                     is String -> result.toByteArray()
                     is Number -> result.toString().toByteArray()
@@ -1317,6 +1363,9 @@ class ExpressionEngine {
         }
 
         // 否则作为普通路径处理
+        if (debugEnabled) {
+            LogManager.logDebug("EXPR", "Extract PATH $trimmed")
+        }
         return extractAndTransform(json, trimmed)
     }
 
@@ -1469,12 +1518,17 @@ class ExpressionEngine {
     ): Pair<ByteArray, Map<String, String>> {
         var data = initialData
         var headers = initialHeaders
+        val debugEnabled = LogManager.isDebugEnabled()
 
         for (step in steps) {
             val target = step.target.trim()
             val template = step.template
             val dataStr = String(data)
             val json = try { org.json.JSONObject(dataStr) } catch (_: Exception) { null }
+
+            if (debugEnabled) {
+                LogManager.logDebug("EXPR", "FormatStep: target=$target, template=${truncateForLog(template)}")
+            }
 
             // Support delete operations when raw is provided as Map/List
             if (step.raw != null) {
@@ -1516,6 +1570,10 @@ class ExpressionEngine {
                                 headers = mutableHeaders.toMap()
                             }
 
+                            if (debugEnabled) {
+                                LogManager.logDebug("EXPR", "FormatStep DELETE keys=$keysToDelete")
+                            }
+
                             // processed delete - continue to next step
                             continue
                         }
@@ -1529,6 +1587,9 @@ class ExpressionEngine {
                                 for (k in keysToDelete) removeJsonPath(obj, k)
                                 data = obj.toString().toByteArray()
                             }
+                            if (debugEnabled) {
+                                LogManager.logDebug("EXPR", "FormatStep DELETE keys=$keysToDelete")
+                            }
                             continue
                         }
                     }
@@ -1539,6 +1600,9 @@ class ExpressionEngine {
                 target == "\$data" -> {
                     val result = evaluateFormatTemplate(template, data, json, headers, context)
                     data = result
+                    if (debugEnabled) {
+                        LogManager.logDebug("EXPR", "FormatStep \$data -> result=${truncateForLog(String(data))}")
+                    }
                 }
                 target.startsWith("\$data.") -> {
                     val field = target.removePrefix("\$data.")
@@ -1546,6 +1610,9 @@ class ExpressionEngine {
                     val obj = json ?: org.json.JSONObject()
                     obj.put(field, parseJsonValueOrString(result))
                     data = obj.toString().toByteArray()
+                    if (debugEnabled) {
+                        LogManager.logDebug("EXPR", "FormatStep \$data.$field -> ${truncateForLog(result)}")
+                    }
                 }
                 target == "\$header" -> {
                     val result = String(evaluateFormatTemplate(template, data, json, headers, context))
@@ -1555,11 +1622,17 @@ class ExpressionEngine {
                         for (key in parsed.keys()) map[key] = parsed.getString(key)
                         map
                     } catch (_: Exception) { headers }
+                    if (debugEnabled) {
+                        LogManager.logDebug("EXPR", "FormatStep \$header -> headers=$headers")
+                    }
                 }
                 target.startsWith("\$header.") -> {
                     val key = target.removePrefix("\$header.")
                     val result = String(evaluateFormatTemplate(template, data, json, headers, context))
                     headers = headers + (key to result)
+                    if (debugEnabled) {
+                        LogManager.logDebug("EXPR", "FormatStep \$header.$key -> ${truncateForLog(result)}")
+                    }
                 }
                 else -> {
                     LogManager.logWarn("EXPR", "Unknown format target: $target")
@@ -1723,6 +1796,7 @@ class ExpressionEngine {
         context: Map<String, String> = emptyMap()
     ): ByteArray {
 
+        val debugEnabled = LogManager.isDebugEnabled()
         val result = StringBuilder()
         var i = 0
         while (i < template.length) {
@@ -1739,7 +1813,11 @@ class ExpressionEngine {
                     continue
                 }
                 val expr = template.substring(i + 1, closeIdx).trim()
-                result.append(resolveFormatExpression(expr, dataStr, json, headers, context))
+                val resolved = resolveFormatExpression(expr, dataStr, json, headers, context)
+                if (debugEnabled) {
+                    LogManager.logDebug("EXPR", "Format: {$expr} -> ${truncateForLog(resolved)}")
+                }
+                result.append(resolved)
                 i = closeIdx + 1
             } else {
                 result.append(template[i])
