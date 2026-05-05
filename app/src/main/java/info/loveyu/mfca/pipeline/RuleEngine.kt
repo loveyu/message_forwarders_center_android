@@ -267,6 +267,11 @@ class RuleEngine(
                         LogManager.logDebug("RULE", "转发已暂停, 跳过输出: $outputName")
                         return@forEach
                     }
+                    // Skip unavailable outputs (e.g. link not connected)
+                    if (!output.isAvailable()) {
+                        LogManager.logInfo("RULE", "Rule [${rule.name}] output -> $outputName: SKIPPED, output unavailable")
+                        return@forEach
+                    }
                     if (LogManager.isDebugEnabled()) {
                         LogManager.logDebug("RULE", "Rule [${rule.name}] output -> $outputName: sending, dataLen=${currentData.size}, headers=${expressionEngine.truncateForLog(inputMessage.headers.toString())}")
                     }
@@ -392,6 +397,11 @@ class RuleEngine(
                 if (output != null) {
                     if (!ForwardService.isForwardingEnabled && output.type != OutputType.internal) {
                         LogManager.logDebug("RULE", "转发已暂停, 跳过输出: $outputName")
+                        return@forEach
+                    }
+                    // Skip unavailable outputs (e.g. link not connected)
+                    if (!output.isAvailable()) {
+                        LogManager.logInfo("RULE", "Rule [${rule.name}] output -> $outputName: SKIPPED, output unavailable")
                         return@forEach
                     }
                     if (LogManager.isDebugEnabled()) {
