@@ -463,6 +463,7 @@ object ConfigLoader {
         val formatSteps = if (rawFormat is List<*>) parseFormatSteps(rawFormat) else null
         val formatStr = if (rawFormat is String) rawFormat else null
         return TransformConfig(
+            decode = map["decode"] as? String,
             extract = map["extract"] as? String,
             filter = map["filter"] as? String,
             detect = map["detect"] as? String,

@@ -393,6 +393,89 @@ class ExpressionEngine {
             val text = args.getOrNull(0)?.toString() ?: ""
             clipboardUpdateBeforeFn?.invoke(text) ?: -1L
         }
+
+        // Decode/Encode 函数
+        builtinFunctions["jsonDecode"] = BuiltinFunction("jsonDecode", 1) { args ->
+            val str = args.getOrNull(0)?.toString() ?: return@BuiltinFunction null
+            val trimmed = str.trim()
+            try {
+                when {
+                    trimmed.startsWith("\"") -> {
+                        // JSON string literal — use JSONTokener to properly unquote and unescape
+                        org.json.JSONTokener(trimmed).nextValue()?.toString() ?: str
+                    }
+                    trimmed.startsWith("{") -> JSONObject(trimmed)
+                    trimmed.startsWith("[") -> JSONArray(trimmed)
+                    trimmed == "true" -> true
+                    trimmed == "false" -> false
+                    trimmed == "null" -> null
+                    trimmed.toLongOrNull() != null -> trimmed.toLongOrNull()
+                    trimmed.toDoubleOrNull() != null -> trimmed.toDoubleOrNull()
+                    else -> str
+                }
+            } catch (e: Exception) {
+                LogManager.logWarn("EXPR", "jsonDecode error: ${e.message}")
+                str
+            }
+        }
+
+        builtinFunctions["yamlDecode"] = BuiltinFunction("yamlDecode", 1) { args ->
+            val str = args.getOrNull(0)?.toString() ?: return@BuiltinFunction null
+            try {
+                val yamlLoad = org.snakeyaml.engine.v2.api.Load(
+                    org.snakeyaml.engine.v2.api.LoadSettings.builder().build()
+                )
+                yamlLoad.loadFromString(str) ?: str
+            } catch (e: Exception) {
+                LogManager.logWarn("EXPR", "yamlDecode error: ${e.message}")
+                str
+            }
+        }
+
+        builtinFunctions["yamlEncode"] = BuiltinFunction("yamlEncode", 1) { args ->
+            val obj = args.getOrNull(0) ?: return@BuiltinFunction ""
+            try {
+                val yamlDump = org.snakeyaml.engine.v2.api.Dump(
+                    org.snakeyaml.engine.v2.api.DumpSettings.builder().build()
+                )
+                yamlDump.dumpToString(obj)
+            } catch (e: Exception) {
+                LogManager.logWarn("EXPR", "yamlEncode error: ${e.message}")
+                obj.toString()
+            }
+        }
+
+        builtinFunctions["gzEncode"] = BuiltinFunction("gzEncode", 1) { args ->
+            val str = args.getOrNull(0)?.toString() ?: return@BuiltinFunction ""
+            try {
+                val bos = java.io.ByteArrayOutputStream()
+                java.util.zip.GZIPOutputStream(bos).use { gzip ->
+                    gzip.write(str.toByteArray(Charsets.UTF_8))
+                }
+                android.util.Base64.encodeToString(bos.toByteArray(), android.util.Base64.NO_WRAP)
+            } catch (e: Exception) {
+                LogManager.logWarn("EXPR", "gzEncode error: ${e.message}")
+                ""
+            }
+        }
+
+        builtinFunctions["gzDecode"] = BuiltinFunction("gzDecode", 1) { args ->
+            val str = args.getOrNull(0)?.toString() ?: return@BuiltinFunction ""
+            try {
+                val compressed = android.util.Base64.decode(str, android.util.Base64.NO_WRAP)
+                java.io.ByteArrayInputStream(compressed).use { bis ->
+                    java.util.zip.GZIPInputStream(bis).use { gzip ->
+                        gzip.readBytes().toString(Charsets.UTF_8)
+                    }
+                }
+            } catch (e: Exception) {
+                LogManager.logWarn("EXPR", "gzDecode error: ${e.message}")
+                ""
+            }
+        }
+
+        builtinFunctions["gzipEncode"] = builtinFunctions["gzEncode"]!!
+        builtinFunctions["gzipDecode"] = builtinFunctions["gzDecode"]!!
     }
 
     /**
@@ -1137,6 +1220,69 @@ class ExpressionEngine {
             is List<*> -> extracted.toString().toByteArray()
             else -> extracted.toString().toByteArray()
         }
+    }
+
+    /**
+     * 评估解码管道表达式，按 `|` 分割函数链式调用。
+     * 初始值为 String(data, UTF_8)，每个函数的输出作为下一个函数的输入。
+     * 返回解码后的 ByteArray，失败返回 null。
+     */
+    fun evaluateDecodePipeline(expression: String, data: ByteArray): ByteArray? {
+        val steps = expression.split('|').map { it.trim() }.filter { it.isNotEmpty() }
+        if (steps.isEmpty()) return data
+
+        var current: Any? = String(data, Charsets.UTF_8)
+
+        LogManager.logDebug("RULE", "decode pipeline [$expression] start, input type=${current?.javaClass?.simpleName}, len=${(current as? String)?.length ?: -1}")
+
+        for ((index, step) in steps.withIndex()) {
+            val inputType = current?.javaClass?.simpleName ?: "null"
+            val inputPreview = truncateForLog(current)
+            LogManager.logDebug("RULE", "decode pipeline step [$index/$${steps.size - 1}] func=$step, input type=$inputType, value=$inputPreview")
+
+            val result = callDecodeFunction(step, current)
+            if (result == null) {
+                LogManager.logWarn("RULE", "decode pipeline step [$step] returned null, aborting pipeline [$expression]")
+                return null
+            }
+            current = result
+
+            val outputType = current?.javaClass?.simpleName ?: "null"
+            val outputPreview = truncateForLog(current)
+            LogManager.logDebug("RULE", "decode pipeline step [$step] result type=$outputType, value=$outputPreview")
+        }
+
+        val finalResult = when (current) {
+            is JSONObject -> current.toString().toByteArray()
+            is JSONArray -> current.toString().toByteArray()
+            is String -> current.toByteArray()
+            is Map<*, *> -> JSONObject(current as Map<*, *>).toString().toByteArray()
+            is List<*> -> JSONArray(current as List<*>).toString().toByteArray()
+            else -> current?.toString()?.toByteArray() ?: return null
+        }
+
+        LogManager.logDebug("RULE", "decode pipeline [$expression] complete, output type=${current?.javaClass?.simpleName}, outputLen=${finalResult.size}")
+        return finalResult
+    }
+
+    private fun callDecodeFunction(name: String, input: Any?): Any? {
+        val fn = builtinFunctions[name]
+        if (fn == null) {
+            LogManager.logWarn("RULE", "decode pipeline: unknown function [$name]")
+            return null
+        }
+        return try {
+            fn.invoke(arrayOf(input))
+        } catch (e: Exception) {
+            LogManager.logWarn("RULE", "decode pipeline function [$name] error: ${e.message}")
+            null
+        }
+    }
+
+    private fun truncateForLog(value: Any?, maxLen: Int = 200): String {
+        if (value == null) return "null"
+        val s = value.toString()
+        return if (s.length > maxLen) s.substring(0, maxLen) + "..." else s
     }
 
     /**

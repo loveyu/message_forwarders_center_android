@@ -174,8 +174,20 @@ class RuleEngine(
             val transform = step.transform
             var skipStep = false
 
+            // Apply decode before detect
+            if (transform?.decode != null) {
+                val decoded = expressionEngine.evaluateDecodePipeline(transform.decode!!, currentData)
+                if (decoded != null) {
+                    currentData = decoded
+                    currentJson = parseJson(currentData)
+                } else {
+                    LogManager.logDebug("RULE", "Rule [${rule.name}] decode [${transform.decode}] -> null, SKIPPED")
+                    skipStep = true
+                }
+            }
+
             // Apply detect first if specified
-            if (transform?.detect != null) {
+            if (!skipStep && transform?.detect != null) {
                 if (!detectMedia(currentData, transform.detect)) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] detect [${transform.detect}] -> SKIPPED")
                     skipStep = true
@@ -272,8 +284,20 @@ class RuleEngine(
             val transform = step.transform
             var skipStep = false
 
+            // Apply decode before detect
+            if (transform?.decode != null) {
+                val decoded = expressionEngine.evaluateDecodePipeline(transform.decode!!, currentData)
+                if (decoded != null) {
+                    currentData = decoded
+                    currentJson = parseJson(currentData)
+                } else {
+                    LogManager.logDebug("RULE", "Rule [${rule.name}] decode [${transform.decode}] -> null, SKIPPED")
+                    skipStep = true
+                }
+            }
+
             // Apply detect first if specified
-            if (transform?.detect != null) {
+            if (!skipStep && transform?.detect != null) {
                 if (!detectMedia(currentData, transform.detect)) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] detect [${transform.detect}] -> SKIPPED")
                     skipStep = true

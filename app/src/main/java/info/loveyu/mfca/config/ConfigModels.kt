@@ -402,6 +402,7 @@ data class OutputFormatStep(
 )
 
 data class TransformConfig(
+    val decode: String? = null,
     val extract: String? = null,
     val filter: String? = null,
     val detect: String? = null,

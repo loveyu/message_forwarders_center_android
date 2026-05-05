@@ -101,8 +101,9 @@ protocol://[username:password@]host:port[?param1=value1&param2=value2...]
 
 ## 规则引擎语法
 
-执行顺序：`detect → enrich → filter → extract → format → output`
+执行顺序：`decode → detect → enrich → filter → extract → format → output`
 
+- decode: 管道解码（`"base64Decode|jsonDecode"`, `"gzDecode|jsonDecode"`），执行顺序在 detect 之前
 - detect: 类型检测（`image`, `json`, `text`）
 - enrich: 数据富化（`"gotifyIcon:<linkId>"`）
 - filter: 表达式过滤（`"len(data.items) > 0"`, `"path == value"`, `"startsWith"`, `"$headers.X"`）
