@@ -1032,7 +1032,7 @@ class ExpressionEngine {
         val json = try { JSONObject(dataStr) } catch (_: Exception) { null }
         val resolved = resolveFilterTemplate(expression, dataStr, json, headers ?: emptyMap())
         if (LogManager.isDebugEnabled()) {
-            LogManager.logDebug("EXPR", "TwoPhaseFilter: original=$expression, resolved=$resolved")
+            LogManager.logDebug("EXPR", "TwoPhaseFilter: original=${truncateForLog(expression)}, resolved=${truncateForLog(resolved)}")
         }
         return executeFilter(resolved, json, data, headers)
     }
@@ -1049,7 +1049,7 @@ class ExpressionEngine {
         val json = preParsedJson ?: try { JSONObject(dataStr) } catch (_: Exception) { null }
         val resolved = resolveFilterTemplate(expression, dataStr, json, headers ?: emptyMap())
         if (LogManager.isDebugEnabled()) {
-            LogManager.logDebug("EXPR", "TwoPhaseFilter: original=$expression, resolved=$resolved")
+            LogManager.logDebug("EXPR", "TwoPhaseFilter: original=${truncateForLog(expression)}, resolved=${truncateForLog(resolved)}")
         }
         return executeFilter(resolved, json, data, headers)
     }
@@ -1623,7 +1623,7 @@ class ExpressionEngine {
                         map
                     } catch (_: Exception) { headers }
                     if (debugEnabled) {
-                        LogManager.logDebug("EXPR", "FormatStep \$header -> headers=$headers")
+                        LogManager.logDebug("EXPR", "FormatStep \$header -> headers=${truncateForLog(headers.toString())}")
                     }
                 }
                 target.startsWith("\$header.") -> {
