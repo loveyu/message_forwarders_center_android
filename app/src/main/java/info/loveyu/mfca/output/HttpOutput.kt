@@ -9,10 +9,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import java.util.concurrent.TimeUnit
 
 /**
@@ -38,6 +40,7 @@ class HttpOutput(
             .connectTimeout(config.timeout.millis, TimeUnit.MILLISECONDS)
             .readTimeout(config.timeout.millis, TimeUnit.MILLISECONDS)
             .writeTimeout(config.timeout.millis, TimeUnit.MILLISECONDS)
+            .addNetworkInterceptor(OkHttpLoggingInterceptor(name))
             .build()
     }
 
@@ -98,30 +101,8 @@ class HttpOutput(
                 .method(prepared.method, body)
                 .build()
 
-            if (LogManager.isDebugEnabled()) {
-                val bodyPreview = if (body != null) {
-                    String(prepared.body).take(500).let { if (prepared.body.size > 500) "$it…(${prepared.body.size}B)" else it }
-                } else "(no body)"
-                LogManager.logDebug(
-                    "OKHTTP",
-                    "[$name] --> ${prepared.method} ${request.url}\n" +
-                        "Headers: ${request.headers.toMap()}\n" +
-                        "Content-Type: ${prepared.contentType}\n" +
-                        "Body: $bodyPreview"
-                )
-            }
-
             client.newCall(request).execute().use { response ->
                 val responseCode = response.code
-                if (LogManager.isDebugEnabled()) {
-                    val respBodyPreview = response.body?.string()?.take(500) ?: "(no body)"
-                    LogManager.logDebug(
-                        "OKHTTP",
-                        "[$name] <-- $responseCode ${response.message} ${request.url}\n" +
-                            "Headers: ${response.headers.toMap()}\n" +
-                            "Body: $respBodyPreview"
-                    )
-                }
                 if (responseCode in 200..299) {
                     OutputResult.Success(responseCode)
                 } else {
@@ -204,3 +185,52 @@ internal data class PreparedRequest(
     val contentType: String,
     val headers: Map<String, String>
 )
+
+/**
+ * OkHttp 网络拦截器：在 Debug 模式下打印完整请求和响应信息。
+ * 使用 addNetworkInterceptor 可以捕获 OkHttp 最终发出的原始 header，
+ * 包括自动添加的 Host、User-Agent、Content-Length、Accept-Encoding 等默认值。
+ */
+internal class OkHttpLoggingInterceptor(private val outputName: String) : Interceptor {
+
+    override fun intercept(chain: Interceptor.Chain): Response {
+        if (!LogManager.isDebugEnabled()) return chain.proceed(chain.request())
+
+        val request = chain.request()
+
+        // Log request (body is read non-destructively via peek)
+        val reqBodyStr = request.body?.let { body ->
+            val buffer = okio.Buffer()
+            body.writeTo(buffer)
+            buffer.readUtf8().take(500).let { s ->
+                if (buffer.size > 0) "$s…(${body.contentLength()}B)" else s
+            }
+        } ?: "(no body)"
+
+        LogManager.logDebug(
+            "OKHTTP",
+            "[$outputName] --> ${request.method} ${request.url}\n" +
+                "Headers: ${request.headers.toMultimap()}\n" +
+                "Body: $reqBodyStr"
+        )
+
+        val response = chain.proceed(request)
+
+        // Log response (buffer body so it can still be consumed by caller)
+        val respBody = response.body
+        val respBodyStr = if (respBody != null) {
+            val source = respBody.source()
+            source.request(Long.MAX_VALUE)
+            source.buffer.clone().readUtf8().take(500)
+        } else "(no body)"
+
+        LogManager.logDebug(
+            "OKHTTP",
+            "[$outputName] <-- ${response.code} ${response.message} ${request.url}\n" +
+                "Headers: ${response.headers.toMultimap()}\n" +
+                "Body: $respBodyStr"
+        )
+
+        return response
+    }
+}
