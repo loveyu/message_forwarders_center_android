@@ -1,6 +1,7 @@
 package info.loveyu.mfca.output
 
 import info.loveyu.mfca.config.OutputFormatStep
+import info.loveyu.mfca.config.QueueRefConfig
 import info.loveyu.mfca.queue.QueueItem
 
 /**
@@ -12,6 +13,10 @@ interface Output {
 
     /** 输出前的数据/header 格式化步骤（null 表示不处理） */
     val formatSteps: List<OutputFormatStep>?
+        get() = null
+
+    /** 输出关联的队列配置（null 表示不使用队列，直接发送） */
+    val queueRef: QueueRefConfig?
         get() = null
 
     fun send(item: QueueItem, callback: ((Boolean) -> Unit)? = null)

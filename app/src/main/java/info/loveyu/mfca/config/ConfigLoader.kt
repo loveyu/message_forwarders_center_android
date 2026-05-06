@@ -173,13 +173,10 @@ object ConfigLoader {
     private fun parseOnFailure(onFailure: Any?): OnFailureConfig? {
         if (onFailure == null) return null
         val map = onFailure as? Map<String, Any> ?: return null
+        val action = map["action"] as? String ?: "discard"
         return OnFailureConfig(
-            action = when (map["action"] as? String) {
-                "failQueue" -> OnFailureAction.failQueue
-                else -> OnFailureAction.discard
-            },
+            action = action,
             idType = map["idType"] as? String,
-            queue = map["queue"] as? String,
             delay = Duration(map["delay"] as? String ?: "60s")
         )
     }
@@ -259,9 +256,9 @@ object ConfigLoader {
     }
 
     private fun parseOverflowStrategy(strategy: String?): OverflowStrategy {
-        return when (strategy?.lowercase()) {
-            "drop_oldest" -> OverflowStrategy.dropOldest
-            "drop_new" -> OverflowStrategy.dropNew
+        return when (strategy?.lowercase()?.replace("_", "")) {
+            "dropoldest" -> OverflowStrategy.dropOldest
+            "dropnew" -> OverflowStrategy.dropNew
             "block" -> OverflowStrategy.block
             else -> OverflowStrategy.dropOldest
         }
@@ -371,10 +368,11 @@ object ConfigLoader {
 
     private fun parseQueueRef(queue: Any?): QueueRefConfig? {
         if (queue == null) return null
-        val map = queue as Map<String, Any>
+        val map = queue as? Map<String, Any> ?: return null
+        val name = map["name"] as? String ?: return null
         return QueueRefConfig(
-            priority = map["priority"] as? String,
-            queue = map["queue"] as? String
+            name = name,
+            delay = (map["delay"] as? Number)?.toLong() ?: 0L
         )
     }
 
@@ -413,6 +411,7 @@ object ConfigLoader {
                     fileName = map["fileName"] as? String,
                     options = map["options"] as? Map<String, Any>,
                     channel = map["channel"] as? String,
+                    queue = parseQueueRef(map["queue"]),
                     format = parseFormatSteps(map["format"])
                 )
             }

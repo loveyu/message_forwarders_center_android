@@ -4,6 +4,7 @@ import android.content.Context
 import info.loveyu.mfca.config.AppConfig
 import info.loveyu.mfca.config.InternalOutputConfig
 import info.loveyu.mfca.config.InternalOutputType
+import info.loveyu.mfca.queue.QueueManager
 import info.loveyu.mfca.util.LogManager
 import java.lang.ref.WeakReference
 
@@ -44,9 +45,30 @@ object OutputManager {
                 "Registered internal output: ${internalConfig.name} (${internalConfig.type})"
             )
         }
+
+        setupQueueConsumers()
     }
 
     fun getOutput(name: String): Output? = outputs[name]
+
+    private fun setupQueueConsumers() {
+        val wiredQueues = mutableSetOf<String>()
+        outputs.values.forEach { output ->
+            val queueName = output.queueRef?.name ?: return@forEach
+            if (wiredQueues.add(queueName)) {
+                QueueManager.getQueue(queueName)?.setConsumer { item ->
+                    val outName = item.metadata["outputName"] ?: return@setConsumer false
+                    val target = outputs[outName]
+                    if (target == null) {
+                        LogManager.logWarn("OUTPUT", "Queue consumer: output not found: $outName")
+                        return@setConsumer false
+                    }
+                    target.send(item, null)
+                    true
+                } ?: LogManager.logWarn("OUTPUT", "Queue not found for output ${output.name}: $queueName")
+            }
+        }
+    }
 
     fun getHttpOutput(name: String): HttpOutput? = outputs[name] as? HttpOutput
 

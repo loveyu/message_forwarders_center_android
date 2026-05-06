@@ -17,14 +17,24 @@ object QueueManager {
         clear()
         contextRef = WeakReference(ctx.applicationContext)
 
+        val registeredNames = mutableSetOf<String>()
+
         // Initialize memory queues
         config.queues.memory.forEach { (name, memoryConfig) ->
+            if (!registeredNames.add(name)) {
+                LogManager.logError("QUEUE", "Duplicate queue name: '$name' (memory), ignoring")
+                return@forEach
+            }
             queues[name] = MemoryQueue(name, memoryConfig)
             LogManager.logDebug("QUEUE", "Registered memory queue: $name (capacity: ${memoryConfig.capacity})")
         }
 
         // Initialize SQLite queues
         config.queues.sqlite.forEach { (name, sqliteConfig) ->
+            if (!registeredNames.add(name)) {
+                LogManager.logError("QUEUE", "Duplicate queue name: '$name' (sqlite), ignoring")
+                return@forEach
+            }
             val ctx = contextRef?.get() ?: return@forEach
             val queue = SqliteQueue(ctx, name, sqliteConfig)
             queues[name] = queue
@@ -39,16 +49,9 @@ object QueueManager {
     fun getSqliteQueue(name: String): SqliteQueue? = queues[name] as? SqliteQueue
 
     /**
-     * 按格式字符串解析队列引用。
-     * 格式: "sqlite:队列名" 或 "memory:队列名"；省略前缀时按名称直接查找。
+     * 按队列名称直接解析队列引用。
      */
-    fun resolveQueue(queueRef: String): Queue? {
-        return when {
-            queueRef.startsWith("sqlite:") -> getSqliteQueue(queueRef.removePrefix("sqlite:"))
-            queueRef.startsWith("memory:") -> getMemoryQueue(queueRef.removePrefix("memory:"))
-            else -> getQueue(queueRef)
-        }
-    }
+    fun resolveQueue(queueName: String): Queue? = queues[queueName]
 
     fun startAll() {
         queues.values.forEach { queue ->

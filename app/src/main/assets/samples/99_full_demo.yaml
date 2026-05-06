@@ -100,7 +100,7 @@ outputs:
         maxAttempts: 3
         interval: 2s
       queue:
-        sqliteQueue: sensor_archive
+        name: sensor_archive
 
   link:
     # 通过 TCP 发送到设备

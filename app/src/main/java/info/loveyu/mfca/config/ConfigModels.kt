@@ -287,31 +287,23 @@ data class RetryConfig(
  * 失败后处理策略
  */
 data class OnFailureConfig(
-    val action: OnFailureAction = OnFailureAction.discard,
-    /** 失败消息类型标识，action=failQueue 时必填 */
-    val idType: String? = null,
     /**
-     * 目标队列，格式: "sqlite:队列名" 或 "memory:队列名"。
-     * action=failQueue 时必填。
+     * 失败处理动作：
+     * - "discard" — 丢弃（默认）
+     * - 队列名称 — 放入指定队列，等待 FailQueueInput 重新注入
      */
-    val queue: String? = null,
+    val action: String = "discard",
+    /** 失败消息类型标识，action 为队列名称时可选，用于 FailQueueInput 按 idType 过滤 */
+    val idType: String? = null,
     /** 消息在失败队列中等待多久后重新注入为 input（按 tick 近似）*/
     val delay: Duration = Duration("60s")
 )
 
-enum class OnFailureAction {
-    /** 丢弃（默认） */
-    discard,
-    /** 放入失败队列，等待 FailQueueInput 重新注入 */
-    failQueue
-}
-
 data class QueueRefConfig(
-    val priority: String? = null,
-    /**
-     * 队列引用，格式: "sqlite:队列名" 或 "memory:队列名"。
-     */
-    val queue: String? = null
+    /** 队列名称，直接引用 queues 中定义的名称 */
+    val name: String,
+    /** 入队延迟（毫秒），默认 0 立即处理 */
+    val delay: Long = 0
 )
 
 data class LinkOutputConfig(
@@ -341,6 +333,7 @@ data class InternalOutputConfig(
     val fileName: String? = null,
     val options: Map<String, Any>? = null,
     val channel: String? = null,
+    val queue: QueueRefConfig? = null,
     /** 输出前的数据格式化步骤 */
     val format: List<OutputFormatStep>? = null
 )

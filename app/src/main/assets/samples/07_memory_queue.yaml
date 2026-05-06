@@ -40,7 +40,7 @@ outputs:
       role: producer
       topic: processed/data
       queue:
-        memoryQueue: fast_queue  # 引用内存队列
+        name: fast_queue  # 引用内存队列
 
 rules:
   - name: process_fast

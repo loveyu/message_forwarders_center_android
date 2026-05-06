@@ -79,10 +79,9 @@ outputs:
   #   interval      - 两次尝试之间的等待时长（默认 1s）
   #
   # onFailure（所有即时重试耗尽后的处理策略）:
-  #   action        - discard（默认，丢弃）| failQueue（放入失败队列）
-  #   idType        - 失败消息类型标识（action=failQueue 时必填）
+  #   action        - "discard"（默认，丢弃）| 队列名称（放入对应失败队列）
+  #   idType        - 失败消息类型标识（用队列时可选）
   #                   同一队列中可混存多种 idType，由 FailQueueInput 按订阅过滤
-  #   queue         - 目标队列，格式: "sqlite:队列名"（持久化）或 "memory:队列名"（内存）
   #   delay         - 消息在失败队列中等待多久后被重新注入为 input（默认 60s）
   #                   实际出队时间按 tick 近似（非严格精确）
   link:
@@ -103,10 +102,9 @@ outputs:
         maxAttempts: 3    # 首次 + 2 次重试，共 3 次
         interval: 5s      # 每次重试前等待 5 秒
       onFailure:
-        action: failQueue
-        idType: mqtt_failures      # 失败消息的类型标识
-        queue: sqlite:fail_store   # 持久化存储（服务重启后不丢失）
-        delay: 120s                # 120 秒后由 FailQueueInput 重新注入
+        action: fail_store             # 队列名称（"discard" 则丢弃）
+        idType: mqtt_failures          # 失败消息的类型标识
+        delay: 120s                    # 120 秒后由 FailQueueInput 重新注入
 
     # retain=true 示例：保留最后一次状态（适合设备状态上报）
     - name: mqtt_status

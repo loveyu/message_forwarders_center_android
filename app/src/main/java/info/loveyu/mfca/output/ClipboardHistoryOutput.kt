@@ -14,6 +14,7 @@ class ClipboardHistoryOutput(
 
     override val type: OutputType = OutputType.internal
     override val formatSteps get() = config.format
+    override val queueRef get() = config.queue
 
     private val historyDbHelper = ClipboardHistoryDbHelper(context)
 

@@ -61,6 +61,7 @@ class SqliteQueue(
             put("retry_count", item.retryCount)
             put("next_attempt_at", item.nextAttemptAt)
             put("metadata", serializeMetadata(item.metadata))
+            put("headers", serializeHeaders(item.headers))
             put("tag", item.tag)
         }
 
@@ -165,7 +166,7 @@ class SqliteQueue(
         }
     }
 
-    fun setConsumer(consumer: QueueConsumer) {
+    override fun setConsumer(consumer: QueueConsumer) {
         this.consumer = consumer
     }
 
@@ -249,6 +250,7 @@ class SqliteQueue(
     }
 
     private fun cursorToItem(cursor: android.database.Cursor): QueueItem {
+        val headersIdx = cursor.getColumnIndex("headers")
         return QueueItem(
             id = cursor.getLong(cursor.getColumnIndexOrThrow("id")),
             data = cursor.getBlob(cursor.getColumnIndexOrThrow("data")),
@@ -257,6 +259,7 @@ class SqliteQueue(
             retryCount = cursor.getInt(cursor.getColumnIndexOrThrow("retry_count")),
             nextAttemptAt = cursor.getLong(cursor.getColumnIndexOrThrow("next_attempt_at")),
             metadata = deserializeMetadata(cursor.getString(cursor.getColumnIndexOrThrow("metadata"))),
+            headers = if (headersIdx >= 0) deserializeHeaders(cursor.getString(headersIdx)) else emptyMap(),
             tag = cursor.getString(cursor.getColumnIndexOrThrow("tag")) ?: ""
         )
     }
@@ -273,10 +276,30 @@ class SqliteQueue(
         }.toMap()
     }
 
+    private fun serializeHeaders(headers: Map<String, String>): String {
+        return try {
+            val obj = org.json.JSONObject()
+            headers.forEach { (k, v) -> obj.put(k, v) }
+            obj.toString()
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    private fun deserializeHeaders(data: String?): Map<String, String> {
+        if (data.isNullOrEmpty()) return emptyMap()
+        return try {
+            val obj = org.json.JSONObject(data)
+            buildMap { obj.keys().forEach { key -> put(key, obj.getString(key)) } }
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
     private inner class QueueDbHelper(
         context: Context,
         dbPath: String
-    ) : SQLiteOpenHelper(context, dbPath, null, 3) {
+    ) : SQLiteOpenHelper(context, dbPath, null, 4) {
 
         override fun onCreate(db: SQLiteDatabase) {
             db.execSQL("""
@@ -288,6 +311,7 @@ class SqliteQueue(
                     retry_count INTEGER DEFAULT 0,
                     next_attempt_at INTEGER NOT NULL,
                     metadata TEXT,
+                    headers TEXT NOT NULL DEFAULT '{}',
                     tag TEXT NOT NULL DEFAULT ''
                 )
             """.trimIndent())
@@ -306,6 +330,9 @@ class SqliteQueue(
             if (oldVersion < 3) {
                 db.execSQL("ALTER TABLE queue_items ADD COLUMN tag TEXT NOT NULL DEFAULT ''")
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_queue_tag ON queue_items(tag)")
+            }
+            if (oldVersion < 4) {
+                db.execSQL("ALTER TABLE queue_items ADD COLUMN headers TEXT NOT NULL DEFAULT '{}'")
             }
         }
     }

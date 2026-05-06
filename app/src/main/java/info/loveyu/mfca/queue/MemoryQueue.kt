@@ -138,7 +138,7 @@ class MemoryQueue(
         LogManager.logDebug("QUEUE", "Memory queue $name stopped")
     }
 
-    fun setConsumer(consumer: QueueConsumer) {
+    override fun setConsumer(consumer: QueueConsumer) {
         this.consumer = consumer
     }
 }

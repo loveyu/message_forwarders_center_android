@@ -1,7 +1,6 @@
 package info.loveyu.mfca.output
 
 import info.loveyu.mfca.config.LinkOutputConfig
-import info.loveyu.mfca.config.OnFailureAction
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.queue.QueueManager
@@ -34,6 +33,7 @@ class MqttOutput(
 
     override val type: OutputType = OutputType.mqtt
     override val formatSteps get() = config.format
+    override val queueRef get() = config.queue
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -108,18 +108,15 @@ class MqttOutput(
 
     private fun handleOnFailure(item: QueueItem) {
         val onFailure = config.onFailure ?: return
-        if (onFailure.action == OnFailureAction.discard) return
+        if (onFailure.action == "discard") return
 
+        val queueName = onFailure.action
         val idType = onFailure.idType
-        if (idType.isNullOrBlank()) {
-            LogManager.logWarn("MQTT", "[$name] onFailure.action=failQueue but idType is empty")
-            return
-        }
 
         val failItem = item.copy(
-            tag = idType,
+            tag = idType ?: "",
             metadata = item.metadata + mapOf(
-                "idType" to idType,
+                "idType" to (idType ?: ""),
                 "outputName" to name,
                 "source" to (item.metadata["source"] ?: ""),
                 "rule" to (item.metadata["rule"] ?: ""),
@@ -129,23 +126,19 @@ class MqttOutput(
             nextAttemptAt = System.currentTimeMillis() + onFailure.delay.millis
         )
 
-        val queued = onFailure.queue?.let { queueRef ->
-            QueueManager.resolveQueue(queueRef)?.enqueue(failItem) ?: run {
-                LogManager.logWarn("MQTT", "[$name] Queue not found: $queueRef")
-                false
-            }
-        } ?: run {
-            LogManager.logWarn("MQTT", "[$name] onFailure.action=failQueue but no queue specified")
+        val queue = QueueManager.getQueue(queueName)
+        val queued = queue?.enqueue(failItem) ?: run {
+            LogManager.logWarn("MQTT", "[$name] Fail queue not found: $queueName")
             false
         }
 
         if (queued) {
             LogManager.logDebug(
                 "MQTT",
-                "[$name] Queued failed item (idType=$idType, delay=${onFailure.delay.value})"
+                "[$name] Queued failed item (idType=$idType, queue=$queueName, delay=${onFailure.delay.value})"
             )
         } else {
-            LogManager.logWarn("MQTT", "[$name] Failed to enqueue item to fail queue")
+            LogManager.logWarn("MQTT", "[$name] Failed to enqueue item to fail queue: $queueName")
         }
     }
 

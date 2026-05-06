@@ -52,18 +52,18 @@ inputs:
     # 失败队列输入源：订阅 idType=mqtt_failures 的失败消息
     - name: mqtt_retry_in
       idTypes: [mqtt_failures]      # 只处理 mqtt_failures 类型
-      queues: [sqlite:fail_store]   # 从 fail_store 读取
+      queues: [fail_store]          # 从 fail_store 读取
       batchSize: 20                 # 每次 tick 最多处理 20 条
 
     # 也可订阅多种类型（来自同一队列的不同 idType）
     - name: all_failures_in
       idTypes: [mqtt_failures, ws_failures]
-      queues: [sqlite:fail_store]
+      queues: [fail_store]
       batchSize: 10
 
     # 不指定 idTypes 则处理队列中所有消息
     - name: any_failure_in
-      queues: [sqlite:fail_store]
+      queues: [fail_store]
       batchSize: 5
 
 outputs:
@@ -77,10 +77,9 @@ outputs:
         maxAttempts: 3          # 即时重试 3 次
         interval: 2s            # 每次等待 2 秒
       onFailure:
-        action: failQueue
-        idType: mqtt_failures   # 失败消息打上此标签
-        queue: sqlite:fail_store  # 写入持久化队列（memory:fast_fail 则写内存队列）
-        delay: 60s              # 60 秒后重新注入（按 tick 近似）
+        action: fail_store        # 队列名称，失败时写入此队列（"discard" 则丢弃）
+        idType: mqtt_failures     # 失败消息打上此标签
+        delay: 60s                # 60 秒后重新注入（按 tick 近似）
 
   http:
     - name: http_fallback

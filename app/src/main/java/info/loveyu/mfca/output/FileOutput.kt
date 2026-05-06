@@ -44,6 +44,7 @@ class FileOutput(
 ) : InternalOutput {
     override val type: OutputType = OutputType.internal
     override val formatSteps get() = config.format
+    override val queueRef get() = config.queue
 
     // 缓冲句柄映射：key = resolved file path
     private val handles = ConcurrentHashMap<String, BufferedFileHandle>()

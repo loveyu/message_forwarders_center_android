@@ -18,6 +18,9 @@ interface Queue {
 
     fun start()
     fun stop()
+
+    /** 设置消费者回调，由队列工作线程或 tick 驱动调用 */
+    fun setConsumer(consumer: QueueConsumer)
 }
 
 enum class QueueType {

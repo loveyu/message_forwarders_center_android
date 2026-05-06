@@ -560,7 +560,7 @@ private fun buildHttpOutputStatus(config: HttpOutputConfig): ComponentStatus {
         append("\nMethod: ${config.method}")
         config.timeout.let { append("\nTimeout: ${it.value}") }
         config.retry?.let { append("\nRetry: max ${it.maxAttempts} × ${it.interval.value}") }
-        config.queue?.queue?.let { append("\nQueue: $it") }
+        config.queue?.name?.let { append("\nQueue: $it") }
     }
     return ComponentStatus(
         id = config.name,
@@ -589,7 +589,7 @@ private fun buildLinkOutputStatus(context: Context, config: LinkOutputConfig): C
         append("\nLink: ${config.linkId}")
         append("\nRole: ${config.role}")
         config.topic?.let { append("\nTopic: $it") }
-        config.queue?.queue?.let { append("\nQueue: $it") }
+        config.queue?.name?.let { append("\nQueue: $it") }
         if (config.whenCondition != null || config.deny != null) {
             append(
                 "\n\n${NetworkChecker.getMatchedConditions(context, config.whenCondition, config.deny)}"

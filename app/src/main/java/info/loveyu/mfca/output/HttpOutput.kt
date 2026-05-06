@@ -25,6 +25,7 @@ class HttpOutput(
 
     override val type: OutputType = OutputType.http
     override val formatSteps get() = config.effectiveFormatSteps
+    override val queueRef get() = config.queue
 
     @Volatile
     private var available = true

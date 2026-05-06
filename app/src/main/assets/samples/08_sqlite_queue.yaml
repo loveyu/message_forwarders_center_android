@@ -74,7 +74,7 @@ outputs:
       role: producer
       topic: data/processed
       queue:
-        sqliteQueue: persistent_queue
+        name: persistent_queue
 
 rules:
   - name: persist_and_forward

@@ -1,7 +1,6 @@
 package info.loveyu.mfca.output
 
 import info.loveyu.mfca.config.LinkOutputConfig
-import info.loveyu.mfca.config.OnFailureAction
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.queue.QueueManager
@@ -30,6 +29,7 @@ class WebSocketOutput(
 
     override val type: OutputType = OutputType.websocket
     override val formatSteps get() = config.format
+    override val queueRef get() = config.queue
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -90,18 +90,15 @@ class WebSocketOutput(
 
     private fun handleOnFailure(item: QueueItem) {
         val onFailure = config.onFailure ?: return
-        if (onFailure.action == OnFailureAction.discard) return
+        if (onFailure.action == "discard") return
 
+        val queueName = onFailure.action
         val idType = onFailure.idType
-        if (idType.isNullOrBlank()) {
-            LogManager.logWarn("WS", "[$name] onFailure.action=failQueue but idType is empty")
-            return
-        }
 
         val failItem = item.copy(
-            tag = idType,
+            tag = idType ?: "",
             metadata = item.metadata + mapOf(
-                "idType" to idType,
+                "idType" to (idType ?: ""),
                 "outputName" to name,
                 "source" to (item.metadata["source"] ?: ""),
                 "rule" to (item.metadata["rule"] ?: ""),
@@ -111,17 +108,16 @@ class WebSocketOutput(
             nextAttemptAt = System.currentTimeMillis() + onFailure.delay.millis
         )
 
-        val queued = onFailure.queue?.let { queueRef ->
-            QueueManager.resolveQueue(queueRef)?.enqueue(failItem) ?: run {
-                LogManager.logWarn("WS", "[$name] Queue not found: $queueRef")
-                false
-            }
-        } ?: false
+        val queue = QueueManager.getQueue(queueName)
+        val queued = queue?.enqueue(failItem) ?: run {
+            LogManager.logWarn("WS", "[$name] Fail queue not found: $queueName")
+            false
+        }
 
         if (queued) {
-            LogManager.logDebug("WS", "[$name] Queued failed item (idType=$idType)")
+            LogManager.logDebug("WS", "[$name] Queued failed item (idType=$idType, queue=$queueName)")
         } else {
-            LogManager.logWarn("WS", "[$name] Failed to enqueue to fail queue")
+            LogManager.logWarn("WS", "[$name] Failed to enqueue to fail queue: $queueName")
         }
     }
 

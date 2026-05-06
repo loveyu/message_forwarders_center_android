@@ -22,6 +22,7 @@ class ClipboardOutput(
 ) : InternalOutput {
     override val type: OutputType = OutputType.internal
     override val formatSteps get() = config.format
+    override val queueRef get() = config.queue
 
     private val clipboardManager: ClipboardManager? =
         context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
