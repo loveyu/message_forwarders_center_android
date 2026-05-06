@@ -136,16 +136,36 @@ class HttpOutput(
 
     internal fun prepareRequest(item: QueueItem): PreparedRequest {
         val method = config.method.uppercase()
-        val normalizedHeaders = normalizeHeaders(item.headers)
+
+        // Collect header keys explicitly set by this output's format steps
+        val configuredHeaderKeys = buildSet<String> {
+            config.effectiveFormatSteps?.forEach { step ->
+                val target = step.target ?: return@forEach
+                if (target.startsWith("\$header.", ignoreCase = true)) {
+                    add(target.removePrefix("\$header.").lowercase())
+                }
+            }
+        }
+
+        // Only forward content-type from the incoming message, plus headers explicitly
+        // defined in the output config. All other input headers (remote-addr, host,
+        // X-Matched-Path, etc.) are internal routing metadata and must not be forwarded.
+        val filteredHeaders = linkedMapOf<String, String>()
+        item.headers.forEach { (k, v) ->
+            val lower = k.lowercase()
+            if (lower == "content-type" || lower in configuredHeaderKeys) {
+                filteredHeaders[k] = v
+            }
+        }
+
         val contentType =
-            removeHeaderIgnoreCase(normalizedHeaders, "content-type")
-                ?: "application/octet-stream"
-        removeHeaderIgnoreCase(normalizedHeaders, "content-length")
+            removeHeaderIgnoreCase(filteredHeaders, "content-type") ?: "application/octet-stream"
+        removeHeaderIgnoreCase(filteredHeaders, "content-length")
         return PreparedRequest(
             method = method,
             body = item.data,
             contentType = contentType,
-            headers = normalizedHeaders
+            headers = filteredHeaders
         )
     }
 
