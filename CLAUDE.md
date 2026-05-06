@@ -15,6 +15,7 @@ Message Forwarders Center Android - Android 消息转发中心，基于 Android 
 ./gradlew assembleRelease      # 发布构建（需配置 keystore.properties）
 ./gradlew clean                # 清理构建产物
 ./gradlew build                # 完整构建
+./gradlew generateConfigDoc    # 生成配置 Schema 文档到 app/src/main/assets/config_schema.md
 ```
 
 ## 代码风格
@@ -25,6 +26,7 @@ Message Forwarders Center Android - Android 消息转发中心，基于 Android 
 1. `./gradlew spotlessApply` — 格式化所有 Kotlin 文件
 2. `./gradlew assembleDebug` — 验证编译通过
 3. `./gradlew testDebugUnitTest` — 运行单元测试，确保全部通过
+4. `./gradlew generateConfigDoc` — 更新配置 Schema 文档（修改 Schema 后需执行）
 
 禁止提交存在 ktlint/ktfmt 违规的代码，或单元测试失败的代码。CI 会拒绝违规的 PR。
 

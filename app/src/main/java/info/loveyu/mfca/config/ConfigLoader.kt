@@ -1,5 +1,8 @@
 package info.loveyu.mfca.config
 
+import info.loveyu.mfca.config.schema.AppConfigSchema
+import info.loveyu.mfca.config.schema.SchemaProcessor
+import info.loveyu.mfca.config.schema.SchemaValidationException
 import info.loveyu.mfca.util.LogManager
 import org.snakeyaml.engine.v2.api.Load
 import org.snakeyaml.engine.v2.api.LoadSettings
@@ -11,8 +14,13 @@ object ConfigLoader {
 
     fun loadConfig(yamlString: String): AppConfig {
         return try {
-            val data = yaml.loadFromString(yamlString) as? Map<String, Any>
-                ?: throw IllegalArgumentException("Invalid YAML format")
+            val data =
+                yaml.loadFromString(yamlString) as? Map<String, Any>
+                    ?: throw IllegalArgumentException("Invalid YAML format")
+
+            SchemaProcessor.process(AppConfigSchema.schema, data) { warning ->
+                LogManager.logWarn("ConfigSchema", warning.toString())
+            }
 
             AppConfig(
                 version = data["version"] as? String ?: "",
@@ -23,8 +31,10 @@ object ConfigLoader {
                 outputs = parseOutputs(data["outputs"]),
                 rules = parseRules(data["rules"]),
                 deadLetter = parseDeadLetter(data["deadLetter"]),
-                quickSettings = parseQuickSettings(data["quickSettings"])
+                quickSettings = parseQuickSettings(data["quickSettings"]),
             )
+        } catch (e: SchemaValidationException) {
+            throw ConfigLoadException("Config schema validation failed: ${e.message}", e)
         } catch (e: Exception) {
             throw ConfigLoadException("Failed to parse config: ${e.message}", e)
         }

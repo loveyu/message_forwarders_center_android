@@ -153,3 +153,19 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
+
+afterEvaluate {
+    val unitTestTask = tasks.named<Test>("testDebugUnitTest").get()
+    tasks.register<Test>("generateConfigDoc") {
+        group = "documentation"
+        description = "Generate config schema Markdown to src/main/assets/config_schema.md"
+        testClassesDirs = unitTestTask.testClassesDirs
+        classpath = unitTestTask.classpath
+        dependsOn("compileDebugUnitTestKotlin")
+        filter {
+            includeTestsMatching("info.loveyu.mfca.config.schema.GenerateConfigDocTest")
+        }
+        systemProperty("generateConfigDoc", "true")
+        outputs.upToDateWhen { false }
+    }
+}

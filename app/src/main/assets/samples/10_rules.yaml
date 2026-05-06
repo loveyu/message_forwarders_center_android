@@ -128,7 +128,7 @@ rules:
     from: filtered_clipboard
     pipeline:
       - transform:
-          filter: "\"{\$headers.mqtt_topic}\" == \"phone-clipboard/user\""  # 只处理用户剪贴板
+          filter: "\"{$headers.mqtt_topic}\" == \"phone-clipboard/user\""  # 只处理用户剪贴板
         to: [clipboard_out]
 
   # 示例9：Headers 过滤 - 排除特定 Topic
@@ -136,7 +136,7 @@ rules:
     from: filtered_clipboard
     pipeline:
       - transform:
-          filter: "\"{\$headers.mqtt_topic}\" != \"phone-clipboard/system\""  # 排除系统剪贴板
+          filter: "\"{$headers.mqtt_topic}\" != \"phone-clipboard/system\""  # 排除系统剪贴板
         to: [clipboard_out]
 
   # 示例10：完整变换链（检测 -> 过滤 -> 提取 -> 发送）
