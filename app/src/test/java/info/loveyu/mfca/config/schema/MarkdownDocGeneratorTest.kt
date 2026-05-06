@@ -33,17 +33,21 @@ class MarkdownDocGeneratorTest {
                 boolean("ssl") {}
                 duration("timeout") {}
                 enum("strategy", listOf("a", "b")) {}
-                objectNode("nested") {}
+                // objectNode with a child to get its own section with **Type**: object
+                objectNode("nested") { string("x") {} }
                 stringList("tags") {}
             }
         val md = MarkdownDocGenerator.generate(s)
-        assertTrue(md.contains("**Type**: string"))
-        assertTrue(md.contains("**Type**: int"))
-        assertTrue(md.contains("**Type**: boolean"))
-        assertTrue(md.contains("**Type**: duration"))
-        assertTrue(md.contains("**Type**: enum"))
+        // scalar types appear in table columns
+        assertTrue(md.contains("| string |"))
+        assertTrue(md.contains("| int |"))
+        assertTrue(md.contains("| boolean |"))
+        assertTrue(md.contains("| duration |"))
+        assertTrue(md.contains("| enum |"))
+        // object with children gets a dedicated section
         assertTrue(md.contains("**Type**: object"))
-        assertTrue(md.contains("**Type**: list of string"))
+        // list type appears in table
+        assertTrue(md.contains("list[string]"))
     }
 
     @Test
@@ -57,17 +61,19 @@ class MarkdownDocGeneratorTest {
                 enum("mode", listOf("a", "b")) { default = "a" }
             }
         val md = MarkdownDocGenerator.generate(s)
-        assertTrue(md.contains("**Default**: `8080`"))
-        assertTrue(md.contains("**Default**: `localhost`"))
-        assertTrue(md.contains("**Default**: `false`"))
-        assertTrue(md.contains("**Default**: `5s`"))
+        // defaults appear in the table's default column wrapped in backticks
+        assertTrue(md.contains("`8080`"))
+        assertTrue(md.contains("`localhost`"))
+        assertTrue(md.contains("`false`"))
+        assertTrue(md.contains("`5s`"))
     }
 
     @Test
     fun `includes required marker`() {
         val s = configSchema { string("host") { required() } }
         val md = MarkdownDocGenerator.generate(s)
-        assertTrue(md.contains("**Required**: yes"))
+        // required fields show ✓ in the table column
+        assertTrue(md.contains("✓"))
     }
 
     @Test

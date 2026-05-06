@@ -6,130 +6,142 @@ object MarkdownDocGenerator {
         return buildString {
             appendLine("# $title")
             appendLine()
-            appendObjectChildren(schema, 2)
+            appendObjectContent(schema, headingLevel = 2)
         }.trimEnd()
     }
 
-    private fun StringBuilder.appendObjectChildren(schema: ObjectNodeDef, headingLevel: Int) {
+    /**
+     * Renders [schema]'s children as:
+     * 1. A summary table of all direct children
+     * 2. Sub-sections (at [headingLevel]) for children that are objects/object-lists/object-maps
+     */
+    private fun StringBuilder.appendObjectContent(schema: ObjectNodeDef, headingLevel: Int) {
+        if (schema.children.isEmpty()) return
+
+        appendChildrenTable(schema.children)
+
         for (child in schema.children) {
-            appendNode(child, schema.name, headingLevel)
+            if (!hasSubsection(child)) continue
+            appendLine()
+            val h = "#".repeat(headingLevel.coerceAtMost(6))
+            appendLine("$h `${child.name}`")
+            appendLine()
+            child.deprecated?.let { appendDeprecation(it) }
+            child.description?.let {
+                appendLine(it)
+                appendLine()
+            }
+            appendSectionMeta(child)
+            expandChild(child, (headingLevel + 1).coerceAtMost(6))
         }
     }
 
-    private fun StringBuilder.appendNode(node: NodeDef, parentPath: String, headingLevel: Int) {
-        val path =
-            when {
-                parentPath == "<root>" -> node.name
-                parentPath == "<item>" || parentPath == "<value>" -> node.name
-                else -> "$parentPath.${node.name}"
-            }
-        val heading = "#".repeat(headingLevel)
-
-        appendLine("$heading `${node.name}`")
-        appendLine()
-
-        node.description?.let {
-            appendLine(it)
-            appendLine()
-        }
-
-        node.deprecated?.let { dep ->
-            val deprecationLine = buildString {
-                append("> ⚠️ **Deprecated**")
-                dep.since?.let { append(" since $it") }
-                dep.message?.let { append(" — $it") }
-                dep.replacement?.let { append(". Use `${dep.replacement}` instead.") }
-            }
-            appendLine(deprecationLine)
-            appendLine()
-        }
-
-        appendNodeMeta(node)
-        appendLine()
-
+    private fun StringBuilder.expandChild(node: NodeDef, headingLevel: Int) {
         when (node) {
             is ObjectNodeDef -> {
                 if (node.children.isNotEmpty()) {
-                    appendObjectChildren(
-                        node.copy(name = path),
-                        (headingLevel + 1).coerceAtMost(6),
-                    )
+                    appendLine()
+                    appendObjectContent(node, headingLevel)
                 }
             }
             is ListNodeDef -> {
-                val itemSchema = node.itemSchema
-                if (itemSchema is ObjectNodeDef && itemSchema.children.isNotEmpty()) {
-                    appendLine("**Item fields:**")
-                    appendLine()
-                    appendObjectChildren(
-                        itemSchema.copy(name = "$path[]"),
-                        (headingLevel + 1).coerceAtMost(6),
-                    )
-                }
+                val item = node.itemSchema as? ObjectNodeDef ?: return
+                if (item.children.isEmpty()) return
+                appendLine()
+                appendObjectContent(item, headingLevel)
             }
             is MapNodeDef -> {
-                val valueSchema = node.valueSchema
-                if (valueSchema is ObjectNodeDef && valueSchema.children.isNotEmpty()) {
-                    appendLine("**Value fields:**")
-                    appendLine()
-                    appendObjectChildren(
-                        valueSchema.copy(name = "$path.<key>"),
-                        (headingLevel + 1).coerceAtMost(6),
-                    )
-                }
+                val value = node.valueSchema as? ObjectNodeDef ?: return
+                if (value.children.isEmpty()) return
+                appendLine()
+                appendLine("*每个命名实例的属性如下：*")
+                appendLine()
+                appendObjectContent(value, headingLevel)
             }
             else -> {}
         }
     }
 
-    private fun StringBuilder.appendNodeMeta(node: NodeDef) {
-        val lines = mutableListOf<String>()
-
-        lines += "**Type**: ${typeLabel(node)}"
-
-        if (node.isRequired) {
-            lines += "**Required**: yes"
+    private fun hasSubsection(node: NodeDef): Boolean =
+        when (node) {
+            is ObjectNodeDef -> node.children.isNotEmpty()
+            is ListNodeDef -> (node.itemSchema as? ObjectNodeDef)?.children?.isNotEmpty() == true
+            is MapNodeDef -> (node.valueSchema as? ObjectNodeDef)?.children?.isNotEmpty() == true
+            else -> false
         }
 
+    private fun StringBuilder.appendChildrenTable(children: List<NodeDef>) {
+        appendLine("| 字段 | 类型 | 必填 | 默认值 | 说明 |")
+        appendLine("|------|------|:----:|--------|------|")
+        for (child in children) {
+            val required = if (child.isRequired) "✓" else ""
+            val default = defaultValue(child)?.let { "`$it`" } ?: ""
+            val descParts = mutableListOf<String>()
+            child.description?.replace("|", "\\|")?.replace("\n", " ")?.let { descParts += it }
+            scalarConstraint(child)?.let { descParts += it }
+            child.deprecated?.let { dep ->
+                val note = buildString {
+                    append("⚠️ *Deprecated")
+                    dep.since?.let { append(" since $it") }
+                    dep.replacement?.let { append(". Use `${dep.replacement}`") }
+                    append("*")
+                }
+                descParts += note
+            }
+            val desc = descParts.joinToString(" ")
+            appendLine("| `${child.name}` | ${typeLabel(child)} | $required | $default | $desc |")
+        }
+    }
+
+    /** Inline constraint hint shown in the description column for scalar fields. */
+    private fun scalarConstraint(node: NodeDef): String? =
         when (node) {
-            is StringNodeDef -> {
-                node.default?.let { lines += "**Default**: `$it`" }
-                node.minLength?.let { lines += "**Min length**: $it" }
-                node.maxLength?.let { lines += "**Max length**: $it" }
-                node.pattern?.let { lines += "**Pattern**: `${it.pattern}`" }
-                node.allowedValues?.let { lines += "**Allowed**: ${it.joinToString(", ") { v -> "`$v`" }}" }
-            }
-            is IntNodeDef -> {
-                node.default?.let { lines += "**Default**: `$it`" }
-                node.min?.let { min -> node.max?.let { max -> lines += "**Range**: $min – $max" } }
-            }
-            is LongNodeDef -> {
-                node.default?.let { lines += "**Default**: `$it`" }
-                node.min?.let { min -> node.max?.let { max -> lines += "**Range**: $min – $max" } }
-            }
-            is DoubleNodeDef -> {
-                node.default?.let { lines += "**Default**: `$it`" }
-                node.min?.let { min -> node.max?.let { max -> lines += "**Range**: $min – $max" } }
-            }
-            is BooleanNodeDef -> {
-                node.default?.let { lines += "**Default**: `$it`" }
-            }
-            is DurationNodeDef -> {
-                node.default?.let { lines += "**Default**: `$it`" }
-            }
-            is EnumNodeDef -> {
-                node.default?.let { lines += "**Default**: `$it`" }
-                lines += "**Values**: ${node.values.joinToString(", ") { "`$it`" }}"
-            }
+            is IntNodeDef -> node.min?.let { mn -> node.max?.let { mx -> "_(${mn}–${mx})_" } }
+            is LongNodeDef -> node.min?.let { mn -> node.max?.let { mx -> "_(${mn}–${mx})_" } }
+            is DoubleNodeDef -> node.min?.let { mn -> node.max?.let { mx -> "_(${mn}–${mx})_" } }
+            is EnumNodeDef -> node.values.joinToString(" / ") { "`$it`" }
+            is StringNodeDef -> node.allowedValues?.joinToString(" / ") { "`$it`" }
+            else -> null
+        }
+
+    /** Meta bullet-list shown inside a complex node's own heading section. */
+    private fun StringBuilder.appendSectionMeta(node: NodeDef) {
+        val lines = mutableListOf<String>()
+        lines += "**Type**: ${typeLabel(node)}"
+        if (node.isRequired) lines += "**Required**: yes"
+        when (node) {
             is ListNodeDef -> {
                 node.minSize?.let { lines += "**Min items**: $it" }
                 node.maxSize?.let { lines += "**Max items**: $it" }
             }
             else -> {}
         }
-
         lines.forEach { appendLine("- $it") }
+        appendLine()
     }
+
+    private fun StringBuilder.appendDeprecation(dep: DeprecatedInfo) {
+        val line = buildString {
+            append("> ⚠️ **Deprecated**")
+            dep.since?.let { append(" since $it") }
+            dep.message?.let { append(" — $it") }
+            dep.replacement?.let { append(". Use `${dep.replacement}` instead.") }
+        }
+        appendLine(line)
+        appendLine()
+    }
+
+    private fun defaultValue(node: NodeDef): String? =
+        when (node) {
+            is StringNodeDef -> node.default
+            is IntNodeDef -> node.default?.toString()
+            is LongNodeDef -> node.default?.toString()
+            is DoubleNodeDef -> node.default?.toString()
+            is BooleanNodeDef -> node.default?.toString()
+            is DurationNodeDef -> node.default
+            is EnumNodeDef -> node.default
+            else -> null
+        }
 
     private fun typeLabel(node: NodeDef): String =
         when (node) {
@@ -141,8 +153,8 @@ object MarkdownDocGenerator {
             is BooleanNodeDef -> "boolean"
             is DurationNodeDef -> "duration"
             is EnumNodeDef -> "enum"
-            is ListNodeDef -> "list of ${typeLabel(node.itemSchema)}"
-            is MapNodeDef -> "map of ${typeLabel(node.valueSchema)}"
+            is ListNodeDef -> "list[${typeLabel(node.itemSchema)}]"
+            is MapNodeDef -> "map[${typeLabel(node.valueSchema)}]"
             is AnyNodeDef -> "any"
         }
 }

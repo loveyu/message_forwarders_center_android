@@ -1,11 +1,16 @@
 # Config Schema Reference
 
-## `version`
-
-Config version identifier
-
-- **Type**: string
-- **Default**: ``
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `version` | string |  | `` | Config version identifier |
+| `scheduler` | object |  |  | Unified scheduler configuration |
+| `links` | list[object] |  |  | Link (connection pool) configurations |
+| `inputs` | object |  |  | Input source configurations |
+| `queues` | object |  |  | Queue system configuration |
+| `outputs` | object |  |  | Output sink configurations |
+| `rules` | list[object] |  |  | Message forwarding rules |
+| `deadLetter` | object |  |  | Dead-letter handling for messages that exhausted all retries |
+| `quickSettings` | object |  |  | Quick-settings tile configuration |
 
 ## `scheduler`
 
@@ -13,72 +18,32 @@ Unified scheduler configuration
 
 - **Type**: object
 
-### `tickInterval`
 
-Scheduler tick interval (minimum 20s enforced at runtime)
-
-- **Type**: duration
-- **Default**: `40s`
-
-### `chargingTickInterval`
-
-Tick interval when charging (defaults to tickInterval if omitted)
-
-- **Type**: duration
-
-### `wakeLockTimeout`
-
-Wake lock maximum hold duration
-
-- **Type**: duration
-- **Default**: `1h`
-
-### `wifiLockTimeout`
-
-WiFi lock maximum hold duration
-
-- **Type**: duration
-- **Default**: `1h`
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `tickInterval` | duration |  | `40s` | Scheduler tick interval (minimum 20s enforced at runtime) |
+| `chargingTickInterval` | duration |  |  | Tick interval when charging (defaults to tickInterval if omitted) |
+| `wakeLockTimeout` | duration |  | `1h` | Wake lock maximum hold duration |
+| `wifiLockTimeout` | duration |  | `1h` | WiFi lock maximum hold duration |
 
 ## `links`
 
 Link (connection pool) configurations
 
-- **Type**: list of object
+- **Type**: list[object]
 
-**Item fields:**
 
-### `id`
-
-Unique link identifier referenced by inputs and outputs
-
-- **Type**: string
-- **Required**: yes
-
-### `dsn`
-
-Connection string: protocol://[user:pass@]host:port[?params]. Protocol determines link type: mqtt[s]:// | ws[s]:// | tcp[s]:// | http[s]://
-
-- **Type**: string
-
-### `clientId`
-
-Client identifier (MQTT)
-
-- **Type**: string
-
-### `host`
-
-Host override when not using dsn
-
-- **Type**: string
-
-### `port`
-
-Port override when not using dsn
-
-- **Type**: int
-- **Range**: 1 – 65535
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `id` | string | ✓ |  | Unique link identifier referenced by inputs and outputs |
+| `dsn` | string |  |  | Connection string: protocol://[user:pass@]host:port[?params]. Protocol determines link type: mqtt[s]:// \| ws[s]:// \| tcp[s]:// \| http[s]:// |
+| `clientId` | string |  |  | Client identifier (MQTT) |
+| `host` | string |  |  | Host override when not using dsn |
+| `port` | int |  |  | Port override when not using dsn _(1–65535)_ |
+| `reconnect` | object |  |  | Reconnection policy |
+| `tls` | object |  |  | TLS configuration |
+| `when` | string |  |  | Enable condition (e.g. network=wifi,ssid=MyWiFi) |
+| `deny` | string |  |  | Disable condition (e.g. network=mobile) |
 
 ### `reconnect`
 
@@ -86,24 +51,12 @@ Reconnection policy
 
 - **Type**: object
 
-#### `enabled`
 
-- **Type**: boolean
-- **Default**: `true`
-
-#### `interval`
-
-Initial reconnect interval
-
-- **Type**: duration
-- **Default**: `10s`
-
-#### `maxInterval`
-
-Maximum reconnect interval
-
-- **Type**: duration
-- **Default**: `60s`
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `enabled` | boolean |  | `true` |  |
+| `interval` | duration |  | `10s` | Initial reconnect interval |
+| `maxInterval` | duration |  | `60s` | Maximum reconnect interval |
 
 ### `tls`
 
@@ -111,42 +64,13 @@ TLS configuration
 
 - **Type**: object
 
-#### `ca`
 
-CA certificate path
-
-- **Type**: string
-
-#### `cert`
-
-Client certificate path
-
-- **Type**: string
-
-#### `key`
-
-Client private key path
-
-- **Type**: string
-
-#### `insecure`
-
-Skip TLS certificate verification
-
-- **Type**: boolean
-- **Default**: `false`
-
-### `when`
-
-Enable condition (e.g. network=wifi,ssid=MyWiFi)
-
-- **Type**: string
-
-### `deny`
-
-Disable condition (e.g. network=mobile)
-
-- **Type**: string
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `ca` | string |  |  | CA certificate path |
+| `cert` | string |  |  | Client certificate path |
+| `key` | string |  |  | Client private key path |
+| `insecure` | boolean |  | `false` | Skip TLS certificate verification |
 
 ## `inputs`
 
@@ -154,106 +78,48 @@ Input source configurations
 
 - **Type**: object
 
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `http` | list[object] |  |  | HTTP server input sources |
+| `link` | list[object] |  |  | Link-based input sources (MQTT subscriber, WebSocket, TCP) |
+| `failQueue` | list[object] |  |  | Fail-queue input sources (re-inject failed messages) |
+
 ### `http`
 
 HTTP server input sources
 
-- **Type**: list of object
+- **Type**: list[object]
 
-**Item fields:**
 
-#### `name`
-
-Unique input name referenced by rules
-
-- **Type**: string
-- **Required**: yes
-
-#### `dsn`
-
-HTTP listen DSN: http://[user:pass@]host:port[?method=GET&token=xxx]
-
-- **Type**: string
-- **Required**: yes
-
-#### `paths`
-
-URL path filters (empty = all paths)
-
-- **Type**: list of string
-
-#### `linkId`
-
-Link to also publish received messages to
-
-- **Type**: string
-
-#### `when`
-
-Enable condition
-
-- **Type**: string
-
-#### `deny`
-
-Disable condition
-
-- **Type**: string
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `name` | string | ✓ |  | Unique input name referenced by rules |
+| `dsn` | string | ✓ |  | HTTP listen DSN: http://[user:pass@]host:port[?method=GET&token=xxx] |
+| `paths` | list[string] |  |  | URL path filters (empty = all paths) |
+| `linkId` | string |  |  | Link to also publish received messages to |
+| `when` | string |  |  | Enable condition |
+| `deny` | string |  |  | Disable condition |
 
 ### `link`
 
 Link-based input sources (MQTT subscriber, WebSocket, TCP)
 
-- **Type**: list of object
+- **Type**: list[object]
 
-**Item fields:**
 
-#### `name`
-
-Unique input name referenced by rules
-
-- **Type**: string
-- **Required**: yes
-
-#### `linkId`
-
-Link ID(s) to subscribe from (string or list of strings)
-
-- **Type**: any
-- **Required**: yes
-
-#### `role`
-
-Link role: consumer (subscribe) or producer (publish)
-
-- **Type**: enum
-- **Default**: `consumer`
-- **Values**: `consumer`, `producer`
-
-#### `topic`
-
-Topic to subscribe (MQTT)
-
-- **Type**: string
-
-#### `topics`
-
-Multiple topics to subscribe
-
-- **Type**: list of string
-
-#### `excludeTopics`
-
-Topics to exclude
-
-- **Type**: list of string
-
-#### `qos`
-
-MQTT QoS level
-
-- **Type**: int
-- **Range**: 0 – 2
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `name` | string | ✓ |  | Unique input name referenced by rules |
+| `linkId` | any | ✓ |  | Link ID(s) to subscribe from (string or list of strings) |
+| `role` | enum |  | `consumer` | Link role: consumer (subscribe) or producer (publish) `consumer` / `producer` |
+| `topic` | string |  |  | Topic to subscribe (MQTT) |
+| `topics` | list[string] |  |  | Multiple topics to subscribe |
+| `excludeTopics` | list[string] |  |  | Topics to exclude |
+| `qos` | int |  |  | MQTT QoS level _(0–2)_ |
+| `replay` | object |  |  | Message replay configuration |
+| `when` | string |  |  | Enable condition |
+| `deny` | string |  |  | Disable condition |
 
 #### `replay`
 
@@ -261,117 +127,33 @@ Message replay configuration
 
 - **Type**: object
 
-##### `enabled`
 
-- **Type**: boolean
-- **Default**: `false`
-
-##### `provider`
-
-Replay data provider
-
-- **Type**: enum
-- **Default**: `gotifyApi`
-- **Values**: `gotifyApi`
-
-##### `messageIdPath`
-
-JSON path to the message ID field
-
-- **Type**: string
-- **Default**: `id`
-
-##### `pageSize`
-
-Messages per page when fetching
-
-- **Type**: int
-- **Default**: `50`
-
-##### `maxPages`
-
-Maximum pages to fetch
-
-- **Type**: int
-- **Default**: `20`
-
-##### `maxMessages`
-
-Maximum total messages to replay
-
-- **Type**: int
-- **Default**: `500`
-
-##### `persistState`
-
-Persist last-seen message ID across restarts
-
-- **Type**: boolean
-- **Default**: `true`
-
-##### `baseUrl`
-
-Provider base URL
-
-- **Type**: string
-
-##### `token`
-
-Provider authentication token
-
-- **Type**: string
-
-##### `applicationId`
-
-Provider application ID filter
-
-- **Type**: int
-
-#### `when`
-
-Enable condition
-
-- **Type**: string
-
-#### `deny`
-
-Disable condition
-
-- **Type**: string
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `enabled` | boolean |  | `false` |  |
+| `provider` | enum |  | `gotifyApi` | Replay data provider `gotifyApi` |
+| `messageIdPath` | string |  | `id` | JSON path to the message ID field |
+| `pageSize` | int |  | `50` | Messages per page when fetching |
+| `maxPages` | int |  | `20` | Maximum pages to fetch |
+| `maxMessages` | int |  | `500` | Maximum total messages to replay |
+| `persistState` | boolean |  | `true` | Persist last-seen message ID across restarts |
+| `baseUrl` | string |  |  | Provider base URL |
+| `token` | string |  |  | Provider authentication token |
+| `applicationId` | int |  |  | Provider application ID filter |
 
 ### `failQueue`
 
 Fail-queue input sources (re-inject failed messages)
 
-- **Type**: list of object
+- **Type**: list[object]
 
-**Item fields:**
 
-#### `name`
-
-Unique input name referenced by rules
-
-- **Type**: string
-- **Required**: yes
-
-#### `idTypes`
-
-Message type filter (empty = all)
-
-- **Type**: list of string
-
-#### `queues`
-
-Queue references to read from, e.g. 'sqlite:myQueue', 'memory:myQueue'
-
-- **Type**: list of string
-
-#### `batchSize`
-
-Maximum messages to process per tick
-
-- **Type**: int
-- **Default**: `20`
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `name` | string | ✓ |  | Unique input name referenced by rules |
+| `idTypes` | list[string] |  |  | Message type filter (empty = all) |
+| `queues` | list[string] |  |  | Queue references to read from, e.g. 'sqlite:myQueue', 'memory:myQueue' |
+| `batchSize` | int |  | `20` | Maximum messages to process per tick |
 
 ## `queues`
 
@@ -379,67 +161,40 @@ Queue system configuration
 
 - **Type**: object
 
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `memory` | map[object] |  |  |  |
+| `sqlite` | map[object] |  |  |  |
+
 ### `memory`
 
-- **Type**: map of object
+- **Type**: map[object]
 
-**Value fields:**
 
-#### `capacity`
+*每个命名实例的属性如下：*
 
-Maximum queue capacity
-
-- **Type**: int
-- **Default**: `1000`
-
-#### `workers`
-
-Number of consumer coroutines
-
-- **Type**: int
-- **Default**: `1`
-
-#### `overflow`
-
-Overflow strategy when queue is full
-
-- **Type**: enum
-- **Default**: `dropOldest`
-- **Values**: `dropOldest`, `dropNew`, `block`
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `capacity` | int |  | `1000` | Maximum queue capacity |
+| `workers` | int |  | `1` | Number of consumer coroutines |
+| `overflow` | enum |  | `dropOldest` | Overflow strategy when queue is full `dropOldest` / `dropNew` / `block` |
 
 ### `sqlite`
 
-- **Type**: map of object
+- **Type**: map[object]
 
-**Value fields:**
 
-#### `path`
+*每个命名实例的属性如下：*
 
-Database path. Protocols: data:// | sdcard:// | file:// | cache://
-
-- **Type**: string
-- **Required**: yes
-
-#### `batchSize`
-
-Messages to dequeue per tick
-
-- **Type**: int
-- **Default**: `20`
-
-#### `retryInterval`
-
-Minimum interval between retry attempts
-
-- **Type**: duration
-- **Default**: `5s`
-
-#### `maxRetry`
-
-Maximum delivery attempts before dead-lettering
-
-- **Type**: int
-- **Default**: `10`
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `path` | string | ✓ |  | Database path. Protocols: data:// \| sdcard:// \| file:// \| cache:// |
+| `batchSize` | int |  | `20` | Messages to dequeue per tick |
+| `retryInterval` | duration |  | `5s` | Minimum interval between retry attempts |
+| `maxRetry` | int |  | `10` | Maximum delivery attempts before dead-lettering |
+| `backoff` | object |  |  | Retry backoff configuration |
+| `cleanup` | object |  |  | Completed-message cleanup policy |
 
 #### `backoff`
 
@@ -447,27 +202,12 @@ Retry backoff configuration
 
 - **Type**: object
 
-##### `type`
 
-Backoff calculation strategy
-
-- **Type**: enum
-- **Default**: `exponential`
-- **Values**: `exponential`, `linear`
-
-##### `initial`
-
-Initial backoff duration
-
-- **Type**: duration
-- **Default**: `2s`
-
-##### `max`
-
-Maximum backoff duration
-
-- **Type**: duration
-- **Default**: `5m`
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `type` | enum |  | `exponential` | Backoff calculation strategy `exponential` / `linear` |
+| `initial` | duration |  | `2s` | Initial backoff duration |
+| `max` | duration |  | `5m` | Maximum backoff duration |
 
 #### `cleanup`
 
@@ -475,12 +215,10 @@ Completed-message cleanup policy
 
 - **Type**: object
 
-##### `maxAge`
 
-Retain completed messages for this duration
-
-- **Type**: duration
-- **Default**: `7d`
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `maxAge` | duration |  | `7d` | Retain completed messages for this duration |
 
 ## `outputs`
 
@@ -488,53 +226,32 @@ Output sink configurations
 
 - **Type**: object
 
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `http` | list[object] |  |  | HTTP output sinks |
+| `link` | list[object] |  |  | Link output sinks (MQTT publish, WebSocket send, TCP send) |
+| `internal` | list[object] |  |  | Internal output sinks (clipboard, file, broadcast, notify) |
+
 ### `http`
 
 HTTP output sinks
 
-- **Type**: list of object
+- **Type**: list[object]
 
-**Item fields:**
 
-#### `name`
-
-Unique output name referenced by rules
-
-- **Type**: string
-- **Required**: yes
-
-#### `url`
-
-Target HTTP URL
-
-- **Type**: string
-- **Required**: yes
-
-#### `method`
-
-HTTP method
-
-- **Type**: string
-- **Default**: `POST`
-
-#### `headers`
-
-Additional HTTP request headers; values support template variables
-
-- **Type**: any
-
-#### `body`
-
-Request body template (defaults to message data)
-
-- **Type**: string
-
-#### `timeout`
-
-Request timeout
-
-- **Type**: duration
-- **Default**: `5s`
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `name` | string | ✓ |  | Unique output name referenced by rules |
+| `url` | string | ✓ |  | Target HTTP URL |
+| `method` | string |  | `POST` | HTTP method |
+| `headers` | any |  |  | Additional HTTP request headers; values support template variables |
+| `body` | string |  |  | Request body template (defaults to message data) |
+| `timeout` | duration |  | `5s` | Request timeout |
+| `retry` | object |  |  | Retry policy on transient failure |
+| `onFailure` | object |  |  | Action after all retries are exhausted |
+| `queue` | object |  |  | Queue reference for async delivery |
+| `format` | any |  |  | Output format: string template or list of format steps |
 
 #### `retry`
 
@@ -542,19 +259,11 @@ Retry policy on transient failure
 
 - **Type**: object
 
-##### `maxAttempts`
 
-Maximum delivery attempts
-
-- **Type**: int
-- **Default**: `1`
-
-##### `interval`
-
-Interval between retry attempts
-
-- **Type**: duration
-- **Default**: `1s`
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `maxAttempts` | int |  | `1` | Maximum delivery attempts |
+| `interval` | duration |  | `1s` | Interval between retry attempts |
 
 #### `onFailure`
 
@@ -562,25 +271,12 @@ Action after all retries are exhausted
 
 - **Type**: object
 
-##### `action`
 
-Failure action: 'discard' or a queue name
-
-- **Type**: string
-- **Default**: `discard`
-
-##### `idType`
-
-Message type tag for fail-queue filtering
-
-- **Type**: string
-
-##### `delay`
-
-Delay before the message is re-injected from the fail queue
-
-- **Type**: duration
-- **Default**: `60s`
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `action` | string |  | `discard` | Failure action: 'discard' or a queue name |
+| `idType` | string |  |  | Message type tag for fail-queue filtering |
+| `delay` | duration |  | `60s` | Delay before the message is re-injected from the fail queue |
 
 #### `queue`
 
@@ -588,89 +284,43 @@ Queue reference for async delivery
 
 - **Type**: object
 
-##### `name`
 
-Queue name as defined in queues section
-
-- **Type**: string
-- **Required**: yes
-
-##### `delay`
-
-Enqueue delay in milliseconds
-
-- **Type**: long
-- **Default**: `0`
-
-#### `format`
-
-Output format: string template or list of format steps
-
-- **Type**: any
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `name` | string | ✓ |  | Queue name as defined in queues section |
+| `delay` | long |  | `0` | Enqueue delay in milliseconds |
 
 ### `link`
 
 Link output sinks (MQTT publish, WebSocket send, TCP send)
 
-- **Type**: list of object
+- **Type**: list[object]
 
-**Item fields:**
 
-#### `name`
-
-Unique output name referenced by rules
-
-- **Type**: string
-- **Required**: yes
-
-#### `linkId`
-
-Target link ID
-
-- **Type**: string
-- **Required**: yes
-
-#### `role`
-
-Link role
-
-- **Type**: enum
-- **Default**: `producer`
-- **Values**: `consumer`, `producer`
-
-#### `topic`
-
-Target topic (MQTT)
-
-- **Type**: string
-
-#### `qos`
-
-MQTT QoS level
-
-- **Type**: int
-- **Range**: 0 – 2
-
-#### `retain`
-
-MQTT retain flag
-
-- **Type**: boolean
-- **Default**: `false`
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `name` | string | ✓ |  | Unique output name referenced by rules |
+| `linkId` | string | ✓ |  | Target link ID |
+| `role` | enum |  | `producer` | Link role `consumer` / `producer` |
+| `topic` | string |  |  | Target topic (MQTT) |
+| `qos` | int |  |  | MQTT QoS level _(0–2)_ |
+| `retain` | boolean |  | `false` | MQTT retain flag |
+| `retry` | object |  |  |  |
+| `onFailure` | object |  |  | Action after all retries are exhausted |
+| `queue` | object |  |  |  |
+| `when` | string |  |  | Enable condition |
+| `deny` | string |  |  | Disable condition |
+| `format` | any |  |  | Output format: string template or list of format steps |
 
 #### `retry`
 
 - **Type**: object
 
-##### `maxAttempts`
 
-- **Type**: int
-- **Default**: `1`
-
-##### `interval`
-
-- **Type**: duration
-- **Default**: `1s`
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `maxAttempts` | int |  | `1` |  |
+| `interval` | duration |  | `1s` |  |
 
 #### `onFailure`
 
@@ -678,154 +328,78 @@ Action after all retries are exhausted
 
 - **Type**: object
 
-##### `action`
 
-Failure action: 'discard' or a queue name
-
-- **Type**: string
-- **Default**: `discard`
-
-##### `idType`
-
-Message type tag for fail-queue filtering
-
-- **Type**: string
-
-##### `delay`
-
-Delay before the message is re-injected from the fail queue
-
-- **Type**: duration
-- **Default**: `60s`
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `action` | string |  | `discard` | Failure action: 'discard' or a queue name |
+| `idType` | string |  |  | Message type tag for fail-queue filtering |
+| `delay` | duration |  | `60s` | Delay before the message is re-injected from the fail queue |
 
 #### `queue`
 
 - **Type**: object
 
-##### `name`
 
-- **Type**: string
-- **Required**: yes
-
-##### `delay`
-
-- **Type**: long
-- **Default**: `0`
-
-#### `when`
-
-Enable condition
-
-- **Type**: string
-
-#### `deny`
-
-Disable condition
-
-- **Type**: string
-
-#### `format`
-
-Output format: string template or list of format steps
-
-- **Type**: any
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `name` | string | ✓ |  |  |
+| `delay` | long |  | `0` |  |
 
 ### `internal`
 
 Internal output sinks (clipboard, file, broadcast, notify)
 
-- **Type**: list of object
+- **Type**: list[object]
 
-**Item fields:**
 
-#### `name`
-
-Unique output name referenced by rules
-
-- **Type**: string
-- **Required**: yes
-
-#### `type`
-
-Internal output type
-
-- **Type**: enum
-- **Required**: yes
-- **Values**: `clipboard`, `file`, `broadcast`, `notify`, `clipboardHistory`
-
-#### `basePath`
-
-Base path for file output
-
-- **Type**: string
-
-#### `fileName`
-
-File name template for file output
-
-- **Type**: string
-
-#### `channel`
-
-Notification channel ID
-
-- **Type**: string
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `name` | string | ✓ |  | Unique output name referenced by rules |
+| `type` | enum | ✓ |  | Internal output type `clipboard` / `file` / `broadcast` / `notify` / `clipboardHistory` |
+| `basePath` | string |  |  | Base path for file output |
+| `fileName` | string |  |  | File name template for file output |
+| `channel` | string |  |  | Notification channel ID |
+| `queue` | object |  |  |  |
+| `format` | any |  |  | Output format: string template or list of format steps |
 
 #### `queue`
 
 - **Type**: object
 
-##### `name`
 
-- **Type**: string
-- **Required**: yes
-
-##### `delay`
-
-- **Type**: long
-- **Default**: `0`
-
-#### `format`
-
-Output format: string template or list of format steps
-
-- **Type**: any
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `name` | string | ✓ |  |  |
+| `delay` | long |  | `0` |  |
 
 ## `rules`
 
 Message forwarding rules
 
-- **Type**: list of object
+- **Type**: list[object]
 
-**Item fields:**
 
-### `name`
-
-Unique rule name
-
-- **Type**: string
-- **Required**: yes
-
-### `from`
-
-Source input name (or use froms for multiple)
-
-- **Type**: string
-- **Required**: yes
-
-### `froms`
-
-Multiple source input names
-
-- **Type**: list of string
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `name` | string | ✓ |  | Unique rule name |
+| `from` | string | ✓ |  | Source input name (or use froms for multiple) |
+| `froms` | list[string] |  |  | Multiple source input names |
+| `pipeline` | list[object] |  |  | Processing pipeline steps |
+| `onError` | list[object] |  |  | Pipeline executed on error |
+| `when` | string |  |  | Enable condition |
+| `deny` | string |  |  | Disable condition |
 
 ### `pipeline`
 
 Processing pipeline steps
 
-- **Type**: list of object
+- **Type**: list[object]
 
-**Item fields:**
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `transform` | object |  |  | Data transformation to apply |
+| `to` | list[string] |  |  | Output names to forward to after this step |
 
 #### `transform`
 
@@ -833,88 +407,29 @@ Data transformation to apply
 
 - **Type**: object
 
-##### `decode`
 
-Decode pipeline, e.g. 'base64Decode', 'jsonDecode', 'gzDecode'
-
-- **Type**: string
-
-##### `detect`
-
-Type detection: 'image', 'json', 'text'
-
-- **Type**: string
-
-##### `enrich`
-
-Enrichment spec, e.g. 'gotifyIcon:linkId'
-
-- **Type**: string
-
-##### `filter`
-
-Filter expression, e.g. 'data.type == "alert"'
-
-- **Type**: string
-
-##### `extract`
-
-GJSON path or '$raw', e.g. 'data.temperature'
-
-- **Type**: string
-
-##### `format`
-
-Template string, e.g. '{data.title}: {data.message}'
-
-- **Type**: string
-
-##### `formatSteps`
-
-Structured format steps (mutually exclusive with format)
-
-- **Type**: list of string
-
-##### `breakOnReject`
-
-Abort pipeline when filter rejects
-
-- **Type**: boolean
-- **Default**: `false`
-
-#### `to`
-
-Output names to forward to after this step
-
-- **Type**: list of string
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `decode` | string |  |  | Decode pipeline, e.g. 'base64Decode', 'jsonDecode', 'gzDecode' |
+| `detect` | string |  |  | Type detection: 'image', 'json', 'text' |
+| `enrich` | string |  |  | Enrichment spec, e.g. 'gotifyIcon:linkId' |
+| `filter` | string |  |  | Filter expression, e.g. 'data.type == "alert"' |
+| `extract` | string |  |  | GJSON path or '$raw', e.g. 'data.temperature' |
+| `format` | string |  |  | Template string, e.g. '{data.title}: {data.message}' |
+| `formatSteps` | list[string] |  |  | Structured format steps (mutually exclusive with format) |
+| `breakOnReject` | boolean |  | `false` | Abort pipeline when filter rejects |
 
 ### `onError`
 
 Pipeline executed on error
 
-- **Type**: list of object
+- **Type**: list[object]
 
-**Item fields:**
 
-#### `transform`
-
-- **Type**: object
-
-#### `to`
-
-- **Type**: list of string
-
-### `when`
-
-Enable condition
-
-- **Type**: string
-
-### `deny`
-
-Disable condition
-
-- **Type**: string
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `transform` | object |  |  |  |
+| `to` | list[string] |  |  |  |
 
 ## `deadLetter`
 
@@ -922,33 +437,24 @@ Dead-letter handling for messages that exhausted all retries
 
 - **Type**: object
 
-### `enabled`
 
-- **Type**: boolean
-- **Default**: `false`
-
-### `maxRetry`
-
-Maximum retry attempts in dead-letter processing
-
-- **Type**: int
-- **Default**: `10`
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `enabled` | boolean |  | `false` |  |
+| `maxRetry` | int |  | `10` | Maximum retry attempts in dead-letter processing |
+| `action` | list[object] |  |  | Dead-letter processing pipeline |
 
 ### `action`
 
 Dead-letter processing pipeline
 
-- **Type**: list of object
+- **Type**: list[object]
 
-**Item fields:**
 
-#### `transform`
-
-- **Type**: object
-
-#### `to`
-
-- **Type**: list of string
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `transform` | object |  |  |  |
+| `to` | list[string] |  |  |  |
 
 ## `quickSettings`
 
@@ -956,9 +462,7 @@ Quick-settings tile configuration
 
 - **Type**: object
 
-### `inputMethodSwitcher`
 
-Show input method switcher tile
-
-- **Type**: boolean
-- **Default**: `true`
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `inputMethodSwitcher` | boolean |  | `true` | Show input method switcher tile |
