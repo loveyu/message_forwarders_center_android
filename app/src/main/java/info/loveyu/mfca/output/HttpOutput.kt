@@ -98,8 +98,30 @@ class HttpOutput(
                 .method(prepared.method, body)
                 .build()
 
+            if (LogManager.isDebugEnabled()) {
+                val bodyPreview = if (body != null) {
+                    String(prepared.body).take(500).let { if (prepared.body.size > 500) "$it…(${prepared.body.size}B)" else it }
+                } else "(no body)"
+                LogManager.logDebug(
+                    "OKHTTP",
+                    "[$name] --> ${prepared.method} ${request.url}\n" +
+                        "Headers: ${request.headers.toMap()}\n" +
+                        "Content-Type: ${prepared.contentType}\n" +
+                        "Body: $bodyPreview"
+                )
+            }
+
             client.newCall(request).execute().use { response ->
                 val responseCode = response.code
+                if (LogManager.isDebugEnabled()) {
+                    val respBodyPreview = response.body?.string()?.take(500) ?: "(no body)"
+                    LogManager.logDebug(
+                        "OKHTTP",
+                        "[$name] <-- $responseCode ${response.message} ${request.url}\n" +
+                            "Headers: ${response.headers.toMap()}\n" +
+                            "Body: $respBodyPreview"
+                    )
+                }
                 if (responseCode in 200..299) {
                     OutputResult.Success(responseCode)
                 } else {
