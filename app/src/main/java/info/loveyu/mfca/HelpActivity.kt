@@ -248,6 +248,11 @@ private fun loadSampleFiles(context: Context): List<SampleFile> {
             description = "配置说明 - 完整配置语法和协议说明"
         ),
         SampleFileInfo(
+            fileName = "config_schema.md",
+            description = "配置 Schema 文档 - 所有配置项类型、默认值与说明",
+            assetPath = "config_schema.md"
+        ),
+        SampleFileInfo(
             fileName = "01_basic_mqtt.yaml",
             description = "MQTT 基础连接 - DSN 格式、TLS 支持"
         ),
@@ -327,7 +332,7 @@ private fun loadSampleFiles(context: Context): List<SampleFile> {
 
     return sampleList.mapNotNull { info ->
         try {
-            val content = context.assets.open("samples/${info.fileName}")
+            val content = context.assets.open(info.assetPath ?: "samples/${info.fileName}")
                 .bufferedReader()
                 .use { it.readText() }
             SampleFile(
@@ -343,5 +348,6 @@ private fun loadSampleFiles(context: Context): List<SampleFile> {
 
 private data class SampleFileInfo(
     val fileName: String,
-    val description: String
+    val description: String,
+    val assetPath: String? = null,
 )
