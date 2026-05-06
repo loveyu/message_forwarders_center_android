@@ -382,7 +382,7 @@ Message forwarding rules
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|:----:|--------|------|
 | `name` | string | ✓ |  | Unique rule name |
-| `from` | string | ✓ |  | Source input name (or use froms for multiple) |
+| `from` | any | ✓ |  | Source input name(s): string or list of strings (or use froms) |
 | `froms` | list[string] |  |  | Multiple source input names |
 | `pipeline` | list[object] |  |  | Processing pipeline steps |
 | `onError` | list[object] |  |  | Pipeline executed on error |

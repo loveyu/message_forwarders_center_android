@@ -401,9 +401,9 @@ object AppConfigSchema {
                 required()
                 description = "Unique rule name"
             }
-            string("from") {
+            any("from") {
                 required()
-                description = "Source input name (or use froms for multiple)"
+                description = "Source input name(s): string or list of strings (or use froms)"
             }
             stringList("froms") { description = "Multiple source input names" }
             objectList(
