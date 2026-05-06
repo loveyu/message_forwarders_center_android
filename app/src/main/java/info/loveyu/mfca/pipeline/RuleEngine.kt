@@ -49,7 +49,7 @@ class RuleEngine(
     init {
         config.rules.forEach { rule ->
             rules[rule.name] = rule
-            val fromValues = if (rule.froms.isNotEmpty()) rule.froms else listOf(rule.from)
+            val fromValues = rule.froms
             fromValues.forEach { from ->
                 inputRulesMap.getOrPut(from) { mutableListOf() }.add(rule)
             }

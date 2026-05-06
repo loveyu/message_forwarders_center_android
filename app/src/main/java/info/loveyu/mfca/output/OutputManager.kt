@@ -31,9 +31,22 @@ object OutputManager {
 
         // Link-based outputs (MQTT, WebSocket, TCP)
         config.outputs.link.forEach { linkConfig ->
-            val output = createLinkOutput(linkConfig)
-            outputs[linkConfig.name] = output
-            LogManager.logDebug("OUTPUT", "Registered ${linkConfig.role} output: ${linkConfig.name}")
+            if (linkConfig.linkIds.size <= 1) {
+                val output = createLinkOutput(linkConfig)
+                outputs[linkConfig.name] = output
+                LogManager.logDebug("OUTPUT", "Registered ${linkConfig.role} output: ${linkConfig.name}")
+            } else {
+                // Fan-out: create one output per linkId, register MultiOutput under original name
+                val subOutputs = linkConfig.linkIds.map { linkId ->
+                    val subConfig = linkConfig.copy(linkIds = listOf(linkId), name = "${linkConfig.name}@${linkId}", queue = null)
+                    val subOutput = createLinkOutput(subConfig)
+                    outputs[subConfig.name] = subOutput
+                    subOutput
+                }
+                val multiOutput = MultiOutput(linkConfig.name, subOutputs, linkConfig.queue)
+                outputs[linkConfig.name] = multiOutput
+                LogManager.logDebug("OUTPUT", "Registered fan-out ${linkConfig.role} output: ${linkConfig.name} -> ${linkConfig.linkIds}")
+            }
         }
 
         // Internal outputs
@@ -117,10 +130,11 @@ object OutputManager {
     }
 
     private fun createLinkOutput(config: info.loveyu.mfca.config.LinkOutputConfig): Output {
-        return when {
-            config.linkId.contains("mqtt", ignoreCase = true) -> MqttOutput(config.name, config)
-            config.linkId.contains("ws", ignoreCase = true) -> WebSocketOutput(config.name, config)
-            else -> TcpOutput(config.name, config)
+        val dsn = info.loveyu.mfca.link.LinkManager.getLinkConfig(config.linkId)?.dsn ?: config.linkId
+        return when (info.loveyu.mfca.config.LinkType.fromDsn(dsn)) {
+            info.loveyu.mfca.config.LinkType.websocket -> WebSocketOutput(config.name, config)
+            info.loveyu.mfca.config.LinkType.tcp -> TcpOutput(config.name, config)
+            else -> MqttOutput(config.name, config)
         }
     }
 

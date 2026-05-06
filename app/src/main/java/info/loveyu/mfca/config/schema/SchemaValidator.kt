@@ -312,10 +312,16 @@ object SchemaValidator {
             }
             return
         }
-        val list = value as? List<*>
-        if (list == null) {
-            errors += SchemaError(path, "Expected list but got ${typeName(value)}")
-            return
+        // For scalar-item lists (e.g. stringList), accept a single value as a one-element list.
+        // For object-item lists, require an actual list.
+        val isScalarItemList = schema.itemSchema !is ObjectNodeDef
+        val list = when {
+            value is List<*> -> value
+            isScalarItemList -> listOf(value)
+            else -> {
+                errors += SchemaError(path, "Expected list but got ${typeName(value)}")
+                return
+            }
         }
         schema.minSize?.let {
             if (list.size < it)

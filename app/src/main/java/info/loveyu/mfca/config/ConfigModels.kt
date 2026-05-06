@@ -148,8 +148,7 @@ data class CookieAuth(
 
 data class LinkInputConfig(
     val name: String,
-    val linkId: String,
-    val linkIds: List<String> = emptyList(),
+    val linkIds: List<String>,
     val role: LinkRole,
     val topic: String? = null,
     val topics: List<String>? = null,
@@ -158,7 +157,9 @@ data class LinkInputConfig(
     val replay: ReplayConfig? = null,
     val whenCondition: String? = null,
     val deny: String? = null
-)
+) {
+    val linkId: String get() = linkIds.firstOrNull() ?: ""
+}
 
 enum class LinkRole {
     consumer, producer
@@ -308,7 +309,7 @@ data class QueueRefConfig(
 
 data class LinkOutputConfig(
     val name: String,
-    val linkId: String,
+    val linkIds: List<String>,
     val role: LinkRole,
     val topic: String? = null,
     // MQTT only: QoS level 0/1/2 (default 1)
@@ -324,7 +325,9 @@ data class LinkOutputConfig(
     val deny: String? = null,
     /** 输出前的数据格式化步骤 */
     val format: List<OutputFormatStep>? = null
-)
+) {
+    val linkId: String get() = linkIds.firstOrNull() ?: ""
+}
 
 data class InternalOutputConfig(
     val name: String,
@@ -382,13 +385,14 @@ data class NotifyOptions(
  */
 data class RuleConfig(
     val name: String,
-    val from: String,
-    val froms: List<String> = emptyList(),
+    val froms: List<String>,
     val pipeline: List<PipelineStep> = emptyList(),
     val onError: List<PipelineStep>? = null,
     val whenCondition: String? = null,
     val deny: String? = null
-)
+) {
+    val from: String get() = froms.firstOrNull() ?: ""
+}
 
 data class PipelineStep(
     val transform: TransformConfig? = null,

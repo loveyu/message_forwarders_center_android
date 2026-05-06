@@ -111,7 +111,7 @@ Link-based input sources (MQTT subscriber, WebSocket, TCP)
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|:----:|--------|------|
 | `name` | string | ✓ |  | Unique input name referenced by rules |
-| `linkId` | any | ✓ |  | Link ID(s) to subscribe from (string or list of strings) |
+| `linkId` | list[string] | ✓ |  | Link ID(s) to subscribe from (string or list of strings) |
 | `role` | enum |  | `consumer` | Link role: consumer (subscribe) or producer (publish) `consumer` / `producer` |
 | `topic` | string |  |  | Topic to subscribe (MQTT) |
 | `topics` | list[string] |  |  | Multiple topics to subscribe |
@@ -300,7 +300,7 @@ Link output sinks (MQTT publish, WebSocket send, TCP send)
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|:----:|--------|------|
 | `name` | string | ✓ |  | Unique output name referenced by rules |
-| `linkId` | string | ✓ |  | Target link ID |
+| `linkId` | list[string] | ✓ |  | Target link ID(s) — single string or list for fan-out to multiple links |
 | `role` | enum |  | `producer` | Link role `consumer` / `producer` |
 | `topic` | string |  |  | Target topic (MQTT) |
 | `qos` | int |  |  | MQTT QoS level _(0–2)_ |
@@ -382,8 +382,7 @@ Message forwarding rules
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|:----:|--------|------|
 | `name` | string | ✓ |  | Unique rule name |
-| `from` | any | ✓ |  | Source input name(s): string or list of strings (or use froms) |
-| `froms` | list[string] |  |  | Multiple source input names |
+| `from` | list[string] | ✓ |  | Source input name(s): single string or list of strings |
 | `pipeline` | list[object] |  |  | Processing pipeline steps |
 | `onError` | list[object] |  |  | Pipeline executed on error |
 | `when` | string |  |  | Enable condition |

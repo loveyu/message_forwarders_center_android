@@ -143,7 +143,6 @@ object ConfigLoader {
                 if (linkIds.isEmpty()) return@mapNotNull null
                 LinkInputConfig(
                     name = map["name"] as? String ?: return@mapNotNull null,
-                    linkId = linkIds.first(),
                     linkIds = linkIds,
                     role = parseLinkRole(map["role"] as? String),
                     topic = map["topic"] as? String,
@@ -393,7 +392,7 @@ object ConfigLoader {
             (output as? Map<String, Any>)?.let { map ->
                 LinkOutputConfig(
                     name = map["name"] as? String ?: return@mapNotNull null,
-                    linkId = map["linkId"] as? String ?: return@mapNotNull null,
+                    linkIds = parseStringOrList(map["linkId"]).also { if (it.isEmpty()) return@mapNotNull null },
                     role = parseLinkRole(map["role"] as? String),
                     topic = map["topic"] as? String,
                     qos = (map["qos"] as? Number)?.toInt(),
@@ -450,11 +449,10 @@ object ConfigLoader {
 
         return (rules as List<*>).mapNotNull { rule ->
             (rule as? Map<String, Any>)?.let { map ->
-                val froms = parseStringOrList(map["from"])
+                val froms = parseStringOrList(map["from"]).ifEmpty { parseStringOrList(map["froms"]) }
                 if (froms.isEmpty()) return@mapNotNull null
                 RuleConfig(
                     name = map["name"] as? String ?: return@mapNotNull null,
-                    from = froms.first(),
                     froms = froms,
                     pipeline = parsePipeline(map["pipeline"]),
                     onError = parsePipeline(map["onError"]),

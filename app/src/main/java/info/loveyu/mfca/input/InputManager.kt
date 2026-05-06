@@ -137,9 +137,9 @@ object InputManager {
         // Link-based inputs (MQTT, WebSocket, TCP)
         // 支持 link_id 为数组，展开为多个 InputSource 实例
         config.inputs.link.forEach { linkConfig ->
-            val ids = if (linkConfig.linkIds.isNotEmpty()) linkConfig.linkIds else listOf(linkConfig.linkId)
+            val ids = linkConfig.linkIds
             ids.forEach { linkId ->
-                val perLinkConfig = linkConfig.copy(linkId = linkId)
+                val perLinkConfig = linkConfig.copy(linkIds = listOf(linkId))
                 val input = createLinkInput(perLinkConfig, config.links)
                 entries.add(InputEntry(
                     input = input,

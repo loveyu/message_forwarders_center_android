@@ -104,7 +104,7 @@ object AppConfigSchema {
                     required()
                     description = "Unique input name referenced by rules"
                 }
-                any("linkId") {
+                stringList("linkId") {
                     required()
                     description = "Link ID(s) to subscribe from (string or list of strings)"
                 }
@@ -320,9 +320,9 @@ object AppConfigSchema {
                     required()
                     description = "Unique output name referenced by rules"
                 }
-                string("linkId") {
+                stringList("linkId") {
                     required()
-                    description = "Target link ID"
+                    description = "Target link ID(s) — single string or list for fan-out to multiple links"
                 }
                 enum("role", listOf("consumer", "producer")) {
                     description = "Link role"
@@ -401,11 +401,10 @@ object AppConfigSchema {
                 required()
                 description = "Unique rule name"
             }
-            any("from") {
+            stringList("from") {
                 required()
-                description = "Source input name(s): string or list of strings (or use froms)"
+                description = "Source input name(s): single string or list of strings"
             }
-            stringList("froms") { description = "Multiple source input names" }
             objectList(
                 "pipeline",
                 block = { description = "Processing pipeline steps" },
