@@ -70,6 +70,15 @@ outputs:
         - $header.X-Timestamp: '{now()}'
         - $data: '{jsonEncode(data)}'
 
+    # 也支持 headers/body 直接写法；每个值同样走 format 模板解析
+    - name: http_headers_body
+      url: https://api.example.com/gps
+      method: POST
+      headers:
+        content-type: '{headers.content-type}'
+        X-Device-Id: '{data.deviceId}'
+      body: '{data}'
+
     # 整体替换 data 为 JSON 封装格式
     - name: http_json_envelope
       url: https://api.example.com/event

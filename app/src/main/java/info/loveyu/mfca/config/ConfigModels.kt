@@ -252,12 +252,31 @@ data class HttpOutputConfig(
     val name: String,
     val url: String,
     val method: String = "POST",
+    /** 额外 HTTP headers，值支持模板格式化 */
+    val headers: Map<String, String> = emptyMap(),
+    /** HTTP request body 模板，未配置时默认发送当前 data */
+    val body: String? = null,
     val timeout: Duration = Duration("5s"),
     val retry: RetryConfig? = null,
     val queue: QueueRefConfig? = null,
     /** 输出前的数据格式化步骤 */
     val format: List<OutputFormatStep>? = null
-)
+) {
+    /**
+     * HTTP output 的 headers/body 语法最终转换为统一 formatSteps，
+     * 且放在已有 format 之后，确保显式的 headers/body 配置覆盖默认值。
+     */
+    val effectiveFormatSteps: List<OutputFormatStep>?
+        get() {
+            val steps = mutableListOf<OutputFormatStep>()
+            format?.let { steps += it }
+            headers.forEach { (key, value) ->
+                steps += OutputFormatStep(target = "\$header.$key", template = value)
+            }
+            body?.let { steps += OutputFormatStep(target = "\$data", template = it) }
+            return steps.takeIf { it.isNotEmpty() }
+        }
+}
 
 data class RetryConfig(
     val maxAttempts: Int = 1,

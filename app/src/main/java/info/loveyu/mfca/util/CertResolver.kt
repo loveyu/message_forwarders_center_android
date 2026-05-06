@@ -1,7 +1,6 @@
 package info.loveyu.mfca.util
 
 import android.content.Context
-import android.os.Environment
 import android.util.Base64
 import info.loveyu.mfca.config.TlsConfig
 import java.io.File
@@ -47,27 +46,19 @@ object CertResolver {
 
         return when {
             certPath.startsWith("file://") -> {
-                // 文件系统绝对路径
-                val filePath = certPath.removePrefix("file://")
-                val file = File(filePath)
-                if (file.exists() && file.canRead()) filePath else null
+                val file = StoragePathResolver.resolveFile(context, certPath)
+                if (file.exists() && file.canRead()) file.absolutePath else null
             }
             certPath.startsWith("sdcard://") -> {
-                // 外部存储卡路径
-                val relativePath = certPath.removePrefix("sdcard://")
-                val sdcardDir = Environment.getExternalStorageDirectory()
-                val file = File(sdcardDir, relativePath)
+                val file = StoragePathResolver.resolveFile(context, certPath)
                 if (file.exists() && file.canRead()) file.absolutePath else null
             }
             certPath.startsWith("data://") -> {
-                // 应用私有数据目录
-                val relativePath = certPath.removePrefix("data://")
-                val externalDir = context.getExternalFilesDir(null)
-                val file = if (externalDir != null) {
-                    File(externalDir, relativePath)
-                } else {
-                    File(context.filesDir, relativePath)
-                }
+                val file = StoragePathResolver.resolveFile(context, certPath)
+                if (file.exists() && file.canRead()) file.absolutePath else null
+            }
+            certPath.startsWith("cache://") -> {
+                val file = StoragePathResolver.resolveFile(context, certPath)
                 if (file.exists() && file.canRead()) file.absolutePath else null
             }
             certPath.startsWith("https://") || certPath.startsWith("http://") -> {
@@ -75,7 +66,7 @@ object CertResolver {
                 downloadAndCacheCert(certPath, context)
             }
             else -> {
-                LogManager.logWarn(TAG, "不支持的证书路径协议: $certPath，需使用 file://, sdcard://, data:// 或 http(s)://")
+                LogManager.logWarn(TAG, "不支持的证书路径协议: $certPath，需使用 file://, sdcard://, data://, cache:// 或 http(s)://")
                 null
             }
         }

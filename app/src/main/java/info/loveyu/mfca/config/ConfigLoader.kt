@@ -219,6 +219,17 @@ object ConfigLoader {
         }
     }
 
+    private fun parseStringMap(value: Any?): Map<String, String> {
+        val map = value as? Map<*, *> ?: return emptyMap()
+        return buildMap {
+            map.forEach { (key, itemValue) ->
+                val keyString = key?.toString()?.takeIf { it.isNotBlank() } ?: return@forEach
+                val valueString = itemValue?.toString() ?: return@forEach
+                put(keyString, valueString)
+            }
+        }
+    }
+
     // ==================== Queue Parsing ====================
 
     private fun parseQueues(queues: Any?): QueuesConfig {
@@ -338,6 +349,8 @@ object ConfigLoader {
                     name = map["name"] as? String ?: return@mapNotNull null,
                     url = map["url"] as? String ?: "",
                     method = map["method"] as? String ?: "POST",
+                    headers = parseStringMap(map["headers"]),
+                    body = map["body"]?.toString(),
                     timeout = Duration(map["timeout"] as? String ?: "5s"),
                     retry = parseRetry(map["retry"]),
                     queue = parseQueueRef(map["queue"]),

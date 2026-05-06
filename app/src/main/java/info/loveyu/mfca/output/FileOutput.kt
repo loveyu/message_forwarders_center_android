@@ -1,10 +1,10 @@
 package info.loveyu.mfca.output
 
 import android.content.Context
-import android.os.Environment
 import info.loveyu.mfca.config.InternalOutputConfig
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.util.LogManager
+import info.loveyu.mfca.util.StoragePathResolver
 import java.io.BufferedWriter
 import java.io.File
 import java.io.FileOutputStream
@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * 路径协议:
  * - data:// - 应用私有数据目录 (context.getExternalFilesDir)
+ * - cache:// - 应用缓存目录
  * - sdcard:// - 外部存储卡目录
  * - file:// - 文件系统绝对路径
  *
@@ -53,7 +54,7 @@ class FileOutput(
 
     override fun send(item: QueueItem, callback: ((Boolean) -> Unit)?) {
         try {
-            val basePath = resolvePath(config.basePath ?: "data://output")
+            val basePath = StoragePathResolver.resolvePath(context, config.basePath ?: "data://output")
             val options = config.options ?: emptyMap()
 
             if (LogManager.isDebugEnabled()) {
@@ -199,28 +200,6 @@ class FileOutput(
                     channel.write(ByteBuffer.wrap(data))
                 }
             }
-        }
-    }
-
-    private fun resolvePath(path: String): String {
-        return when {
-            path.startsWith("data://") -> {
-                val relativePath = path.removePrefix("data://")
-                val externalDir = context.getExternalFilesDir(null)
-                if (externalDir != null) {
-                    File(externalDir, relativePath).absolutePath
-                } else {
-                    File(context.filesDir, relativePath).absolutePath
-                }
-            }
-            path.startsWith("sdcard://") -> {
-                val relativePath = path.removePrefix("sdcard://")
-                File(Environment.getExternalStorageDirectory(), relativePath).absolutePath
-            }
-            path.startsWith("file://") -> {
-                path.removePrefix("file://")
-            }
-            else -> throw IllegalArgumentException("Unsupported path protocol: $path, must use data://, sdcard:// or file://")
         }
     }
 

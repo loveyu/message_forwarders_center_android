@@ -111,11 +111,7 @@ class IconCacheManager private constructor(private val context: Context) {
      */
     private fun loadLocalIcon(path: String): Bitmap? {
         return try {
-            val file = if (path.startsWith("file://")) {
-                File(path.removePrefix("file://"))
-            } else {
-                File(path)
-            }
+            val file = StoragePathResolver.resolveFile(context, path, allowRawPath = true)
             if (file.exists()) {
                 loadBitmapFromFile(file)
             } else {

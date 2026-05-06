@@ -307,6 +307,25 @@ class ExpressionEngineFormatTest : ExpressionEngineBaseTest() {
     }
 
     @Test
+    fun `formatSteps - header access is case insensitive`() {
+        val data = "test".toByteArray()
+        val headers = linkedMapOf("Content-Type" to "application/json")
+        val result = engine.evaluateFormatTemplate("{headers.content-type}", data, headers)
+        assertEquals("application/json", String(result))
+    }
+
+    @Test
+    fun `formatSteps - dollar-header overrides existing header ignoring case`() {
+        val data = "test".toByteArray()
+        val steps = listOf(
+            OutputFormatStep(target = "\$header.content-type", template = "text/plain")
+        )
+        val (_, newHeaders) = engine.applyFormatSteps(steps, data, linkedMapOf("Content-Type" to "application/json"))
+        assertEquals(1, newHeaders.size)
+        assertEquals("text/plain", newHeaders["content-type"])
+    }
+
+    @Test
     fun `formatSteps - dollar-header replaces all headers`() {
         val data = """{"h1":"v1","h2":"v2"}""".toByteArray()
         val steps = listOf(
@@ -418,6 +437,22 @@ class ExpressionEngineFormatTest : ExpressionEngineBaseTest() {
         val (_, newHeaders) = engine.applyFormatSteps(steps, data, headers)
         assertEquals("yes", newHeaders["X-Keep"])
         assertFalse(newHeaders.containsKey("X-Remove"))
+    }
+
+    @Test
+    fun `formatSteps - delete from headers ignores case`() {
+        val data = """{"key":"value"}""".toByteArray()
+        val headers = linkedMapOf("Content-Type" to "application/json", "X-Keep" to "yes")
+        val steps = listOf(
+            OutputFormatStep(
+                target = "\$header",
+                template = "",
+                raw = mapOf("delete" to listOf("content-type"))
+            )
+        )
+        val (_, newHeaders) = engine.applyFormatSteps(steps, data, headers)
+        assertFalse(newHeaders.keys.any { it.equals("Content-Type", ignoreCase = true) })
+        assertEquals("yes", newHeaders["X-Keep"])
     }
 
     @Test

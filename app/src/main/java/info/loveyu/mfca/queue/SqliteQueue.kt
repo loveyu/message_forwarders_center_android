@@ -4,10 +4,10 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
-import android.os.Environment
 import info.loveyu.mfca.config.BackoffType
 import info.loveyu.mfca.config.SqliteQueueConfig
 import info.loveyu.mfca.util.LogManager
+import info.loveyu.mfca.util.StoragePathResolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -36,44 +36,11 @@ class SqliteQueue(
     private var lastProcessTime = 0L
 
     init {
-        val dbPath = resolvePath(config.path)
+        val dbPath = StoragePathResolver.resolvePath(context, config.path)
         val dbFile = File(dbPath)
         dbFile.parentFile?.mkdirs()
         dbHelper = QueueDbHelper(context, dbFile.absolutePath)
         initializeCounter()
-    }
-
-    /**
-     * 解析路径协议
-     * 支持:
-     * - data:// - 应用私有数据目录 (context.getExternalFilesDir)
-     * - sdcard:// - 外部存储卡目录
-     * - file:// - 文件系统绝对路径
-     */
-    private fun resolvePath(path: String): String {
-        return when {
-            path.startsWith("data://") -> {
-                // 应用外部数据目录
-                val relativePath = path.removePrefix("data://")
-                val externalDir = context.getExternalFilesDir(null)
-                if (externalDir != null) {
-                    File(externalDir, relativePath).absolutePath
-                } else {
-                    File(context.filesDir, relativePath).absolutePath
-                }
-            }
-            path.startsWith("sdcard://") -> {
-                // 外部存储根目录
-                val relativePath = path.removePrefix("sdcard://")
-                val sdcardDir = Environment.getExternalStorageDirectory()
-                File(sdcardDir, relativePath).absolutePath
-            }
-            path.startsWith("file://") -> {
-                // 文件系统绝对路径
-                path.removePrefix("file://")
-            }
-            else -> throw IllegalArgumentException("Unsupported path protocol: $path, must use data://, sdcard:// or file://")
-        }
     }
 
     private fun initializeCounter() {

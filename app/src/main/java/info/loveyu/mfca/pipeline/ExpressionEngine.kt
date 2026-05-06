@@ -22,6 +22,32 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class ExpressionEngine {
 
+    private fun getHeaderIgnoreCase(headers: Map<String, String>?, key: String): String? {
+        if (headers == null) return null
+        return headers.entries.firstOrNull { it.key.equals(key, ignoreCase = true) }?.value
+    }
+
+    private fun putHeaderIgnoreCase(headers: Map<String, String>, key: String, value: String): Map<String, String> {
+        val mutableHeaders = linkedMapOf<String, String>()
+        headers.forEach { (existingKey, existingValue) ->
+            if (!existingKey.equals(key, ignoreCase = true)) {
+                mutableHeaders[existingKey] = existingValue
+            }
+        }
+        mutableHeaders[key] = value
+        return mutableHeaders
+    }
+
+    private fun removeHeaderIgnoreCase(headers: Map<String, String>, key: String): Map<String, String> {
+        val mutableHeaders = linkedMapOf<String, String>()
+        headers.forEach { (existingKey, existingValue) ->
+            if (!existingKey.equals(key, ignoreCase = true)) {
+                mutableHeaders[existingKey] = existingValue
+            }
+        }
+        return mutableHeaders
+    }
+
     companion object {
         // 预编译正则，避免热路径每次重新编译
         private val ARRAY_ACCESS_REGEX = Regex("""\[(\d+)\](.*)""")
@@ -525,7 +551,7 @@ class ExpressionEngine {
         // 处理 $headers.* 访问
         if (trimmedPath.startsWith("\$headers.")) {
             val headerKey = trimmedPath.substring(9)
-            return headers?.get(headerKey)
+            return getHeaderIgnoreCase(headers, headerKey)
         }
 
         return when (json) {
@@ -1254,8 +1280,8 @@ class ExpressionEngine {
      */
     private fun resolvePathValue(path: String, json: JSONObject?, headers: Map<String, String>?): Any? {
         when {
-            path.startsWith("\$headers.") -> return headers?.get(path.substring(9))
-            path.startsWith("headers.") -> return headers?.get(path.substring(8))
+            path.startsWith("\$headers.") -> return getHeaderIgnoreCase(headers, path.substring(9))
+            path.startsWith("headers.") -> return getHeaderIgnoreCase(headers, path.substring(8))
         }
         if (json == null) return null
         if (path.startsWith("data.")) {
@@ -1555,10 +1581,10 @@ class ExpressionEngine {
 
         // 4. $headers.X / headers.X
         if (trimmed.startsWith("\$headers.")) {
-            return headers?.get(trimmed.substring(9))
+            return getHeaderIgnoreCase(headers, trimmed.substring(9))
         }
         if (trimmed.startsWith("headers.") && !trimmed.startsWith("\$headers.")) {
-            return headers?.get(trimmed.substring(8))
+            return getHeaderIgnoreCase(headers, trimmed.substring(8))
         }
 
         // 5. $ context variable
@@ -1610,10 +1636,10 @@ class ExpressionEngine {
 
         // 4. $headers.X / headers.X
         if (arg.startsWith("\$headers.")) {
-            return headers?.get(arg.substring(9))
+            return getHeaderIgnoreCase(headers, arg.substring(9))
         }
         if (arg.startsWith("headers.") && !arg.startsWith("\$headers.")) {
-            return headers?.get(arg.substring(8))
+            return getHeaderIgnoreCase(headers, arg.substring(8))
         }
 
         // 5. $ context variable
@@ -1812,11 +1838,9 @@ class ExpressionEngine {
                                     data = obj.toString().toByteArray()
                                 }
                             } else if (target == "\$header" || target.startsWith("\$header.")) {
-                                var mutableHeaders = headers.toMutableMap()
                                 for (k in keysToDelete) {
-                                    mutableHeaders.remove(k)
+                                    headers = removeHeaderIgnoreCase(headers, k)
                                 }
-                                headers = mutableHeaders.toMap()
                             }
 
                             if (debugEnabled) {
@@ -1878,7 +1902,7 @@ class ExpressionEngine {
                 target.startsWith("\$header.") -> {
                     val key = target.removePrefix("\$header.")
                     val result = String(evaluateFormatTemplate(template, data, json, headers, context))
-                    headers = headers + (key to result)
+                    headers = putHeaderIgnoreCase(headers, key, result)
                     if (debugEnabled) {
                         LogManager.logDebug("EXPR", "FormatStep \$header.$key -> ${truncateForLog(result)}")
                     }
@@ -2108,7 +2132,7 @@ class ExpressionEngine {
 
         // $headers.X
         if (normalizedExpr.startsWith("\$headers.")) {
-            return headers[normalizedExpr.substring(9)] ?: ""
+            return getHeaderIgnoreCase(headers, normalizedExpr.substring(9)) ?: ""
         }
 
         // Function call — works even when json is null (e.g. now(), base64Encode(data))
@@ -2184,8 +2208,8 @@ class ExpressionEngine {
                         else -> null
                     }
             }
-            stripped.startsWith("\$headers.") -> headers[stripped.substring(9)]
-            stripped.startsWith("headers.") -> headers[stripped.substring(8)]
+            stripped.startsWith("headers.") -> getHeaderIgnoreCase(headers, stripped.substring(8))
+            stripped.startsWith("\$headers.") -> getHeaderIgnoreCase(headers, stripped.substring(9))
             json != null -> {
                 // data.xxx → always access field xxx from root JSON
                 val effectivePath = if (stripped.startsWith("data.")) {

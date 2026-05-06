@@ -24,7 +24,7 @@ class HttpOutput(
 ) : Output {
 
     override val type: OutputType = OutputType.http
-    override val formatSteps get() = config.format
+    override val formatSteps get() = config.effectiveFormatSteps
 
     @Volatile
     private var available = true
@@ -80,10 +80,21 @@ class HttpOutput(
 
     private fun doSend(item: QueueItem): OutputResult {
         return try {
-            val body = item.data.toRequestBody("application/octet-stream".toMediaType())
+            val prepared = prepareRequest(item)
+            val body =
+                if (allowsRequestBody(prepared.method)) {
+                    prepared.body.toRequestBody(prepared.contentType.toMediaType())
+                } else {
+                    null
+                }
             val request = Request.Builder()
                 .url(config.url)
-                .method(config.method, body)
+                .apply {
+                    prepared.headers.forEach { (key, value) ->
+                        header(key, value)
+                    }
+                }
+                .method(prepared.method, body)
                 .build()
 
             client.newCall(request).execute().use { response ->
@@ -100,9 +111,53 @@ class HttpOutput(
         }
     }
 
+    internal fun prepareRequest(item: QueueItem): PreparedRequest {
+        val method = config.method.uppercase()
+        val normalizedHeaders = normalizeHeaders(item.headers)
+        val contentType =
+            removeHeaderIgnoreCase(normalizedHeaders, "content-type")
+                ?: "application/octet-stream"
+        removeHeaderIgnoreCase(normalizedHeaders, "content-length")
+        return PreparedRequest(
+            method = method,
+            body = item.data,
+            contentType = contentType,
+            headers = normalizedHeaders
+        )
+    }
+
+    private fun allowsRequestBody(method: String): Boolean = method != "GET" && method != "HEAD"
+
+    private fun normalizeHeaders(headers: Map<String, String>): LinkedHashMap<String, String> {
+        val normalized = linkedMapOf<String, String>()
+        val originalKeys = mutableMapOf<String, String>()
+        headers.forEach { (key, value) ->
+            val normalizedKey = key.lowercase()
+            val originalKey = originalKeys.remove(normalizedKey)
+            if (originalKey != null) {
+                normalized.remove(originalKey)
+            }
+            originalKeys[normalizedKey] = key
+            normalized[key] = value
+        }
+        return normalized
+    }
+
+    private fun removeHeaderIgnoreCase(headers: MutableMap<String, String>, name: String): String? {
+        val matchedKey = headers.keys.firstOrNull { it.equals(name, ignoreCase = true) } ?: return null
+        return headers.remove(matchedKey)
+    }
+
     override fun isAvailable(): Boolean = available
 
     fun shutdown() {
         scope.cancel()
     }
 }
+
+internal data class PreparedRequest(
+    val method: String,
+    val body: ByteArray,
+    val contentType: String,
+    val headers: Map<String, String>
+)

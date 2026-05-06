@@ -131,7 +131,7 @@ fun ConfigScreenContent(
         isLoading = true
         LogManager.logDebug("CONFIG", "开始下载配置: $configUrl")
 
-        ConfigDownloader.downloadConfig(configUrl) { result ->
+        ConfigDownloader.downloadConfig(context, configUrl) { result ->
             isLoading = false
             result.fold(
                 onSuccess = { content ->
