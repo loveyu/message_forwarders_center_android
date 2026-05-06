@@ -223,7 +223,7 @@ fun NotifyHistoryContent(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = "输出��称",
+                        text = "输出名称",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 4.dp)
