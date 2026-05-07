@@ -17,6 +17,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.util.concurrent.TimeUnit
+import java.util.zip.InflaterInputStream
 
 /**
  * HTTP 输出（OkHttp 连接池复用）
@@ -253,16 +254,28 @@ internal class OkHttpLoggingInterceptor(private val outputName: String) : Interc
             source.request(Long.MAX_VALUE)
             val cloned = source.buffer.clone()
             val contentEncoding = response.header("Content-Encoding")
-            if (contentEncoding.equals("gzip", ignoreCase = true)) {
-                try {
-                    val decompressed = okio.Buffer()
-                    decompressed.writeAll(okio.GzipSource(cloned))
-                    decompressed.readUtf8().take(500)
-                } catch (e: Exception) {
-                    "(gzip decode error: ${e.message})"
+            when {
+                contentEncoding.equals("gzip", ignoreCase = true) -> {
+                    try {
+                        val decompressed = okio.Buffer()
+                        decompressed.writeAll(okio.GzipSource(cloned))
+                        decompressed.readUtf8().take(500)
+                    } catch (e: Exception) {
+                        "(gzip decode error: ${e.message})"
+                    }
                 }
-            } else {
-                cloned.readUtf8().take(500)
+                contentEncoding.equals("deflate", ignoreCase = true) -> {
+                    try {
+                        val inflated = InflaterInputStream(cloned.inputStream()).readBytes()
+                        inflated.toString(Charsets.UTF_8).take(500)
+                    } catch (e: Exception) {
+                        "(deflate decode error: ${e.message})"
+                    }
+                }
+                contentEncoding.equals("br", ignoreCase = true) -> {
+                    "(brotli encoded, ${cloned.size}B — no decoder available)"
+                }
+                else -> cloned.readUtf8().take(500)
             }
         } else "(no body)"
 
