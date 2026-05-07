@@ -123,6 +123,16 @@ enum class ComponentType {
 }
 
 /**
+ * 上游链接状态（用于多上游 Link Output）
+ */
+data class UpstreamLinkStatus(
+    val linkId: String,
+    val isConnected: Boolean,
+    val isNetworkEnabled: Boolean,
+    val typeLabel: String
+)
+
+/**
  * 组件状态信息
  */
 data class ComponentStatus(
@@ -134,7 +144,8 @@ data class ComponentStatus(
     val notEnabledReason: String? = null, // 不符合条件的原因
     val details: String = "", // 详细信息
     val error: String? = null, // 启动错误(如端口冲突)
-    val copyableLinks: List<String> = emptyList()
+    val copyableLinks: List<String> = emptyList(),
+    val upstreamLinks: List<UpstreamLinkStatus> = emptyList()
 ) {
     val isLink: Boolean get() = type == ComponentType.LINK
     val isInput: Boolean get() = type == ComponentType.HTTP_INPUT || type == ComponentType.LINK_INPUT
@@ -573,22 +584,51 @@ private fun buildHttpOutputStatus(config: HttpOutputConfig): ComponentStatus {
 }
 
 private fun buildLinkOutputStatus(context: Context, config: LinkOutputConfig): ComponentStatus {
-    val enableResult = NetworkChecker.getEnableReason(context, config.whenCondition, config.deny)
-    val isRunning =
-        enableResult.enabled && (OutputManager.getOutput(config.name)?.isAvailable() ?: false)
-    val linkType = LinkManager.getLinkConfig(config.linkId)?.dsn?.let { LinkType.fromDsn(it) }
-    val typeStr =
+    val outputEnableResult = NetworkChecker.getEnableReason(context, config.whenCondition, config.deny)
+    val isMultiLink = config.linkIds.size > 1
+
+    val upstreamLinks = config.linkIds.map { linkId ->
+        val linkConfig = LinkManager.getLinkConfig(linkId)
+        val link = LinkManager.getLink(linkId)
+        val isConnected = link?.isConnected() ?: false
+        val linkEnableResult = if (linkConfig != null) {
+            NetworkChecker.getEnableReason(context, linkConfig.whenCondition, linkConfig.deny)
+        } else {
+            NetworkChecker.EnableResult(enabled = false, reason = "Link $linkId not found")
+        }
+        val typeLabel = linkConfig?.let { getLinkTypeString(it) } ?: "Unknown"
+        UpstreamLinkStatus(
+            linkId = linkId,
+            isConnected = isConnected,
+            isNetworkEnabled = outputEnableResult.enabled && linkEnableResult.enabled,
+            typeLabel = typeLabel
+        )
+    }
+
+    val isRunning = outputEnableResult.enabled && (OutputManager.getOutput(config.name)?.isAvailable() ?: false)
+
+    val typeStr = if (isMultiLink) {
+        "Fan-out (${config.linkIds.size} links)"
+    } else {
+        val linkType = LinkManager.getLinkConfig(config.linkId)?.dsn?.let { LinkType.fromDsn(it) }
         when (linkType) {
             LinkType.mqtt -> "MQTT"
             LinkType.websocket -> "WebSocket"
             LinkType.tcp -> "TCP"
             else -> "Link"
         }
+    }
+
     val details = buildString {
         append("Type: $typeStr Output")
-        append("\nLink: ${config.linkId}")
+        if (isMultiLink) {
+            append("\nLinks: ${config.linkIds.joinToString()}")
+        } else {
+            append("\nLink: ${config.linkId}")
+        }
         append("\nRole: ${config.role}")
         config.topic?.let { append("\nTopic: $it") }
+        config.retry?.let { append("\nRetry: max ${it.maxAttempts} × ${it.interval.value}") }
         config.queue?.name?.let { append("\nQueue: $it") }
         if (config.whenCondition != null || config.deny != null) {
             append(
@@ -596,14 +636,16 @@ private fun buildLinkOutputStatus(context: Context, config: LinkOutputConfig): C
             )
         }
     }
+
     return ComponentStatus(
         id = config.name,
         name = config.name,
         type = ComponentType.OUTPUT,
-        isEnabled = enableResult.enabled,
+        isEnabled = outputEnableResult.enabled,
         isRunning = isRunning,
-        notEnabledReason = enableResult.reason,
-        details = details
+        notEnabledReason = outputEnableResult.reason,
+        details = details,
+        upstreamLinks = upstreamLinks
     )
 }
 
@@ -640,7 +682,8 @@ private fun buildQueueStatus(queue: info.loveyu.mfca.queue.Queue): ComponentStat
     val size = try { queue.size() } catch (_: Exception) { -1 }
     val details = buildString {
         append("Type: $typeStr Queue")
-        if (size >= 0) append("\nSize: $size items")
+        if (size >= 0) append("\nPending: $size item(s)")
+        else append("\nSize: N/A")
     }
     return ComponentStatus(
         id = "queue:${queue.name}",
@@ -1083,6 +1126,29 @@ fun ComponentDetailSheet(
                 }
             }
 
+            // Upstream links section (for link outputs with multi-upstream)
+            if (component.upstreamLinks.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(16.dp))
+
+                val upstreamTitle = if (component.upstreamLinks.size > 1) {
+                    "上游链接 (${component.upstreamLinks.size})"
+                } else {
+                    "上游链接"
+                }
+                Text(
+                    text = upstreamTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                component.upstreamLinks.forEach { upstream ->
+                    UpstreamLinkRow(upstream = upstream, isDark = isDark)
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
             HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
@@ -1149,6 +1215,66 @@ fun ComponentDetailSheet(
 private fun copyPlainText(context: Context, label: String, text: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
+}
+
+@Composable
+private fun UpstreamLinkRow(upstream: UpstreamLinkStatus, isDark: Boolean) {
+    val statusColor = when {
+        upstream.isConnected -> if (isDark) StatusRunningDark else StatusRunningLight
+        upstream.isNetworkEnabled -> if (isDark) StatusWarningDark else StatusWarningLight
+        else -> if (isDark) StatusDisabledDark else StatusDisabledLight
+    }
+    val statusText = when {
+        upstream.isConnected -> "已连接"
+        upstream.isNetworkEnabled -> "待连接"
+        else -> "未启用"
+    }
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(statusColor)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Text(
+                        text = upstream.linkId,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = upstream.typeLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.labelMedium,
+                color = statusColor
+            )
+        }
+    }
 }
 
 @Composable

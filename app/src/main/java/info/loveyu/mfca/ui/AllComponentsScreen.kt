@@ -1,5 +1,6 @@
 package info.loveyu.mfca.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
@@ -38,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -309,6 +312,39 @@ private fun ComponentListItem(
                 style = MaterialTheme.typography.bodySmall,
                 color = statusColor
             )
+
+            // Per-upstream status indicators for multi-link outputs
+            if (component.upstreamLinks.size > 1) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "上游:",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    component.upstreamLinks.forEach { upstream ->
+                        val dotColor = when {
+                            upstream.isConnected -> if (isDark) StatusRunningDark else StatusRunningLight
+                            upstream.isNetworkEnabled -> if (isDark) StatusWarningDark else StatusWarningLight
+                            else -> if (isDark) StatusDisabledDark else StatusDisabledLight
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(dotColor)
+                        )
+                    }
+                    val connectedCount = component.upstreamLinks.count { it.isConnected }
+                    Text(
+                        text = "$connectedCount/${component.upstreamLinks.size} 已连接",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
             if (component.notEnabledReason != null) {
                 Text(
