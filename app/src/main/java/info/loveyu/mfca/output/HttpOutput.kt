@@ -251,7 +251,19 @@ internal class OkHttpLoggingInterceptor(private val outputName: String) : Interc
         val respBodyStr = if (respBody != null) {
             val source = respBody.source()
             source.request(Long.MAX_VALUE)
-            source.buffer.clone().readUtf8().take(500)
+            val cloned = source.buffer.clone()
+            val contentEncoding = response.header("Content-Encoding")
+            if (contentEncoding.equals("gzip", ignoreCase = true)) {
+                try {
+                    val decompressed = okio.Buffer()
+                    decompressed.writeAll(okio.GzipSource(cloned))
+                    decompressed.readUtf8().take(500)
+                } catch (e: Exception) {
+                    "(gzip decode error: ${e.message})"
+                }
+            } else {
+                cloned.readUtf8().take(500)
+            }
         } else "(no body)"
 
         LogManager.logDebug(
