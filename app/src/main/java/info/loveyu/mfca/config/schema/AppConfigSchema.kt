@@ -155,25 +155,6 @@ object AppConfigSchema {
                 string("deny") { description = "Disable condition" }
             }
 
-            objectList(
-                "failQueue",
-                block = { description = "Fail-queue input sources (deprecated, use onFailureQueue on outputs instead)" },
-            ) {
-                deprecated(message = "Use onFailureQueue on output configs instead. This field is ignored.")
-                string("name") {
-                    required()
-                    description = "Unique input name"
-                }
-                stringList("idTypes") { description = "Message type filter (empty = all)" }
-                stringList("queues") {
-                    description =
-                        "Queue references to read from, e.g. 'sqlite:myQueue', 'memory:myQueue'"
-                }
-                int("batchSize") {
-                    description = "Maximum messages to process per tick"
-                    default = 20
-                }
-            }
         }
 
         objectNode("queues") {

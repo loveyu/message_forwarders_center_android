@@ -83,7 +83,6 @@ Input source configurations
 |------|------|:----:|--------|------|
 | `http` | list[object] |  |  | HTTP server input sources |
 | `link` | list[object] |  |  | Link-based input sources (MQTT subscriber, WebSocket, TCP) |
-| `failQueue` | list[object] |  |  | Fail-queue input sources (deprecated, use onFailureQueue on outputs instead) |
 
 ### `http`
 
@@ -140,20 +139,6 @@ Message replay configuration
 | `baseUrl` | string |  |  | Provider base URL |
 | `token` | string |  |  | Provider authentication token |
 | `applicationId` | int |  |  | Provider application ID filter |
-
-### `failQueue`
-
-Fail-queue input sources (deprecated, use onFailureQueue on outputs instead)
-
-- **Type**: list[object]
-
-
-| 字段 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|:----:|--------|------|
-| `name` | string | ✓ |  | Unique input name |
-| `idTypes` | list[string] |  |  | Message type filter (empty = all) |
-| `queues` | list[string] |  |  | Queue references to read from, e.g. 'sqlite:myQueue', 'memory:myQueue' |
-| `batchSize` | int |  | `20` | Maximum messages to process per tick |
 
 ## `queues`
 

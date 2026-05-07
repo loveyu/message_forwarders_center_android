@@ -39,7 +39,6 @@ data class QueueItem(
     val enqueuedAt: Long = System.currentTimeMillis(),
     val retryCount: Int = 0,
     val nextAttemptAt: Long = enqueuedAt,
-    /** 路由标签，用于 FailQueueInput 按 idType 订阅 */
     val tag: String = ""
 ) {
     val text: String

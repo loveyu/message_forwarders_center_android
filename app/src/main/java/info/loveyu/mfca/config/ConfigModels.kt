@@ -182,17 +182,6 @@ enum class ReplayProvider {
 }
 
 /**
- * 失败队列输入源配置（已废弃，保留用于向后兼容，无实际功能）
- */
-@Deprecated("Use onFailureQueue on output configs instead")
-data class FailQueueInputConfig(
-    val name: String,
-    val idTypes: List<String> = emptyList(),
-    val queues: List<String> = emptyList(),
-    val batchSize: Int = 20
-)
-
-/**
  * 队列系统配置
  */
 data class QueuesConfig(
