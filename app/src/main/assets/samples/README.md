@@ -1,6 +1,6 @@
 # 配置示例说明
 
-本文档包含 Message Forwarders Center Android 的完整配置示例。
+本文档包含 FlowGate 的完整配置示例。
 
 ## 文件列表
 
@@ -22,7 +22,7 @@
 | `14_scheduler.yaml` | 调度器 - tickInterval / 事件触发 配置 |
 | `15_clipboard_history.yaml` | 剪贴板历史 - 去重同步与历史存储 |
 | `16_encode.yaml` | 数据编码封装 - base64/url/json/嵌套函数/UUID/IP |
-| `17_fail_queue.yaml` | 失败队列 - 输出重试与失败消息回收 |
+| `17_fail_queue.yaml` | 失败队列重试（onFailureQueue）- 输出失败后异步重试 |
 | `18_output_format.yaml` | 输出格式化 - 每个输出独立格式化 data/header，不影响 pipeline |
 | `99_full_demo.yaml` | 完整演示 - 将多个模块组合的演示配置 |
 
@@ -141,6 +141,30 @@ rules:
     pipeline:
       - to: [some_output]
 ```
+
+## 输出重试与失败队列
+
+每个输出（`link`、`http`）支持即时重试和失败队列：
+
+```yaml
+outputs:
+  link:
+    - name: mqtt_out
+      linkId: mqtt_broker
+      role: producer
+      topic: device/data
+      retry:
+        maxAttempts: 3        # 即时重试次数（默认 1，不重试）
+        interval: 2s          # 重试间隔（默认 1s）
+      onFailureQueue:
+        name: fail_store      # 所有重试失败后放入此队列
+        delay: 60s            # 延迟多久后由队列消费者重试（默认 0s）
+```
+
+- `retry`：即时重试，在同一次 send 调用内完成
+- `onFailureQueue`：所有即时重试耗尽后，消息放入指定 SQLite 队列，由队列消费者在下次 tick 时异步重试
+
+详见 `17_fail_queue.yaml` 完整示例。
 
 ## 输出格式化（Output Format）
 
@@ -309,6 +333,20 @@ rules:
     onError:                # 主管道执行失败时的备用管道
       - to: [error_output]
 ```
+
+## 死信队列 (deadLetter)
+
+消息在队列中耗尽所有重试次数后，进入死信队列处理。支持自定义管道对死信消息做最终处理（如写入文件、发送通知等）。
+
+```yaml
+deadLetter:
+  enabled: true
+  maxRetry: 3             # 死信最大重试次数（默认 10）
+  pipeline:
+    - to: [clipboard_out] # 重试失败后执行的自定义管道
+```
+
+死信消息会保存到 `data://deadletter/` 目录下，重启后自动恢复。
 
 ## 输入配置
 

@@ -177,7 +177,7 @@ class ClipboardOutput(
      * 写入剪贴板
      */
     private fun writeToClipboard(text: String, contentHash: String) {
-        val clip = ClipData.newPlainText("MessageForwarder", text)
+        val clip = ClipData.newPlainText("FlowGate", text)
         clipboardManager?.setPrimaryClip(clip)
         lastWrite[name] = text to System.currentTimeMillis()
         LogManager.logDebug("INTERNAL", "Written to clipboard: $name (hash=$contentHash, len=${text.length})")

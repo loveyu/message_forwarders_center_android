@@ -73,7 +73,7 @@ class NotifyOutput(
 
         val importance = NotificationManager.IMPORTANCE_DEFAULT
         val channel = NotificationChannel("channel_$channelId", channelName, importance).apply {
-            description = "Forwarder通知: $channelName"
+            description = "FlowGate通知: $channelName"
             enableLights(true)
             enableVibration(true)
             setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC)

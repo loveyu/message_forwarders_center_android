@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Forwarders</string>
+    <string name="app_name">FlowGate</string>
     <string name="server_running">服务运行中</string>
     <string name="server_stopped">服务已停止</string>
     <string name="start_server">启动服务</string>
@@ -9,8 +9,8 @@
     <string name="forward_target_hint">输入转发目标URL</string>
     <string name="port">端口</string>
     <string name="settings">设置</string>
-    <string name="service_notification_channel">消息转发服务</string>
-    <string name="service_notification_title">消息转发中心</string>
+    <string name="service_notification_channel">FlowGate 服务</string>
+    <string name="service_notification_title">FlowGate</string>
     <string name="service_notification_text">正在运行中…</string>
     <string name="messages_received">已接收消息</string>
     <string name="messages_forwarded">已转发消息</string>

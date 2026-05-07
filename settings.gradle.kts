@@ -27,5 +27,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Message Forwarders Center"
+rootProject.name = "FlowGate"
 include(":app")

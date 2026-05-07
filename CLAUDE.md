@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-Message Forwarders Center Android - Android 消息转发中心，基于 Android Foreground Service 的常驻架构，支持 MQTT、WebSocket、TCP 等多种链接协议。
+FlowGate - Android 消息转发中心，基于 Android Foreground Service 的常驻架构，支持 MQTT、WebSocket、TCP 等多种链接协议。
 
 ## 常用命令
 
@@ -117,6 +117,10 @@ protocol://[username:password@]host:port[?param1=value1&param2=value2...]
 ## 提交规范
 
 提交时请勿添加 AI 签名（如 Co-Authored-By）。
+
+## 文档同步
+
+- **权限列表**：`AndroidManifest.xml` 中权限变更后，必须同步更新 `README.md` 和 `README_CN.md` 的 Permissions/权限需求 章节。
 
 ## 技术栈
 
