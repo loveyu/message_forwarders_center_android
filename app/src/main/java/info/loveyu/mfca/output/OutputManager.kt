@@ -36,14 +36,19 @@ object OutputManager {
                 outputs[linkConfig.name] = output
                 LogManager.logDebug("OUTPUT", "Registered ${linkConfig.role} output: ${linkConfig.name}")
             } else {
-                // Fan-out: create one output per linkId, register MultiOutput under original name
+                // Fan-out: create one sub-output per linkId, each carrying the queue/onFailureQueue refs
+                // so retries can happen independently per upstream.
                 val subOutputs = linkConfig.linkIds.map { linkId ->
-                    val subConfig = linkConfig.copy(linkIds = listOf(linkId), name = "${linkConfig.name}@${linkId}", queue = null)
+                    val subConfig = linkConfig.copy(
+                        linkIds = listOf(linkId),
+                        name = "${linkConfig.name}@${linkId}"
+                    )
                     val subOutput = createLinkOutput(subConfig)
                     outputs[subConfig.name] = subOutput
                     subOutput
                 }
-                val multiOutput = MultiOutput(linkConfig.name, subOutputs, linkConfig.queue)
+                // MultiOutput has no queue itself — sub-outputs each have their own queue.
+                val multiOutput = MultiOutput(linkConfig.name, subOutputs, queueRef = null)
                 outputs[linkConfig.name] = multiOutput
                 LogManager.logDebug("OUTPUT", "Registered fan-out ${linkConfig.role} output: ${linkConfig.name} -> ${linkConfig.linkIds}")
             }
@@ -59,15 +64,15 @@ object OutputManager {
             )
         }
 
-        setupQueueConsumers()
+        setupQueueConsumers(config)
     }
 
     fun getOutput(name: String): Output? = outputs[name]
 
-    private fun setupQueueConsumers() {
+    private fun setupQueueConsumers(config: AppConfig) {
         val wiredQueues = mutableSetOf<String>()
-        outputs.values.forEach { output ->
-            val queueName = output.queueRef?.name ?: return@forEach
+
+        fun wireQueue(queueName: String) {
             if (wiredQueues.add(queueName)) {
                 QueueManager.getQueue(queueName)?.setConsumer { item ->
                     val outName = item.metadata["outputName"] ?: return@setConsumer false
@@ -78,8 +83,21 @@ object OutputManager {
                     }
                     target.send(item, null)
                     true
-                } ?: LogManager.logWarn("OUTPUT", "Queue not found for output ${output.name}: $queueName")
+                } ?: LogManager.logWarn("OUTPUT", "Queue not found: $queueName")
             }
+        }
+
+        // Wire queues referenced by outputs (queueRef for async delivery)
+        outputs.values.forEach { output ->
+            output.queueRef?.name?.let { wireQueue(it) }
+        }
+
+        // Also wire onFailureQueue refs so failed items route back to the same output
+        config.outputs.http.forEach { httpConfig ->
+            httpConfig.onFailureQueue?.name?.let { wireQueue(it) }
+        }
+        config.outputs.link.forEach { linkConfig ->
+            linkConfig.onFailureQueue?.name?.let { wireQueue(it) }
         }
     }
 

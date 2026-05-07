@@ -18,9 +18,8 @@ import kotlinx.coroutines.launch
  *   retry.maxAttempts — 最大尝试次数（默认 1，即不重试）
  *   retry.interval    — 每次重试前等待时长
  *
- * 最终失败处理 (onFailure):
- *   action=discard   — 丢弃（默认）
- *   action=failQueue — 放入失败队列
+ * 最终失败处理 (onFailureQueue):
+ *   将消息放入失败队列异步重试，队列消费者会路由回本输出
  */
 class WebSocketOutput(
     override val name: String,
@@ -57,7 +56,7 @@ class WebSocketOutput(
             }
 
             LogManager.logWarn("WS", "[$name] Exhausted all $maxAttempts attempt(s)")
-            handleOnFailure(item)
+            handleOnFailureQueue(item)
             callback?.invoke(false)
         }
     }
@@ -88,36 +87,28 @@ class WebSocketOutput(
         return link.send(item.data)
     }
 
-    private fun handleOnFailure(item: QueueItem) {
-        val onFailure = config.onFailure ?: return
-        if (onFailure.action == "discard") return
-
-        val queueName = onFailure.action
-        val idType = onFailure.idType
+    private fun handleOnFailureQueue(item: QueueItem) {
+        val queueRef = config.onFailureQueue ?: return
 
         val failItem = item.copy(
-            tag = idType ?: "",
             metadata = item.metadata + mapOf(
-                "idType" to (idType ?: ""),
                 "outputName" to name,
-                "source" to (item.metadata["source"] ?: ""),
-                "rule" to (item.metadata["rule"] ?: ""),
                 "failedAt" to System.currentTimeMillis().toString()
             ),
             retryCount = 0,
-            nextAttemptAt = System.currentTimeMillis() + onFailure.delay.millis
+            nextAttemptAt = System.currentTimeMillis() + queueRef.delay.millis
         )
 
-        val queue = QueueManager.getQueue(queueName)
+        val queue = QueueManager.getQueue(queueRef.name)
         val queued = queue?.enqueue(failItem) ?: run {
-            LogManager.logWarn("WS", "[$name] Fail queue not found: $queueName")
+            LogManager.logWarn("WS", "[$name] onFailureQueue not found: ${queueRef.name}")
             false
         }
 
         if (queued) {
-            LogManager.logDebug("WS", "[$name] Queued failed item (idType=$idType, queue=$queueName)")
+            LogManager.logDebug("WS", "[$name] Queued failed item to onFailureQueue=${queueRef.name}")
         } else {
-            LogManager.logWarn("WS", "[$name] Failed to enqueue to fail queue: $queueName")
+            LogManager.logWarn("WS", "[$name] Failed to enqueue item to onFailureQueue: ${queueRef.name}")
         }
     }
 

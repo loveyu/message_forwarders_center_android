@@ -4,7 +4,7 @@ import info.loveyu.mfca.config.Duration
 
 object SchemaValidator {
 
-    private val DURATION_PATTERN = Regex("""^\d+(ms|s|m|h|d)$""")
+    private val DURATION_PATTERN = Regex("""^\d+(\.\d+)?(ms|s|m|h|d)$""")
 
     fun validate(schema: ObjectNodeDef, data: Map<String, Any>?): List<SchemaError> {
         val errors = mutableListOf<SchemaError>()

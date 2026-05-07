@@ -1,0 +1,23 @@
+links:
+  - id: local_mqtt
+    dsn: mqtt://localhost:1883
+
+queues:
+  memory:
+    main_queue:
+      capacity: 100
+
+rules:
+  - name: test_rule
+    inputs: [local_mqtt]
+    outputs:
+      - name: mqtt_out
+        queue:
+          name: main_queue
+          delay: "5x"  # invalid duration unit
+
+outputs:
+  link:
+    - name: mqtt_out
+      linkId: local_mqtt
+      topic: out/test

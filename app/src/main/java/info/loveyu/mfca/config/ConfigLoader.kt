@@ -112,8 +112,7 @@ object ConfigLoader {
         val map = inputs as Map<String, Any>
         return InputsConfig(
             http = parseHttpInputs(map["http"]),
-            link = parseLinkInputs(map["link"]),
-            failQueue = parseFailQueueInputs(map["failQueue"])
+            link = parseLinkInputs(map["link"])
         )
     }
 
@@ -163,31 +162,6 @@ object ConfigLoader {
             "producer" -> LinkRole.producer
             else -> LinkRole.consumer
         }
-    }
-
-    private fun parseFailQueueInputs(failQueue: Any?): List<FailQueueInputConfig> {
-        if (failQueue == null) return emptyList()
-        return (failQueue as List<*>).mapNotNull { item ->
-            (item as? Map<String, Any>)?.let { map ->
-                FailQueueInputConfig(
-                    name = map["name"] as? String ?: return@mapNotNull null,
-                    idTypes = (map["idTypes"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
-                    queues = parseStringOrList(map["queues"]),
-                    batchSize = (map["batchSize"] as? Number)?.toInt() ?: 20
-                )
-            }
-        }
-    }
-
-    private fun parseOnFailure(onFailure: Any?): OnFailureConfig? {
-        if (onFailure == null) return null
-        val map = onFailure as? Map<String, Any> ?: return null
-        val action = map["action"] as? String ?: "discard"
-        return OnFailureConfig(
-            action = action,
-            idType = map["idType"] as? String,
-            delay = Duration(map["delay"] as? String ?: "60s")
-        )
     }
 
     private fun parseReplay(replay: Any?): ReplayConfig? {
@@ -359,6 +333,7 @@ object ConfigLoader {
                     body = map["body"]?.toString(),
                     timeout = Duration(map["timeout"] as? String ?: "5s"),
                     retry = parseRetry(map["retry"]),
+                    onFailureQueue = parseQueueRef(map["onFailureQueue"]),
                     queue = parseQueueRef(map["queue"]),
                     format = parseFormatSteps(map["format"])
                 )
@@ -379,9 +354,15 @@ object ConfigLoader {
         if (queue == null) return null
         val map = queue as? Map<String, Any> ?: return null
         val name = map["name"] as? String ?: return null
+        val delayRaw = map["delay"]
+        val delayStr = when (delayRaw) {
+            is String -> delayRaw
+            is Number -> "${delayRaw.toLong()}ms"
+            else -> "0s"
+        }
         return QueueRefConfig(
             name = name,
-            delay = (map["delay"] as? Number)?.toLong() ?: 0L
+            delay = Duration(delayStr)
         )
     }
 
@@ -398,7 +379,7 @@ object ConfigLoader {
                     qos = (map["qos"] as? Number)?.toInt(),
                     retain = map["retain"] as? Boolean ?: false,
                     retry = parseRetry(map["retry"]),
-                    onFailure = parseOnFailure(map["onFailure"]),
+                    onFailureQueue = parseQueueRef(map["onFailureQueue"]),
                     queue = parseQueueRef(map["queue"]),
                     whenCondition = map["when"] as? String,
                     deny = map["deny"] as? String,

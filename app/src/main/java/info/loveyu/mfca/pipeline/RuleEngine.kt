@@ -6,6 +6,7 @@ import info.loveyu.mfca.clipboard.ClipboardHistoryDbHelper
 import info.loveyu.mfca.config.AppConfig
 import info.loveyu.mfca.config.RuleConfig
 import info.loveyu.mfca.input.InputMessage
+import info.loveyu.mfca.output.FanOut
 import info.loveyu.mfca.output.Output
 import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.output.OutputType
@@ -279,45 +280,7 @@ class RuleEngine(
                     val ruleCtx = buildRuleContext(rule.name, inputMessage)
                     val (outData, outHeaders) =
                         applyOutputFormat(output, currentData, inputMessage.headers, ruleCtx)
-                    val queueRef = output.queueRef
-                    if (queueRef != null) {
-                        val queue = QueueManager.getQueue(queueRef.name)
-                        if (queue != null) {
-                            val queueItem = QueueItem(
-                                data = outData,
-                                metadata = mapOf(
-                                    "rule" to rule.name,
-                                    "source" to inputMessage.source,
-                                    "outputName" to outputName
-                                ),
-                                headers = outHeaders,
-                                nextAttemptAt = System.currentTimeMillis() + queueRef.delay
-                            )
-                            if (queue.enqueue(queueItem)) {
-                                LogManager.logDebug("RULE", "Rule [${rule.name}] -> $outputName: enqueued to ${queueRef.name}")
-                                onForwarded?.invoke()
-                            } else {
-                                LogManager.logWarn("RULE", "Rule [${rule.name}] -> $outputName: failed to enqueue to ${queueRef.name}")
-                            }
-                        } else {
-                            LogManager.logWarn("RULE", "Rule [${rule.name}] -> $outputName: queue not found: ${queueRef.name}")
-                        }
-                    } else {
-                        val item =
-                            QueueItem(
-                                data = outData,
-                                metadata = mapOf("rule" to rule.name, "source" to inputMessage.source, "outputName" to outputName),
-                                headers = outHeaders
-                            )
-                        output.send(item) { success ->
-                            if (success) {
-                                LogManager.logDebug("RULE", "Rule [${rule.name}] -> $outputName: OK")
-                                onForwarded?.invoke()
-                            } else {
-                                LogManager.logWarn("RULE", "Rule [${rule.name}] -> $outputName: FAILED")
-                            }
-                        }
-                    }
+                    dispatchToOutput(output, outputName, outData, outHeaders, rule.name, inputMessage.source, onForwarded)
                 } else {
                     LogManager.logWarn("RULE", "Rule [${rule.name}] output not found: $outputName")
                 }
@@ -436,45 +399,7 @@ class RuleEngine(
                     val ruleCtx = buildRuleContext(rule.name, inputMessage)
                     val (outData, outHeaders) =
                         applyOutputFormat(output, currentData, inputMessage.headers, ruleCtx)
-                    val queueRef = output.queueRef
-                    if (queueRef != null) {
-                        val queue = QueueManager.getQueue(queueRef.name)
-                        if (queue != null) {
-                            val queueItem = QueueItem(
-                                data = outData,
-                                metadata = mapOf(
-                                    "rule" to rule.name,
-                                    "source" to inputMessage.source,
-                                    "outputName" to outputName
-                                ),
-                                headers = outHeaders,
-                                nextAttemptAt = System.currentTimeMillis() + queueRef.delay
-                            )
-                            if (queue.enqueue(queueItem)) {
-                                LogManager.logDebug("RULE", "Rule [${rule.name}] -> $outputName: enqueued to ${queueRef.name}")
-                                onForwarded?.invoke()
-                            } else {
-                                LogManager.logWarn("RULE", "Rule [${rule.name}] -> $outputName: failed to enqueue to ${queueRef.name}")
-                            }
-                        } else {
-                            LogManager.logWarn("RULE", "Rule [${rule.name}] -> $outputName: queue not found: ${queueRef.name}")
-                        }
-                    } else {
-                        val item =
-                            QueueItem(
-                                data = outData,
-                                metadata = mapOf("rule" to rule.name, "source" to inputMessage.source, "outputName" to outputName),
-                                headers = outHeaders
-                            )
-                        output.send(item) { success ->
-                            if (success) {
-                                LogManager.logDebug("RULE", "Rule [${rule.name}] -> $outputName: OK")
-                                onForwarded?.invoke()
-                            } else {
-                                LogManager.logWarn("RULE", "Rule [${rule.name}] -> $outputName: FAILED")
-                            }
-                        }
-                    }
+                    dispatchToOutput(output, outputName, outData, outHeaders, rule.name, inputMessage.source, onForwarded)
                 } else {
                     LogManager.logWarn("RULE", "Rule [${rule.name}] output not found: $outputName")
                 }
@@ -490,6 +415,100 @@ class RuleEngine(
             "unix" to System.currentTimeMillis().toString(),
             "receivedAt" to (inputMessage.headers["X-ReceivedAt"] ?: System.currentTimeMillis().toString())
         )
+
+    /**
+     * Dispatch formatted output data to a single target output.
+     * Handles FanOut with per-sub-target queuing, single-output queuing, and direct send.
+     */
+    private fun dispatchToOutput(
+        output: Output,
+        outputName: String,
+        outData: ByteArray,
+        outHeaders: Map<String, String>,
+        ruleName: String,
+        source: String,
+        onForwarded: (() -> Unit)?
+    ) {
+        val queueRef = output.queueRef
+
+        // FanOut with no top-level queue: enqueue per sub-target independently
+        if (output is FanOut && queueRef == null) {
+            val subTargets = output.subTargets()
+            if (subTargets.any { it.queueRef != null }) {
+                subTargets.forEach { subTarget ->
+                    val subQueueRef = subTarget.queueRef
+                    if (subQueueRef != null) {
+                        val queue = QueueManager.getQueue(subQueueRef.name)
+                        if (queue != null) {
+                            val queueItem = QueueItem(
+                                data = outData,
+                                metadata = mapOf("rule" to ruleName, "source" to source, "outputName" to subTarget.name),
+                                headers = outHeaders,
+                                nextAttemptAt = System.currentTimeMillis() + subQueueRef.delay.millis
+                            )
+                            if (queue.enqueue(queueItem)) {
+                                LogManager.logDebug("RULE", "Rule [$ruleName] -> ${subTarget.name}: enqueued to ${subQueueRef.name}")
+                                onForwarded?.invoke()
+                            } else {
+                                LogManager.logWarn("RULE", "Rule [$ruleName] -> ${subTarget.name}: failed to enqueue to ${subQueueRef.name}")
+                            }
+                        } else {
+                            LogManager.logWarn("RULE", "Rule [$ruleName] -> ${subTarget.name}: queue not found: ${subQueueRef.name}")
+                        }
+                    } else {
+                        val item = QueueItem(
+                            data = outData,
+                            metadata = mapOf("rule" to ruleName, "source" to source, "outputName" to subTarget.name),
+                            headers = outHeaders
+                        )
+                        subTarget.send(item) { success ->
+                            if (success) {
+                                LogManager.logDebug("RULE", "Rule [$ruleName] -> ${subTarget.name}: OK")
+                                onForwarded?.invoke()
+                            } else {
+                                LogManager.logWarn("RULE", "Rule [$ruleName] -> ${subTarget.name}: FAILED")
+                            }
+                        }
+                    }
+                }
+                return
+            }
+        }
+
+        if (queueRef != null) {
+            val queue = QueueManager.getQueue(queueRef.name)
+            if (queue != null) {
+                val queueItem = QueueItem(
+                    data = outData,
+                    metadata = mapOf("rule" to ruleName, "source" to source, "outputName" to outputName),
+                    headers = outHeaders,
+                    nextAttemptAt = System.currentTimeMillis() + queueRef.delay.millis
+                )
+                if (queue.enqueue(queueItem)) {
+                    LogManager.logDebug("RULE", "Rule [$ruleName] -> $outputName: enqueued to ${queueRef.name}")
+                    onForwarded?.invoke()
+                } else {
+                    LogManager.logWarn("RULE", "Rule [$ruleName] -> $outputName: failed to enqueue to ${queueRef.name}")
+                }
+            } else {
+                LogManager.logWarn("RULE", "Rule [$ruleName] -> $outputName: queue not found: ${queueRef.name}")
+            }
+        } else {
+            val item = QueueItem(
+                data = outData,
+                metadata = mapOf("rule" to ruleName, "source" to source, "outputName" to outputName),
+                headers = outHeaders
+            )
+            output.send(item) { success ->
+                if (success) {
+                    LogManager.logDebug("RULE", "Rule [$ruleName] -> $outputName: OK")
+                    onForwarded?.invoke()
+                } else {
+                    LogManager.logWarn("RULE", "Rule [$ruleName] -> $outputName: FAILED")
+                }
+            }
+        }
+    }
 
     private fun applyOutputFormat(
         output: Output,

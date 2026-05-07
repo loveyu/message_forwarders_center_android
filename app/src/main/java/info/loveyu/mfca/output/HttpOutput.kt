@@ -2,6 +2,7 @@ package info.loveyu.mfca.output
 
 import info.loveyu.mfca.config.HttpOutputConfig
 import info.loveyu.mfca.queue.QueueItem
+import info.loveyu.mfca.queue.QueueManager
 import info.loveyu.mfca.util.LogManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -78,7 +79,33 @@ class HttpOutput(
             }
 
             LogManager.logError("HTTP", "HTTP output $name exhausted all $maxAttempts attempts")
+            handleOnFailureQueue(item)
             callback?.invoke(false)
+        }
+    }
+
+    private fun handleOnFailureQueue(item: QueueItem) {
+        val queueRef = config.onFailureQueue ?: return
+
+        val failItem = item.copy(
+            metadata = item.metadata + mapOf(
+                "outputName" to name,
+                "failedAt" to System.currentTimeMillis().toString()
+            ),
+            retryCount = 0,
+            nextAttemptAt = System.currentTimeMillis() + queueRef.delay.millis
+        )
+
+        val queue = QueueManager.getQueue(queueRef.name)
+        val queued = queue?.enqueue(failItem) ?: run {
+            LogManager.logWarn("HTTP", "[$name] onFailureQueue not found: ${queueRef.name}")
+            false
+        }
+
+        if (queued) {
+            LogManager.logDebug("HTTP", "[$name] Queued failed item to onFailureQueue=${queueRef.name}")
+        } else {
+            LogManager.logWarn("HTTP", "[$name] Failed to enqueue item to onFailureQueue: ${queueRef.name}")
         }
     }
 

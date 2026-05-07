@@ -99,8 +99,7 @@ data class TlsConfig(
  */
 data class InputsConfig(
     val http: List<HttpInputConfig> = emptyList(),
-    val link: List<LinkInputConfig> = emptyList(),
-    val failQueue: List<FailQueueInputConfig> = emptyList()
+    val link: List<LinkInputConfig> = emptyList()
 )
 
 data class HttpInputConfig(
@@ -183,19 +182,13 @@ enum class ReplayProvider {
 }
 
 /**
- * 失败队列输入源配置
- * 由统一 Ticker 驱动，从失败队列中取出消息并重新注入规则引擎
+ * 失败队列输入源配置（已废弃，保留用于向后兼容，无实际功能）
  */
+@Deprecated("Use onFailureQueue on output configs instead")
 data class FailQueueInputConfig(
     val name: String,
-    /** 订阅的失败消息类型列表，空表示读取队列中所有消息 */
     val idTypes: List<String> = emptyList(),
-    /**
-     * 从哪些队列读取失败消息，格式: "sqlite:队列名" 或 "memory:队列名"。
-     * 支持同时监听多个队列。
-     */
     val queues: List<String> = emptyList(),
-    /** 每次 tick 最多处理的消息数（默认 20） */
     val batchSize: Int = 20
 )
 
@@ -259,6 +252,7 @@ data class HttpOutputConfig(
     val body: String? = null,
     val timeout: Duration = Duration("5s"),
     val retry: RetryConfig? = null,
+    val onFailureQueue: QueueRefConfig? = null,
     val queue: QueueRefConfig? = null,
     /** 输出前的数据格式化步骤 */
     val format: List<OutputFormatStep>? = null
@@ -284,27 +278,11 @@ data class RetryConfig(
     val interval: Duration = Duration("1s")
 )
 
-/**
- * 失败后处理策略
- */
-data class OnFailureConfig(
-    /**
-     * 失败处理动作：
-     * - "discard" — 丢弃（默认）
-     * - 队列名称 — 放入指定队列，等待 FailQueueInput 重新注入
-     */
-    val action: String = "discard",
-    /** 失败消息类型标识，action 为队列名称时可选，用于 FailQueueInput 按 idType 过滤 */
-    val idType: String? = null,
-    /** 消息在失败队列中等待多久后重新注入为 input（按 tick 近似）*/
-    val delay: Duration = Duration("60s")
-)
-
 data class QueueRefConfig(
     /** 队列名称，直接引用 queues 中定义的名称 */
     val name: String,
-    /** 入队延迟（毫秒），默认 0 立即处理 */
-    val delay: Long = 0
+    /** 入队延迟，默认 0 立即处理 */
+    val delay: Duration = Duration("0s")
 )
 
 data class LinkOutputConfig(
@@ -318,8 +296,8 @@ data class LinkOutputConfig(
     val retain: Boolean = false,
     // Retry on transient failure before giving up
     val retry: RetryConfig? = null,
-    // Action after all retries exhausted (null = discard)
-    val onFailure: OnFailureConfig? = null,
+    // Queue to enqueue failed messages for async retry (null = discard)
+    val onFailureQueue: QueueRefConfig? = null,
     val queue: QueueRefConfig? = null,
     val whenCondition: String? = null,
     val deny: String? = null,
@@ -468,15 +446,15 @@ data class Duration(
             // "ms" suffix must be checked first to avoid mis-detecting as minutes
             val isMillis = d.endsWith("ms")
             val numStr = if (isMillis) d.dropLast(2) else d.dropLast(1)
-            val num = numStr.toLongOrNull() ?: 0
+            val num = numStr.toDoubleOrNull() ?: 0.0
             val unit = if (isMillis) "ms" else d.takeLast(1)
             when (unit) {
-                "ms" -> num
-                "s" -> num * 1000
-                "m" -> num * 60 * 1000
-                "h" -> num * 60 * 60 * 1000
-                "d" -> num * 24 * 60 * 60 * 1000
-                else -> num * 1000
+                "ms" -> num.toLong()
+                "s" -> (num * 1_000).toLong()
+                "m" -> (num * 60_000).toLong()
+                "h" -> (num * 3_600_000).toLong()
+                "d" -> (num * 86_400_000).toLong()
+                else -> (num * 1_000).toLong()
             }
         } catch (e: Exception) {
             5000

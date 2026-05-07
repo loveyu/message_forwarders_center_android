@@ -157,11 +157,12 @@ object AppConfigSchema {
 
             objectList(
                 "failQueue",
-                block = { description = "Fail-queue input sources (re-inject failed messages)" },
+                block = { description = "Fail-queue input sources (deprecated, use onFailureQueue on outputs instead)" },
             ) {
+                deprecated(message = "Use onFailureQueue on output configs instead. This field is ignored.")
                 string("name") {
                     required()
-                    description = "Unique input name referenced by rules"
+                    description = "Unique input name"
                 }
                 stringList("idTypes") { description = "Message type filter (empty = all)" }
                 stringList("queues") {
@@ -279,18 +280,16 @@ object AppConfigSchema {
                         default = "1s"
                     }
                 }
-                objectNode("onFailure") {
-                    description = "Action after all retries are exhausted"
+                objectNode("onFailureQueue") {
+                    description = "Queue to enqueue message after all retries are exhausted (for async retry)"
 
-                    string("action") {
-                        description = "Failure action: 'discard' or a queue name"
-                        default = "discard"
+                    string("name") {
+                        required()
+                        description = "Queue name as defined in queues section"
                     }
-                    string("idType") { description = "Message type tag for fail-queue filtering" }
                     duration("delay") {
-                        description =
-                            "Delay before the message is re-injected from the fail queue"
-                        default = "60s"
+                        description = "Enqueue delay before the message becomes eligible for retry"
+                        default = "0s"
                     }
                 }
                 objectNode("queue") {
@@ -300,9 +299,9 @@ object AppConfigSchema {
                         required()
                         description = "Queue name as defined in queues section"
                     }
-                    long("delay") {
-                        description = "Enqueue delay in milliseconds"
-                        default = 0
+                    duration("delay") {
+                        description = "Enqueue delay before the message is first processed"
+                        default = "0s"
                     }
                 }
                 any("format") {
@@ -341,23 +340,21 @@ object AppConfigSchema {
                     int("maxAttempts") { default = 1 }
                     duration("interval") { default = "1s" }
                 }
-                objectNode("onFailure") {
-                    description = "Action after all retries are exhausted"
+                objectNode("onFailureQueue") {
+                    description = "Queue to enqueue message after all retries are exhausted (for async retry)"
 
-                    string("action") {
-                        description = "Failure action: 'discard' or a queue name"
-                        default = "discard"
-                    }
-                    string("idType") { description = "Message type tag for fail-queue filtering" }
+                    string("name") { required() }
                     duration("delay") {
-                        description =
-                            "Delay before the message is re-injected from the fail queue"
-                        default = "60s"
+                        description = "Enqueue delay before the message becomes eligible for retry"
+                        default = "0s"
                     }
                 }
                 objectNode("queue") {
                     string("name") { required() }
-                    long("delay") { default = 0 }
+                    duration("delay") {
+                        description = "Enqueue delay before the message is first processed"
+                        default = "0s"
+                    }
                 }
                 string("when") { description = "Enable condition" }
                 string("deny") { description = "Disable condition" }
@@ -388,7 +385,10 @@ object AppConfigSchema {
                 string("channel") { description = "Notification channel ID" }
                 objectNode("queue") {
                     string("name") { required() }
-                    long("delay") { default = 0 }
+                    duration("delay") {
+                        description = "Enqueue delay before the message is first processed"
+                        default = "0s"
+                    }
                 }
                 any("format") {
                     description = "Output format: string template or list of format steps"

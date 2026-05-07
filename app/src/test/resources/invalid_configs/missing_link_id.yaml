@@ -1,0 +1,2 @@
+links:
+  - dsn: mqtt://localhost:1883  # Missing required 'id' field

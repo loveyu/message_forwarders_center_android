@@ -78,11 +78,9 @@ outputs:
   #   maxAttempts   - 最大尝试次数（默认 1，即不重试；设为 3 = 首次+2次重试）
   #   interval      - 两次尝试之间的等待时长（默认 1s）
   #
-  # onFailure（所有即时重试耗尽后的处理策略）:
-  #   action        - "discard"（默认，丢弃）| 队列名称（放入对应失败队列）
-  #   idType        - 失败消息类型标识（用队列时可选）
-  #                   同一队列中可混存多种 idType，由 FailQueueInput 按订阅过滤
-  #   delay         - 消息在失败队列中等待多久后被重新注入为 input（默认 60s）
+  # onFailureQueue（所有即时重试耗尽后的处理策略）:
+  #   name          - 队列名称（放入对应失败队列，等待异步重试）
+  #   delay         - 消息在失败队列中等待多久后被消费者重试（默认 0s）
   #                   实际出队时间按 tick 近似（非严格精确）
   link:
     # 最简配置：只需 name、linkId、role、topic
@@ -101,10 +99,9 @@ outputs:
       retry:
         maxAttempts: 3    # 首次 + 2 次重试，共 3 次
         interval: 5s      # 每次重试前等待 5 秒
-      onFailure:
-        action: fail_store             # 队列名称（"discard" 则丢弃）
-        idType: mqtt_failures          # 失败消息的类型标识
-        delay: 120s                    # 120 秒后由 FailQueueInput 重新注入
+      onFailureQueue:
+        name: fail_store             # 队列名称（放入失败队列等待异步重试）
+        delay: 120s                  # 120 秒后由队列消费者重新调度
 
     # retain=true 示例：保留最后一次状态（适合设备状态上报）
     - name: mqtt_status
@@ -122,7 +119,7 @@ outputs:
       retry:
         maxAttempts: 2
         interval: 2s
-      # onFailure 未配置或 action=discard 时，耗尽重试后静默丢弃
+      # onFailureQueue 未配置时，耗尽重试后静默丢弃
 
   # 内部输出 - 剪贴板
   internal:

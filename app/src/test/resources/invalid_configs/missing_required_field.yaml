@@ -1,0 +1,9 @@
+links:
+  - id: local_mqtt
+    dsn: mqtt://localhost:1883
+
+# Missing required 'name' field in link output
+outputs:
+  link:
+    - linkId: local_mqtt
+      topic: out/test

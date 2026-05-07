@@ -83,7 +83,7 @@ Input source configurations
 |------|------|:----:|--------|------|
 | `http` | list[object] |  |  | HTTP server input sources |
 | `link` | list[object] |  |  | Link-based input sources (MQTT subscriber, WebSocket, TCP) |
-| `failQueue` | list[object] |  |  | Fail-queue input sources (re-inject failed messages) |
+| `failQueue` | list[object] |  |  | Fail-queue input sources (deprecated, use onFailureQueue on outputs instead) |
 
 ### `http`
 
@@ -143,14 +143,14 @@ Message replay configuration
 
 ### `failQueue`
 
-Fail-queue input sources (re-inject failed messages)
+Fail-queue input sources (deprecated, use onFailureQueue on outputs instead)
 
 - **Type**: list[object]
 
 
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|:----:|--------|------|
-| `name` | string | ✓ |  | Unique input name referenced by rules |
+| `name` | string | ✓ |  | Unique input name |
 | `idTypes` | list[string] |  |  | Message type filter (empty = all) |
 | `queues` | list[string] |  |  | Queue references to read from, e.g. 'sqlite:myQueue', 'memory:myQueue' |
 | `batchSize` | int |  | `20` | Maximum messages to process per tick |
@@ -249,7 +249,7 @@ HTTP output sinks
 | `body` | string |  |  | Request body template (defaults to message data) |
 | `timeout` | duration |  | `5s` | Request timeout |
 | `retry` | object |  |  | Retry policy on transient failure |
-| `onFailure` | object |  |  | Action after all retries are exhausted |
+| `onFailureQueue` | object |  |  | Queue to enqueue message after all retries are exhausted (for async retry) |
 | `queue` | object |  |  | Queue reference for async delivery |
 | `format` | any |  |  | Output format: string template or list of format steps |
 
@@ -265,18 +265,17 @@ Retry policy on transient failure
 | `maxAttempts` | int |  | `1` | Maximum delivery attempts |
 | `interval` | duration |  | `1s` | Interval between retry attempts |
 
-#### `onFailure`
+#### `onFailureQueue`
 
-Action after all retries are exhausted
+Queue to enqueue message after all retries are exhausted (for async retry)
 
 - **Type**: object
 
 
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|:----:|--------|------|
-| `action` | string |  | `discard` | Failure action: 'discard' or a queue name |
-| `idType` | string |  |  | Message type tag for fail-queue filtering |
-| `delay` | duration |  | `60s` | Delay before the message is re-injected from the fail queue |
+| `name` | string | ✓ |  | Queue name as defined in queues section |
+| `delay` | duration |  | `0s` | Enqueue delay before the message becomes eligible for retry |
 
 #### `queue`
 
@@ -288,7 +287,7 @@ Queue reference for async delivery
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|:----:|--------|------|
 | `name` | string | ✓ |  | Queue name as defined in queues section |
-| `delay` | long |  | `0` | Enqueue delay in milliseconds |
+| `delay` | duration |  | `0s` | Enqueue delay before the message is first processed |
 
 ### `link`
 
@@ -306,7 +305,7 @@ Link output sinks (MQTT publish, WebSocket send, TCP send)
 | `qos` | int |  |  | MQTT QoS level _(0–2)_ |
 | `retain` | boolean |  | `false` | MQTT retain flag |
 | `retry` | object |  |  |  |
-| `onFailure` | object |  |  | Action after all retries are exhausted |
+| `onFailureQueue` | object |  |  | Queue to enqueue message after all retries are exhausted (for async retry) |
 | `queue` | object |  |  |  |
 | `when` | string |  |  | Enable condition |
 | `deny` | string |  |  | Disable condition |
@@ -322,18 +321,17 @@ Link output sinks (MQTT publish, WebSocket send, TCP send)
 | `maxAttempts` | int |  | `1` |  |
 | `interval` | duration |  | `1s` |  |
 
-#### `onFailure`
+#### `onFailureQueue`
 
-Action after all retries are exhausted
+Queue to enqueue message after all retries are exhausted (for async retry)
 
 - **Type**: object
 
 
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|:----:|--------|------|
-| `action` | string |  | `discard` | Failure action: 'discard' or a queue name |
-| `idType` | string |  |  | Message type tag for fail-queue filtering |
-| `delay` | duration |  | `60s` | Delay before the message is re-injected from the fail queue |
+| `name` | string | ✓ |  |  |
+| `delay` | duration |  | `0s` | Enqueue delay before the message becomes eligible for retry |
 
 #### `queue`
 
@@ -343,7 +341,7 @@ Action after all retries are exhausted
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|:----:|--------|------|
 | `name` | string | ✓ |  |  |
-| `delay` | long |  | `0` |  |
+| `delay` | duration |  | `0s` | Enqueue delay before the message is first processed |
 
 ### `internal`
 
@@ -370,7 +368,7 @@ Internal output sinks (clipboard, file, broadcast, notify)
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|:----:|--------|------|
 | `name` | string | ✓ |  |  |
-| `delay` | long |  | `0` |  |
+| `delay` | duration |  | `0s` | Enqueue delay before the message is first processed |
 
 ## `rules`
 

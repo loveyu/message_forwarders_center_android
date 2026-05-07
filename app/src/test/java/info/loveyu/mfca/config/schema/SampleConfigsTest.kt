@@ -69,7 +69,9 @@ class SampleConfigsTest {
     @Test
     fun `17 fail queue parses correctly`() {
         val config = loadSample("17_fail_queue.yaml")
-        assertTrue("failQueue inputs should be non-empty", config.inputs.failQueue.isNotEmpty())
+        val mqttOut = config.outputs.link.firstOrNull { it.name == "mqtt_out" }
+        assertNotNull("mqtt_out output should exist", mqttOut)
+        assertNotNull("mqtt_out should have onFailureQueue", mqttOut!!.onFailureQueue)
         assertTrue("sqlite queues should be non-empty", config.queues.sqlite.isNotEmpty())
     }
 
