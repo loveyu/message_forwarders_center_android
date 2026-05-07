@@ -45,10 +45,16 @@ class MqttOutput(
             var attempt = 0
 
             while (attempt < maxAttempts) {
-                val success = doSend(item)
-                if (success) {
-                    callback?.invoke(true)
-                    return@launch
+                when (doSend(item)) {
+                    SendResult.SUCCESS -> {
+                        callback?.invoke(true)
+                        return@launch
+                    }
+                    SendResult.SKIP -> {
+                        callback?.invoke(false)
+                        return@launch
+                    }
+                    SendResult.RETRY -> {}
                 }
 
                 attempt++
@@ -68,30 +74,30 @@ class MqttOutput(
         }
     }
 
-    private fun doSend(item: QueueItem): Boolean {
+    private fun doSend(item: QueueItem): SendResult {
         val link = mqttLink
         if (link == null) {
             LogManager.logError("MQTT", "[$name] Link not found: ${config.linkId}")
-            return false
+            return SendResult.RETRY
         }
 
         val topic = config.topic
         if (topic == null) {
             LogManager.logWarn("MQTT", "[$name] No topic specified")
-            return false
+            return SendResult.RETRY
         }
 
         if (!link.isConnected()) {
             if (!LinkManager.shouldEnableLink(config.linkId)) {
                 LogManager.logDebug("MQTT", "[$name] Skipping: link network conditions not met")
-                return false
+                return SendResult.SKIP
             }
             if (link.isConnecting()) {
                 LogManager.logDebug("MQTT", "[$name] Skipping: link is connecting")
-                return false
+                return SendResult.RETRY
             }
             link.connect()
-            return false
+            return SendResult.RETRY
         }
 
         val qos = config.qos ?: 1
@@ -102,7 +108,7 @@ class MqttOutput(
                 "[$name] Publishing to $topic qos=$qos retain=$retain dataLen=${item.data.size}"
             )
         }
-        return link.sendToTopic(topic, item.data, qos, retain)
+        return if (link.sendToTopic(topic, item.data, qos, retain)) SendResult.SUCCESS else SendResult.RETRY
     }
 
     private fun handleOnFailureQueue(item: QueueItem) {

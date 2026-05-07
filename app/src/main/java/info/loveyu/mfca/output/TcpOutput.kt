@@ -41,10 +41,16 @@ class TcpOutput(
             var attempt = 0
 
             while (attempt < maxAttempts) {
-                val success = doSend(item)
-                if (success) {
-                    callback?.invoke(true)
-                    return@launch
+                when (doSend(item)) {
+                    SendResult.SUCCESS -> {
+                        callback?.invoke(true)
+                        return@launch
+                    }
+                    SendResult.SKIP -> {
+                        callback?.invoke(false)
+                        return@launch
+                    }
+                    SendResult.RETRY -> {}
                 }
 
                 attempt++
@@ -61,30 +67,30 @@ class TcpOutput(
         }
     }
 
-    private fun doSend(item: QueueItem): Boolean {
+    private fun doSend(item: QueueItem): SendResult {
         val link = tcpLink
         if (link == null) {
             LogManager.logError("TCP", "[$name] Link not found: ${config.linkId}")
-            return false
+            return SendResult.RETRY
         }
 
         if (!link.isConnected()) {
             if (!LinkManager.shouldEnableLink(config.linkId)) {
                 LogManager.logDebug("TCP", "[$name] Skipping: link network conditions not met")
-                return false
+                return SendResult.SKIP
             }
             if (link.isConnecting()) {
                 LogManager.logDebug("TCP", "[$name] Skipping: link is connecting")
-                return false
+                return SendResult.RETRY
             }
             link.connect()
-            return false
+            return SendResult.RETRY
         }
 
         if (LogManager.isDebugEnabled()) {
             LogManager.logDebug("TCP", "[$name] Sending dataLen=${item.data.size}")
         }
-        return link.send(item.data)
+        return if (link.send(item.data)) SendResult.SUCCESS else SendResult.RETRY
     }
 
     private fun handleOnFailureQueue(item: QueueItem) {
