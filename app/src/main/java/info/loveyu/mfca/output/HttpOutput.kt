@@ -85,6 +85,8 @@ class HttpOutput(
     }
 
     private fun handleOnFailureQueue(item: QueueItem) {
+        // If item is being processed by the queue layer, skip — retry is handled by the queue
+        if (item.metadata["_inQueue"] == "true" || item.isDeadLetter) return
         val queueRef = config.onFailureQueue ?: return
 
         val failItem = item.copy(
@@ -108,6 +110,7 @@ class HttpOutput(
             LogManager.logWarn("HTTP", "[$name] Failed to enqueue item to onFailureQueue: ${queueRef.name}")
         }
     }
+
 
     private fun doSend(item: QueueItem): OutputResult {
         return try {

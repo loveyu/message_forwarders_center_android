@@ -161,7 +161,7 @@ object AppConfigSchema {
             description = "Queue system configuration"
 
             objectMap("memory") {
-                description = "In-memory queue (Channel-driven)"
+                description = "In-memory queue (worker-driven)"
 
                 int("capacity") {
                     description = "Maximum queue capacity"
@@ -174,6 +174,30 @@ object AppConfigSchema {
                 enum("overflow", listOf("dropOldest", "dropNew", "block")) {
                     description = "Overflow strategy when queue is full"
                     default = "dropOldest"
+                }
+                duration("retryInterval") {
+                    description = "Initial retry delay on consumer failure"
+                    default = "5s"
+                }
+                int("maxRetry") {
+                    description = "Maximum delivery attempts before dead-lettering"
+                    default = 10
+                }
+                objectNode("backoff") {
+                    description = "Retry backoff configuration"
+
+                    enum("type", listOf("exponential", "linear")) {
+                        description = "Backoff calculation strategy"
+                        default = "exponential"
+                    }
+                    duration("initial") {
+                        description = "Initial backoff duration"
+                        default = "2s"
+                    }
+                    duration("max") {
+                        description = "Maximum backoff duration"
+                        default = "5m"
+                    }
                 }
             }
 
@@ -435,11 +459,25 @@ object AppConfigSchema {
                 default = 10
             }
             objectList(
-                "action",
-                block = { description = "Dead-letter processing pipeline" },
+                "pipeline",
+                block = { description = "Pipeline executed on dead-letter messages (same structure as rules.pipeline)" },
             ) {
-                objectNode("transform") {}
-                stringList("to") {}
+                objectNode("transform") {
+                    description = "Data transformation to apply"
+
+                    string("decode") { description = "Decode pipeline" }
+                    string("detect") { description = "Type detection: 'image', 'json', 'text'" }
+                    string("enrich") { description = "Enrichment spec" }
+                    string("filter") { description = "Filter expression" }
+                    string("extract") { description = "GJSON path or '\$raw'" }
+                    string("format") { description = "Template string" }
+                    stringList("formatSteps") { description = "Structured format steps" }
+                    boolean("breakOnReject") {
+                        description = "Abort pipeline when filter rejects"
+                        default = false
+                    }
+                }
+                stringList("to") { description = "Output names to forward to after this step" }
             }
         }
 

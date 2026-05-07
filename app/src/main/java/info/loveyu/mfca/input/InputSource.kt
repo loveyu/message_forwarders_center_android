@@ -28,7 +28,9 @@ enum class InputType {
 data class InputMessage(
     val source: String,
     val data: ByteArray,
-    val headers: Map<String, String> = emptyMap()
+    val headers: Map<String, String> = emptyMap(),
+    val metadata: Map<String, String> = emptyMap(),
+    val isDeadLetter: Boolean = false
 ) {
     val text: String
         get() = String(data)

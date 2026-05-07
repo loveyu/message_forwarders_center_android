@@ -164,6 +164,22 @@ Queue system configuration
 | `capacity` | int |  | `1000` | Maximum queue capacity |
 | `workers` | int |  | `1` | Number of consumer coroutines |
 | `overflow` | enum |  | `dropOldest` | Overflow strategy when queue is full `dropOldest` / `dropNew` / `block` |
+| `retryInterval` | duration |  | `5s` | Initial retry delay on consumer failure |
+| `maxRetry` | int |  | `10` | Maximum delivery attempts before dead-lettering |
+| `backoff` | object |  |  | Retry backoff configuration |
+
+#### `backoff`
+
+Retry backoff configuration
+
+- **Type**: object
+
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `type` | enum |  | `exponential` | Backoff calculation strategy `exponential` / `linear` |
+| `initial` | duration |  | `2s` | Initial backoff duration |
+| `max` | duration |  | `5m` | Maximum backoff duration |
 
 ### `sqlite`
 
@@ -424,19 +440,37 @@ Dead-letter handling for messages that exhausted all retries
 |------|------|:----:|--------|------|
 | `enabled` | boolean |  | `false` |  |
 | `maxRetry` | int |  | `10` | Maximum retry attempts in dead-letter processing |
-| `action` | list[object] |  |  | Dead-letter processing pipeline |
+| `pipeline` | list[object] |  |  | Pipeline executed on dead-letter messages (same structure as rules.pipeline) |
 
-### `action`
+### `pipeline`
 
-Dead-letter processing pipeline
+Pipeline executed on dead-letter messages (same structure as rules.pipeline)
 
 - **Type**: list[object]
 
 
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|:----:|--------|------|
-| `transform` | object |  |  |  |
-| `to` | list[string] |  |  |  |
+| `transform` | object |  |  | Data transformation to apply |
+| `to` | list[string] |  |  | Output names to forward to after this step |
+
+#### `transform`
+
+Data transformation to apply
+
+- **Type**: object
+
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `decode` | string |  |  | Decode pipeline |
+| `detect` | string |  |  | Type detection: 'image', 'json', 'text' |
+| `enrich` | string |  |  | Enrichment spec |
+| `filter` | string |  |  | Filter expression |
+| `extract` | string |  |  | GJSON path or '$raw' |
+| `format` | string |  |  | Template string |
+| `formatSteps` | list[string] |  |  | Structured format steps |
+| `breakOnReject` | boolean |  | `false` | Abort pipeline when filter rejects |
 
 ## `quickSettings`
 

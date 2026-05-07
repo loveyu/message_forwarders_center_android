@@ -182,7 +182,6 @@ class ForwardService : Service() {
 
     // New architecture components
     private var ruleEngine: RuleEngine? = null
-    private var deadLetterHandler: DeadLetterHandler? = null
 
     // 统一调度器：替代原来分散的 statsScheduler + configExecutor
     // 同时处理周期性 tick 和一次性 config 加载任务
@@ -648,18 +647,16 @@ class ForwardService : Service() {
             LogManager.logDebug("CONFIG", "Initializing outputs...")
             OutputManager.initialize(this, config)
 
-            // 4. Initialize Dead Letter Handler
-            deadLetterHandler = DeadLetterHandler(this, config.deadLetter)
-
-            // 5. Initialize Rule Engine
-            LogManager.logDebug("CONFIG", "Initializing rule engine...")
+            // 4. Initialize Dead Letter Handler (singleton, wire to rule engine after creation)
             ruleEngine = RuleEngine(config, this) {
                 forwardedCount++
                 onStatsChanged?.invoke()
             }
+            DeadLetterHandler.initialize(this, config.deadLetter) { msg ->
+                ruleEngine?.processDeadLetter(msg)
+            }
 
-            // 6. Initialize Inputs with message handler
-            LogManager.logDebug("CONFIG", "Initializing inputs...")
+            // 5. Initialize Inputs with message handler
             InputManager.setContext(this)
             InputManager.initialize(config) { message ->
                 handleMessage(message)
@@ -731,7 +728,7 @@ class ForwardService : Service() {
         forwardedCount = 0
         ruleEngine?.shutdown()
         ruleEngine = null
-        deadLetterHandler = null
+        DeadLetterHandler.clear()
         LogManager.logInfo("SERVICE", "All components stopped")
     }
 

@@ -88,6 +88,8 @@ class WebSocketOutput(
     }
 
     private fun handleOnFailureQueue(item: QueueItem) {
+        // If item is being processed by the queue layer, skip — retry is handled by the queue
+        if (item.metadata["_inQueue"] == "true" || item.isDeadLetter) return
         val queueRef = config.onFailureQueue ?: return
 
         val failItem = item.copy(

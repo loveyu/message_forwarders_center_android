@@ -155,6 +155,32 @@ class RuleEngine(
     }
 
     /**
+     * 处理死信消息。使用 deadLetter.pipeline 配置构建合成规则，同步执行。
+     * 死信消息标记 isDeadLetter=true，不允许二次入队。
+     */
+    fun processDeadLetter(message: InputMessage) {
+        val dlConfig = config.deadLetter
+        if (!dlConfig.enabled || dlConfig.pipeline.isEmpty()) {
+            LogManager.logDebug("RULE", "Dead letter pipeline not configured, dropping message")
+            return
+        }
+
+        val syntheticRule =
+            RuleConfig(
+                name = "_deadLetter",
+                froms = listOf(message.source),
+                pipeline = dlConfig.pipeline
+            )
+
+        LogManager.logDebug("RULE", "Processing dead letter message from=${message.source}")
+        try {
+            processRuleSync(syntheticRule, message)
+        } catch (e: Exception) {
+            LogManager.logWarn("RULE", "Dead letter pipeline error: ${e.message}")
+        }
+    }
+
+    /**
      * 尝试从 ByteArray 解析 JSONObject，失败返回 null
      */
     private fun parseJson(data: ByteArray): JSONObject? {
@@ -280,7 +306,7 @@ class RuleEngine(
                     val ruleCtx = buildRuleContext(rule.name, inputMessage)
                     val (outData, outHeaders) =
                         applyOutputFormat(output, currentData, inputMessage.headers, ruleCtx)
-                    dispatchToOutput(output, outputName, outData, outHeaders, rule.name, inputMessage.source, onForwarded)
+                    dispatchToOutput(output, outputName, outData, outHeaders, rule.name, inputMessage.source, onForwarded, inputMessage.isDeadLetter)
                 } else {
                     LogManager.logWarn("RULE", "Rule [${rule.name}] output not found: $outputName")
                 }
@@ -399,7 +425,7 @@ class RuleEngine(
                     val ruleCtx = buildRuleContext(rule.name, inputMessage)
                     val (outData, outHeaders) =
                         applyOutputFormat(output, currentData, inputMessage.headers, ruleCtx)
-                    dispatchToOutput(output, outputName, outData, outHeaders, rule.name, inputMessage.source, onForwarded)
+                    dispatchToOutput(output, outputName, outData, outHeaders, rule.name, inputMessage.source, onForwarded, inputMessage.isDeadLetter)
                 } else {
                     LogManager.logWarn("RULE", "Rule [${rule.name}] output not found: $outputName")
                 }
@@ -419,6 +445,7 @@ class RuleEngine(
     /**
      * Dispatch formatted output data to a single target output.
      * Handles FanOut with per-sub-target queuing, single-output queuing, and direct send.
+     * If isDeadLetter is true, queueRef is skipped and the item is marked as dead letter.
      */
     private fun dispatchToOutput(
         output: Output,
@@ -427,16 +454,17 @@ class RuleEngine(
         outHeaders: Map<String, String>,
         ruleName: String,
         source: String,
-        onForwarded: (() -> Unit)?
+        onForwarded: (() -> Unit)?,
+        isDeadLetter: Boolean = false
     ) {
-        val queueRef = output.queueRef
+        val queueRef = if (isDeadLetter) null else output.queueRef
 
         // FanOut with no top-level queue: enqueue per sub-target independently
         if (output is FanOut && queueRef == null) {
             val subTargets = output.subTargets()
-            if (subTargets.any { it.queueRef != null }) {
+            if (subTargets.any { it.queueRef != null && !isDeadLetter }) {
                 subTargets.forEach { subTarget ->
-                    val subQueueRef = subTarget.queueRef
+                    val subQueueRef = if (isDeadLetter) null else subTarget.queueRef
                     if (subQueueRef != null) {
                         val queue = QueueManager.getQueue(subQueueRef.name)
                         if (queue != null) {
@@ -444,7 +472,8 @@ class RuleEngine(
                                 data = outData,
                                 metadata = mapOf("rule" to ruleName, "source" to source, "outputName" to subTarget.name),
                                 headers = outHeaders,
-                                nextAttemptAt = System.currentTimeMillis() + subQueueRef.delay.millis
+                                nextAttemptAt = System.currentTimeMillis() + subQueueRef.delay.millis,
+                                isDeadLetter = isDeadLetter
                             )
                             if (queue.enqueue(queueItem)) {
                                 LogManager.logDebug("RULE", "Rule [$ruleName] -> ${subTarget.name}: enqueued to ${subQueueRef.name}")
@@ -459,7 +488,8 @@ class RuleEngine(
                         val item = QueueItem(
                             data = outData,
                             metadata = mapOf("rule" to ruleName, "source" to source, "outputName" to subTarget.name),
-                            headers = outHeaders
+                            headers = outHeaders,
+                            isDeadLetter = isDeadLetter
                         )
                         subTarget.send(item) { success ->
                             if (success) {
@@ -482,7 +512,8 @@ class RuleEngine(
                     data = outData,
                     metadata = mapOf("rule" to ruleName, "source" to source, "outputName" to outputName),
                     headers = outHeaders,
-                    nextAttemptAt = System.currentTimeMillis() + queueRef.delay.millis
+                    nextAttemptAt = System.currentTimeMillis() + queueRef.delay.millis,
+                    isDeadLetter = isDeadLetter
                 )
                 if (queue.enqueue(queueItem)) {
                     LogManager.logDebug("RULE", "Rule [$ruleName] -> $outputName: enqueued to ${queueRef.name}")
@@ -497,7 +528,8 @@ class RuleEngine(
             val item = QueueItem(
                 data = outData,
                 metadata = mapOf("rule" to ruleName, "source" to source, "outputName" to outputName),
-                headers = outHeaders
+                headers = outHeaders,
+                isDeadLetter = isDeadLetter
             )
             output.send(item) { success ->
                 if (success) {

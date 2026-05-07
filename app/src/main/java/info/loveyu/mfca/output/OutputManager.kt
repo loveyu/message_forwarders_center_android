@@ -7,6 +7,7 @@ import info.loveyu.mfca.config.InternalOutputType
 import info.loveyu.mfca.queue.QueueManager
 import info.loveyu.mfca.util.LogManager
 import java.lang.ref.WeakReference
+import kotlinx.coroutines.CompletableDeferred
 
 /**
  * 输出管理器
@@ -81,8 +82,11 @@ object OutputManager {
                         LogManager.logWarn("OUTPUT", "Queue consumer: output not found: $outName")
                         return@setConsumer false
                     }
-                    target.send(item, null)
-                    true
+                    // Mark item as being processed by queue — suppresses output-level onFailureQueue
+                    val markedItem = item.copy(metadata = item.metadata + ("_inQueue" to "true"))
+                    val result = CompletableDeferred<Boolean>()
+                    target.send(markedItem) { success -> result.complete(success) }
+                    result.await()
                 } ?: LogManager.logWarn("OUTPUT", "Queue not found: $queueName")
             }
         }

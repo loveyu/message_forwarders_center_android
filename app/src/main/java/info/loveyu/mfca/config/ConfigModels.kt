@@ -192,7 +192,10 @@ data class QueuesConfig(
 data class MemoryQueueConfig(
     val capacity: Int = 1000,
     val workers: Int = 1,
-    val overflow: OverflowStrategy = OverflowStrategy.dropOldest
+    val overflow: OverflowStrategy = OverflowStrategy.dropOldest,
+    val retryInterval: Duration = Duration("5s"),
+    val maxRetry: Int = 10,
+    val backoff: BackoffConfig? = null
 )
 
 enum class OverflowStrategy {
@@ -408,7 +411,7 @@ data class TransformConfig(
 data class DeadLetterConfig(
     val enabled: Boolean = false,
     val maxRetry: Int = 10,
-    val action: List<PipelineStep> = emptyList()
+    val pipeline: List<PipelineStep> = emptyList()
 )
 
 /**

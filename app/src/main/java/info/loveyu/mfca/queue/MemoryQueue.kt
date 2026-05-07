@@ -1,13 +1,16 @@
 package info.loveyu.mfca.queue
 
+import info.loveyu.mfca.config.BackoffType
 import info.loveyu.mfca.config.MemoryQueueConfig
 import info.loveyu.mfca.config.OverflowStrategy
+import info.loveyu.mfca.deadletter.DeadLetterHandler
 import info.loveyu.mfca.util.LogManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -15,7 +18,9 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 内存队列实现
- * 使用 Channel 事件驱动，空闲时零唤醒
+ * 使用 Channel 事件驱动，空闲时零唤醒。
+ * 消费失败时自动退避重试，超过 maxRetry 后转死信。
+ * isDeadLetter 消息不允许入队。
  */
 class MemoryQueue(
     override val name: String,
@@ -28,13 +33,16 @@ class MemoryQueue(
     private val counter = AtomicInteger(0)
     private val workers = mutableListOf<Job>()
 
-    // 事件通道：有新元素入队时发送信号，worker 阻塞等待
     private var wakeSignal = Channel<Unit>(Channel.CONFLATED)
 
     private var consumer: QueueConsumer? = null
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     override fun enqueue(item: QueueItem): Boolean {
+        if (item.isDeadLetter) {
+            LogManager.logWarn("QUEUE", "Rejected dead-letter item in queue $name")
+            return false
+        }
         synchronized(queue) {
             if (counter.get() >= config.capacity) {
                 when (config.overflow) {
@@ -101,39 +109,77 @@ class MemoryQueue(
 
     override fun start() {
         repeat(config.workers) { workerId ->
-            val worker = scope.launch {
-                while (isActive) {
-                    val item = dequeue()
-                    if (item != null) {
-                        try {
-                            val success = consumer?.invoke(item) ?: false
-                            if (!success) {
-                                enqueue(item.copy(retryCount = item.retryCount + 1))
-                            }
-                        } catch (e: Exception) {
-                            LogManager.logWarn("QUEUE", "Worker $workerId error in queue $name: ${e.message}")
-                            enqueue(item.copy(retryCount = item.retryCount + 1))
-                        }
-                    } else {
-                        // 队列为空 → 阻塞等待信号，不再轮询
-                        try {
-                            wakeSignal.receive()
-                        } catch (_: Exception) {
-                            // Channel 关闭或协程取消
+            val worker =
+                scope.launch {
+                    while (isActive) {
+                        val item = dequeue()
+                        if (item != null) {
+                            processItem(workerId, item)
+                        } else {
+                            try {
+                                wakeSignal.receive()
+                            } catch (_: Exception) {}
                         }
                     }
                 }
-            }
             workers.add(worker)
         }
         LogManager.logDebug("QUEUE", "Memory queue $name started with ${config.workers} workers")
+    }
+
+    private suspend fun processItem(workerId: Int, item: QueueItem) {
+        try {
+            val success = consumer?.invoke(item) ?: false
+            if (!success) {
+                handleFailure(workerId, item, "Consumer returned false")
+            }
+        } catch (e: Exception) {
+            LogManager.logWarn("QUEUE", "Worker $workerId error in queue $name: ${e.message}")
+            handleFailure(workerId, item, e.message ?: "Unknown error")
+        }
+    }
+
+    private suspend fun handleFailure(workerId: Int, item: QueueItem, error: String) {
+        val nextRetry = item.retryCount + 1
+        if (nextRetry >= config.maxRetry) {
+            LogManager.logWarn(
+                "QUEUE",
+                "Queue $name item exhausted after $nextRetry retries, sending to dead letter"
+            )
+            DeadLetterHandler.handle(item.copy(retryCount = nextRetry), name, error)
+            return
+        }
+
+        // Backoff delay before re-enqueue
+        val backoffMs = calculateBackoff(nextRetry)
+        LogManager.logDebug(
+            "QUEUE",
+            "Worker $workerId retrying in ${backoffMs}ms (attempt $nextRetry/${config.maxRetry})"
+        )
+        delay(backoffMs)
+        enqueue(item.copy(retryCount = nextRetry))
+    }
+
+    private fun calculateBackoff(retryCount: Int): Long {
+        val backoff = config.backoff
+        val initial = config.retryInterval.millis
+        return if (backoff == null) {
+            initial
+        } else {
+            val computed =
+                when (backoff.type) {
+                    BackoffType.exponential ->
+                        (backoff.initial.millis * Math.pow(2.0, retryCount.toDouble())).toLong()
+                    BackoffType.linear -> backoff.initial.millis * (retryCount + 1)
+                }
+            minOf(computed, backoff.max.millis)
+        }
     }
 
     override fun stop() {
         workers.forEach { it.cancel() }
         workers.clear()
         wakeSignal.close()
-        // 重建 Channel 以支持后续可能的 start() 调用
         wakeSignal = Channel(Channel.CONFLATED)
         LogManager.logDebug("QUEUE", "Memory queue $name stopped")
     }
@@ -142,3 +188,4 @@ class MemoryQueue(
         this.consumer = consumer
     }
 }
+

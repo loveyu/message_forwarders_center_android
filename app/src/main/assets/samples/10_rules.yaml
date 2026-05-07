@@ -214,5 +214,5 @@ rules:
 deadLetter:
   enabled: true
   maxRetry: 3
-  action:
+  pipeline:
     - to: [clipboard_out]               # 重试失败后保存到剪贴板

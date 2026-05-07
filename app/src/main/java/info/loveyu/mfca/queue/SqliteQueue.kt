@@ -6,6 +6,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import info.loveyu.mfca.config.BackoffType
 import info.loveyu.mfca.config.SqliteQueueConfig
+import info.loveyu.mfca.deadletter.DeadLetterHandler
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.StoragePathResolver
 import kotlinx.coroutines.CoroutineScope
@@ -53,6 +54,10 @@ class SqliteQueue(
     }
 
     override fun enqueue(item: QueueItem): Boolean {
+        if (item.isDeadLetter) {
+            LogManager.logWarn("QUEUE", "Rejected dead-letter item in sqlite queue $name")
+            return false
+        }
         val db = dbHelper.writableDatabase
         val values = ContentValues().apply {
             put("data", item.data)
@@ -198,27 +203,31 @@ class SqliteQueue(
             try {
                 val success = consumer?.invoke(item) ?: false
                 if (!success) {
-                    handleRetry(item)
+                    handleRetry(item, "Consumer returned false")
                 }
             } catch (e: Exception) {
                 LogManager.logWarn("QUEUE", "Error processing item in queue $name: ${e.message}")
-                handleRetry(item)
+                handleRetry(item, e.message ?: "Unknown error")
             }
         }
     }
 
-    private fun handleRetry(item: QueueItem) {
-        if (item.retryCount < config.maxRetry) {
+    private fun handleRetry(item: QueueItem, error: String = "Consumer failure") {
+        val nextRetry = item.retryCount + 1
+        if (nextRetry >= config.maxRetry) {
+            LogManager.logWarn(
+                "QUEUE",
+                "Item exceeded max retries in queue $name, moving to dead letter"
+            )
+            DeadLetterHandler.handle(item.copy(retryCount = nextRetry), name, error)
+        } else {
             val nextAttemptAt = System.currentTimeMillis() + calculateBackoff(item.retryCount)
             enqueue(
                 item.copy(
-                    retryCount = item.retryCount + 1,
+                    retryCount = nextRetry,
                     nextAttemptAt = nextAttemptAt
                 )
             )
-        } else {
-            LogManager.logWarn("QUEUE", "Item exceeded max retries in queue $name, moving to dead letter")
-            // TODO: Move to dead letter queue
         }
     }
 

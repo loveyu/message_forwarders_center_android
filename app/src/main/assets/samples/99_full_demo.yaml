@@ -197,7 +197,7 @@ rules:
 deadLetter:
   enabled: true
   maxRetry: 5
-  action:
+  pipeline:
     # 失败后保存到独立文件
     - to: [raw_data_log]
 

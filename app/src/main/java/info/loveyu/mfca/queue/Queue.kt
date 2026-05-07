@@ -29,6 +29,8 @@ enum class QueueType {
 
 /**
  * 队列项
+ *
+ * isDeadLetter: 死信标记。标记为 true 的消息不允许再次入队，队列消费时也会跳过 queue/onFailureQueue 逻辑。
  */
 data class QueueItem(
     val id: Long = System.currentTimeMillis(),
@@ -39,7 +41,8 @@ data class QueueItem(
     val enqueuedAt: Long = System.currentTimeMillis(),
     val retryCount: Int = 0,
     val nextAttemptAt: Long = enqueuedAt,
-    val tag: String = ""
+    val tag: String = "",
+    val isDeadLetter: Boolean = false
 ) {
     val text: String
         get() = String(data)
@@ -55,6 +58,7 @@ data class QueueItem(
 }
 
 /**
- * 队列消费者回调
+ * 队列消费者回调（挂起函数，支持异步等待结果）
+ * 返回 true 表示处理成功，false 触发队列层重试逻辑
  */
-typealias QueueConsumer = (QueueItem) -> Boolean
+typealias QueueConsumer = suspend (QueueItem) -> Boolean

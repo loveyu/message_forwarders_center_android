@@ -228,11 +228,16 @@ object ConfigLoader {
         val result = mutableMapOf<String, MemoryQueueConfig>()
         (memory as Map<String, Any>).forEach { (name, config) ->
             (config as? Map<String, Any>)?.let { map ->
-                result[name] = MemoryQueueConfig(
-                    capacity = (map["capacity"] as? Number)?.toInt() ?: 1000,
-                    workers = (map["workers"] as? Number)?.toInt() ?: 2,
-                    overflow = parseOverflowStrategy(map["overflow"] as? String)
-                )
+                result[name] =
+                    MemoryQueueConfig(
+                        capacity = (map["capacity"] as? Number)?.toInt() ?: 1000,
+                        workers = (map["workers"] as? Number)?.toInt() ?: 1,
+                        overflow = parseOverflowStrategy(map["overflow"] as? String),
+                        retryInterval =
+                            Duration(map["retryInterval"] as? String ?: "5s"),
+                        maxRetry = (map["maxRetry"] as? Number)?.toInt() ?: 10,
+                        backoff = parseBackoff(map["backoff"])
+                    )
             }
         }
         return result
@@ -483,7 +488,7 @@ object ConfigLoader {
         return DeadLetterConfig(
             enabled = map["enabled"] as? Boolean ?: false,
             maxRetry = (map["maxRetry"] as? Number)?.toInt() ?: 10,
-            action = parsePipeline(map["action"])
+            pipeline = parsePipeline(map["pipeline"])
         )
     }
 
