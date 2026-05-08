@@ -42,10 +42,11 @@ Link type is auto-detected via DSN protocol (`mqtt://`, `ws://`, `tcp://`). Conn
 Each output supports instant retry (`retry`) and async failure queue (`onFailureQueue`).
 
 ### Rule Engine (RuleEngine)
-Execution order: `decode -> detect -> enrich -> filter -> extract -> format -> output`
+Execution order: `call -> decode -> detect -> enrich -> filter -> extract -> format -> output`
 
 | Option | Description |
 |--------|-------------|
+| `call` | Invoke named HTTP call resources, inject results as variables for subsequent steps |
 | `decode` | Pipeline decoding (`base64Decode|jsonDecode`) |
 | `detect` | Type detection (`image`/`json`/`text`) |
 | `enrich` | Data enrichment (Gotify icon, etc.) |
@@ -92,6 +93,7 @@ Unified Ticker drives all periodic checks (default 40s, shorter when charging). 
 | [`16_encode.yaml`](app/src/main/assets/samples/16_encode.yaml) | Data encoding |
 | [`17_fail_queue.yaml`](app/src/main/assets/samples/17_fail_queue.yaml) | Failure queue retry (onFailureQueue) |
 | [`18_output_format.yaml`](app/src/main/assets/samples/18_output_format.yaml) | Output formatting |
+| [`19_call_resource.yaml`](app/src/main/assets/samples/19_call_resource.yaml) | Call resources - invoke external HTTP services from pipeline |
 | [`99_full_demo.yaml`](app/src/main/assets/samples/99_full_demo.yaml) | Full demo (combined example) |
 
 ## Status Bar / Service Status Display

@@ -42,10 +42,11 @@ Android 消息转发中心 - Service 常驻架构
 每个输出支持即时重试（`retry`）和异步失败队列（`onFailureQueue`）。
 
 ### 规则引擎 (RuleEngine)
-执行顺序：`decode → detect → enrich → filter → extract → format → output`
+执行顺序：`call → decode → detect → enrich → filter → extract → format → output`
 
 | 选项 | 说明 |
 |------|------|
+| `call` | 调用顶层定义的 HTTP Call 资源，将结果注入为命名变量供后续步骤使用 |
 | `decode` | 管道解码（`base64Decode|jsonDecode`） |
 | `detect` | 类型检测（`image`/`json`/`text`） |
 | `enrich` | 数据富化（Gotify 图标等） |
@@ -92,6 +93,7 @@ Android 消息转发中心 - Service 常驻架构
 | [`16_encode.yaml`](app/src/main/assets/samples/16_encode.yaml) | 数据编码封装 |
 | [`17_fail_queue.yaml`](app/src/main/assets/samples/17_fail_queue.yaml) | 失败队列重试（onFailureQueue） |
 | [`18_output_format.yaml`](app/src/main/assets/samples/18_output_format.yaml) | 输出格式化 |
+| [`19_call_resource.yaml`](app/src/main/assets/samples/19_call_resource.yaml) | Call 资源调用 - 在 pipeline 中调用外部 HTTP 服务并注入结果 |
 | [`99_full_demo.yaml`](app/src/main/assets/samples/99_full_demo.yaml) | 完整演示 (组合示例) |
 
 ## 状态栏 / 服务状态显示
