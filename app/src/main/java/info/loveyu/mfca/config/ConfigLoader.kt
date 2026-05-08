@@ -29,6 +29,7 @@ object ConfigLoader {
                 inputs = parseInputs(data["inputs"]),
                 queues = parseQueues(data["queues"]),
                 outputs = parseOutputs(data["outputs"]),
+                calls = parseCalls(data["call"]),
                 rules = parseRules(data["rules"]),
                 deadLetter = parseDeadLetter(data["deadLetter"]),
                 quickSettings = parseQuickSettings(data["quickSettings"]),
@@ -468,6 +469,7 @@ object ConfigLoader {
         val rawFormat = map["format"]
         val formatSteps = if (rawFormat is List<*>) parseFormatSteps(rawFormat) else null
         val formatStr = if (rawFormat is String) rawFormat else null
+        val callSteps = parseCallSteps(map["call"])
         return TransformConfig(
             decode = map["decode"] as? String,
             extract = map["extract"] as? String,
@@ -475,8 +477,72 @@ object ConfigLoader {
             detect = map["detect"] as? String,
             format = formatStr,
             enrich = map["enrich"] as? String,
-            formatSteps = formatSteps
+            formatSteps = formatSteps,
+            call = callSteps,
+            breakOnReject = map["breakOnReject"] as? Boolean ?: false
         )
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun parseCallSteps(raw: Any?): List<Map<String, String>>? {
+        if (raw == null) return null
+        val list = raw as? List<*> ?: return null
+        return list.mapNotNull { item ->
+            val m = item as? Map<*, *> ?: return@mapNotNull null
+            m.entries
+                .filter { it.key is String && it.value is String }
+                .associate { it.key as String to it.value as String }
+                .takeIf { it.isNotEmpty() }
+        }
+    }
+
+    // ==================== Calls Parsing ====================
+
+    @Suppress("UNCHECKED_CAST")
+    private fun parseCalls(calls: Any?): List<CallConfig> {
+        if (calls == null) return emptyList()
+        val list = calls as? List<*> ?: return emptyList()
+        return list.mapNotNull { item ->
+            val m = item as? Map<*, *> ?: return@mapNotNull null
+            val map = m as Map<String, Any>
+            val name = map["name"] as? String ?: return@mapNotNull null
+            val typeStr = map["type"] as? String ?: "http"
+            val type =
+                try {
+                    CallType.valueOf(typeStr)
+                } catch (_: IllegalArgumentException) {
+                    CallType.http
+                }
+            val headers =
+                (map["headers"] as? Map<*, *>)
+                    ?.entries
+                    ?.mapNotNull { e ->
+                        val k = e.key as? String ?: return@mapNotNull null
+                        val v = e.value?.toString() ?: return@mapNotNull null
+                        k to v
+                    }
+                    ?.toMap() ?: emptyMap()
+            val retryMap = map["retry"] as? Map<*, *>
+            val retry =
+                if (retryMap != null) {
+                    val rm = retryMap as Map<String, Any>
+                    RetryConfig(
+                        maxAttempts = (rm["maxAttempts"] as? Number)?.toInt() ?: 3,
+                        interval = Duration(rm["interval"] as? String ?: "1s"),
+                    )
+                } else null
+            CallConfig(
+                name = name,
+                type = type,
+                url = map["url"] as? String ?: "",
+                method = (map["method"] as? String)?.uppercase() ?: "POST",
+                headers = headers,
+                body = map["body"] as? String,
+                response = map["response"] as? String,
+                timeout = Duration(map["timeout"] as? String ?: "15s"),
+                retry = retry,
+            )
+        }
     }
 
     // ==================== Dead Letter Parsing ====================

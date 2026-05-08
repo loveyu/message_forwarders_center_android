@@ -4,6 +4,7 @@ import android.content.Context
 import android.provider.Settings
 import info.loveyu.mfca.clipboard.ClipboardHistoryDbHelper
 import info.loveyu.mfca.config.AppConfig
+import info.loveyu.mfca.config.CallConfig
 import info.loveyu.mfca.config.RuleConfig
 import info.loveyu.mfca.input.InputMessage
 import info.loveyu.mfca.output.FanOut
@@ -19,11 +20,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * 规则引擎
@@ -36,6 +43,7 @@ class RuleEngine(
 ) {
     private val rules = mutableMapOf<String, RuleConfig>()
     private val inputRulesMap = ConcurrentHashMap<String, MutableList<RuleConfig>>()
+    private val callConfigs = ConcurrentHashMap<String, CallConfig>()
 
     // 表达式引擎
     private val expressionEngine = ExpressionEngine()
@@ -47,6 +55,15 @@ class RuleEngine(
     // Enrichers
     private val enrichers = ConcurrentHashMap<String, Enricher>()
 
+    // 共享 OkHttpClient，用于 call 资源的 HTTP 请求
+    private val callHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build()
+    }
+
     init {
         config.rules.forEach { rule ->
             rules[rule.name] = rule
@@ -54,6 +71,9 @@ class RuleEngine(
             fromValues.forEach { from ->
                 inputRulesMap.getOrPut(from) { mutableListOf() }.add(rule)
             }
+        }
+        config.calls.forEach { call ->
+            callConfigs[call.name] = call
         }
 
         // Register built-in enrichers
@@ -195,12 +215,34 @@ class RuleEngine(
         LogManager.logDebug("RULE", "Processing rule: ${rule.name} (${rule.pipeline.size} steps)")
 
         var currentData = inputMessage.data
+        var currentHeaders = inputMessage.headers
         // 跟踪已解析的 JSONObject，数据不变时复用
         var currentJson: JSONObject? = parseJson(currentData)
 
         for (step in rule.pipeline) {
             val transform = step.transform
             var skipStep = false
+
+            // Execute call steps first (before other transforms)
+            if (!skipStep && transform?.call != null) {
+                try {
+                    val (newData, newHeaders) =
+                        executeCallSteps(
+                            transform.call,
+                            currentData,
+                            currentHeaders,
+                            buildRuleContext(rule.name, inputMessage.copy(headers = currentHeaders)),
+                            rule.name,
+                        )
+                    if (newData !== currentData) {
+                        currentData = newData
+                        currentJson = parseJson(currentData)
+                    }
+                    currentHeaders = newHeaders
+                } catch (e: Exception) {
+                    LogManager.logWarn("RULE", "Rule [${rule.name}] call steps failed: ${e.message}")
+                }
+            }
 
             // Apply decode before detect
             if (transform?.decode != null) {
@@ -243,7 +285,7 @@ class RuleEngine(
             // Apply filter before extract (先过滤，再提取)
             if (!skipStep && transform?.filter != null) {
                 val passed = withContext(Dispatchers.Default) {
-                    expressionEngine.executeTwoPhaseFilter(transform.filter!!, currentJson, currentData, inputMessage.headers)
+                    expressionEngine.executeTwoPhaseFilter(transform.filter!!, currentJson, currentData, currentHeaders)
                 }
                 if (!passed) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] filter [${transform.filter}] -> REJECTED")
@@ -260,7 +302,8 @@ class RuleEngine(
 
             // Apply extract + format if present (过滤通过后再提取)
             if (!skipStep && transform != null) {
-                val transformed = applyTransform(transform, currentData, currentJson, inputMessage, rule.name)
+                val msgForTransform = inputMessage.copy(headers = currentHeaders)
+                val transformed = applyTransform(transform, currentData, currentJson, msgForTransform, rule.name)
                 if (transformed == null) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] extract [${transform.extract}] -> null, SKIPPED")
                     skipStep = true
@@ -301,11 +344,12 @@ class RuleEngine(
                         return@forEach
                     }
                     if (LogManager.isDebugEnabled()) {
-                        LogManager.logDebug("RULE", "Rule [${rule.name}] output -> $outputName: sending, dataLen=${currentData.size}, headers=${expressionEngine.truncateForLog(inputMessage.headers.toString())}")
+                        LogManager.logDebug("RULE", "Rule [${rule.name}] output -> $outputName: sending, dataLen=${currentData.size}, headers=${expressionEngine.truncateForLog(currentHeaders.toString())}")
                     }
-                    val ruleCtx = buildRuleContext(rule.name, inputMessage)
+                    val effectiveMsg = inputMessage.copy(headers = currentHeaders)
+                    val ruleCtx = buildRuleContext(rule.name, effectiveMsg)
                     val (outData, outHeaders) =
-                        applyOutputFormat(output, currentData, inputMessage.headers, ruleCtx)
+                        applyOutputFormat(output, currentData, currentHeaders, ruleCtx)
                     dispatchToOutput(output, outputName, outData, outHeaders, rule.name, inputMessage.source, onForwarded, inputMessage.isDeadLetter)
                 } else {
                     LogManager.logWarn("RULE", "Rule [${rule.name}] output not found: $outputName")
@@ -318,11 +362,33 @@ class RuleEngine(
         LogManager.logDebug("RULE", "Processing rule (sync): ${rule.name} (${rule.pipeline.size} steps)")
 
         var currentData = inputMessage.data
+        var currentHeaders = inputMessage.headers
         var currentJson: JSONObject? = parseJson(currentData)
 
         for (step in rule.pipeline) {
             val transform = step.transform
             var skipStep = false
+
+            // Execute call steps first (before other transforms)
+            if (!skipStep && transform?.call != null) {
+                try {
+                    val (newData, newHeaders) =
+                        executeCallStepsSync(
+                            transform.call,
+                            currentData,
+                            currentHeaders,
+                            buildRuleContext(rule.name, inputMessage.copy(headers = currentHeaders)),
+                            rule.name,
+                        )
+                    if (newData !== currentData) {
+                        currentData = newData
+                        currentJson = parseJson(currentData)
+                    }
+                    currentHeaders = newHeaders
+                } catch (e: Exception) {
+                    LogManager.logWarn("RULE", "Rule [${rule.name}] call steps failed: ${e.message}")
+                }
+            }
 
             // Apply decode before detect
             if (transform?.decode != null) {
@@ -366,7 +432,7 @@ class RuleEngine(
 
             // Apply filter before extract (先过滤，再提取)
             if (!skipStep && transform?.filter != null) {
-                if (!expressionEngine.executeTwoPhaseFilter(transform.filter!!, currentJson, currentData, inputMessage.headers)) {
+                if (!expressionEngine.executeTwoPhaseFilter(transform.filter!!, currentJson, currentData, currentHeaders)) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] filter [${transform.filter}] -> REJECTED")
                     skipStep = true
                 } else {
@@ -381,7 +447,8 @@ class RuleEngine(
 
             // Apply extract + format if present (过滤通过后再提取)
             if (!skipStep && transform != null) {
-                val transformed = applyTransform(transform, currentData, currentJson, inputMessage, rule.name)
+                val msgForTransform = inputMessage.copy(headers = currentHeaders)
+                val transformed = applyTransform(transform, currentData, currentJson, msgForTransform, rule.name)
                 if (transformed == null) {
                     LogManager.logDebug("RULE", "Rule [${rule.name}] extract [${transform.extract}] -> null, SKIPPED")
                     skipStep = true
@@ -420,11 +487,12 @@ class RuleEngine(
                         return@forEach
                     }
                     if (LogManager.isDebugEnabled()) {
-                        LogManager.logDebug("RULE", "Rule [${rule.name}] output -> $outputName: sending, dataLen=${currentData.size}, headers=${expressionEngine.truncateForLog(inputMessage.headers.toString())}")
+                        LogManager.logDebug("RULE", "Rule [${rule.name}] output -> $outputName: sending, dataLen=${currentData.size}, headers=${expressionEngine.truncateForLog(currentHeaders.toString())}")
                     }
-                    val ruleCtx = buildRuleContext(rule.name, inputMessage)
+                    val effectiveMsg = inputMessage.copy(headers = currentHeaders)
+                    val ruleCtx = buildRuleContext(rule.name, effectiveMsg)
                     val (outData, outHeaders) =
-                        applyOutputFormat(output, currentData, inputMessage.headers, ruleCtx)
+                        applyOutputFormat(output, currentData, currentHeaders, ruleCtx)
                     dispatchToOutput(output, outputName, outData, outHeaders, rule.name, inputMessage.source, onForwarded, inputMessage.isDeadLetter)
                 } else {
                     LogManager.logWarn("RULE", "Rule [${rule.name}] output not found: $outputName")
@@ -708,6 +776,349 @@ class RuleEngine(
     fun getAllRules(): Map<String, RuleConfig> = rules.toMap()
 
     fun getExpressionEngine(): ExpressionEngine = expressionEngine
+
+    // ==================== Call Step Execution ====================
+
+    /**
+     * 执行 transform.call 列表中的所有调用步骤（suspend 版本）。
+     * 返回更新后的 (data, headers) 对。
+     */
+    private suspend fun executeCallSteps(
+        callSteps: List<Map<String, String>>,
+        data: ByteArray,
+        headers: Map<String, String>,
+        context: Map<String, String>,
+        ruleName: String
+    ): Pair<ByteArray, Map<String, String>> {
+        var currentData = data
+        var currentHeaders = headers
+        val callVars = mutableMapOf<String, Any?>()
+
+        for (step in callSteps) {
+            for ((varName, callExpr) in step) {
+                try {
+                    val result =
+                        executeCallExpression(callExpr, currentData, currentHeaders, context, callVars, ruleName)
+                    callVars[varName] = result
+                    // If result is a map with data/headers keys, override pipeline vars
+                    val resultMap = toMap(result)
+                    if (resultMap != null) {
+                        if (resultMap.containsKey("data")) {
+                            val newData = resultMap["data"]
+                            currentData = expressionEngine.anyValueToString(newData).toByteArray()
+                        }
+                        if (resultMap.containsKey("headers")) {
+                            val newHeaders = resultMap["headers"]
+                            if (newHeaders is Map<*, *>) {
+                                currentHeaders =
+                                    newHeaders.entries
+                                        .mapNotNull { e ->
+                                            val k = e.key?.toString() ?: return@mapNotNull null
+                                            val v = e.value?.toString() ?: return@mapNotNull null
+                                            k to v
+                                        }
+                                        .toMap()
+                            }
+                        }
+                    }
+                    LogManager.logDebug("RULE", "Rule [$ruleName] call [$varName = $callExpr] -> OK")
+                } catch (e: Exception) {
+                    LogManager.logWarn("RULE", "Rule [$ruleName] call [$varName = $callExpr] failed: ${e.message}")
+                    callVars[varName] = null
+                }
+            }
+        }
+        return currentData to currentHeaders
+    }
+
+    /**
+     * 同步版本的 call 步骤执行（processRuleSync 使用）。
+     */
+    private fun executeCallStepsSync(
+        callSteps: List<Map<String, String>>,
+        data: ByteArray,
+        headers: Map<String, String>,
+        context: Map<String, String>,
+        ruleName: String
+    ): Pair<ByteArray, Map<String, String>> {
+        var currentData = data
+        var currentHeaders = headers
+        val callVars = mutableMapOf<String, Any?>()
+
+        for (step in callSteps) {
+            for ((varName, callExpr) in step) {
+                try {
+                    val result =
+                        executeCallExpressionSync(callExpr, currentData, currentHeaders, context, callVars, ruleName)
+                    callVars[varName] = result
+                    val resultMap = toMap(result)
+                    if (resultMap != null) {
+                        if (resultMap.containsKey("data")) {
+                            currentData = expressionEngine.anyValueToString(resultMap["data"]).toByteArray()
+                        }
+                        if (resultMap.containsKey("headers")) {
+                            val newHeaders = resultMap["headers"]
+                            if (newHeaders is Map<*, *>) {
+                                currentHeaders =
+                                    newHeaders.entries
+                                        .mapNotNull { e ->
+                                            val k = e.key?.toString() ?: return@mapNotNull null
+                                            val v = e.value?.toString() ?: return@mapNotNull null
+                                            k to v
+                                        }
+                                        .toMap()
+                            }
+                        }
+                    }
+                    LogManager.logDebug("RULE", "Rule [$ruleName] call [$varName = $callExpr] -> OK")
+                } catch (e: Exception) {
+                    LogManager.logWarn("RULE", "Rule [$ruleName] call [$varName = $callExpr] failed: ${e.message}")
+                    callVars[varName] = null
+                }
+            }
+        }
+        return currentData to currentHeaders
+    }
+
+    /**
+     * 解析并执行一个 call 表达式，如 "resource-upload(headers, data)"。
+     */
+    private suspend fun executeCallExpression(
+        callExpr: String,
+        data: ByteArray,
+        headers: Map<String, String>,
+        context: Map<String, String>,
+        callVars: Map<String, Any?>,
+        ruleName: String
+    ): Any? {
+        val match = ExpressionEngine.FUNC_CALL_REGEX.find(callExpr.trim())
+            ?: throw IllegalArgumentException("Invalid call expression: $callExpr")
+        val callName = match.groupValues[1]
+        val argsStr = match.groupValues[2]
+        val argNames = expressionEngine.parseFunctionArgs(argsStr).map { it.trim() }
+        val resolvedArgs = resolveCallArgs(argNames, data, headers, callVars)
+
+        val callConfig = callConfigs[callName]
+            ?: throw IllegalArgumentException("Unknown call resource: $callName")
+
+        return withContext(Dispatchers.IO) {
+            executeHttpCall(callConfig, resolvedArgs, data, headers, context, callVars, ruleName)
+        }
+    }
+
+    /** 同步版本 */
+    private fun executeCallExpressionSync(
+        callExpr: String,
+        data: ByteArray,
+        headers: Map<String, String>,
+        context: Map<String, String>,
+        callVars: Map<String, Any?>,
+        ruleName: String
+    ): Any? {
+        val match = ExpressionEngine.FUNC_CALL_REGEX.find(callExpr.trim())
+            ?: throw IllegalArgumentException("Invalid call expression: $callExpr")
+        val callName = match.groupValues[1]
+        val argsStr = match.groupValues[2]
+        val argNames = expressionEngine.parseFunctionArgs(argsStr).map { it.trim() }
+        val resolvedArgs = resolveCallArgs(argNames, data, headers, callVars)
+
+        val callConfig = callConfigs[callName]
+            ?: throw IllegalArgumentException("Unknown call resource: $callName")
+
+        return executeHttpCallSync(callConfig, resolvedArgs, data, headers, context, callVars, ruleName)
+    }
+
+    /** 将调用参数名解析为具体值 */
+    private fun resolveCallArgs(
+        argNames: List<String>,
+        data: ByteArray,
+        headers: Map<String, String>,
+        callVars: Map<String, Any?>
+    ): List<Any?> =
+        argNames.map { name ->
+            when {
+                name == "data" -> String(data)
+                name == "headers" -> headers
+                callVars.containsKey(name) -> callVars[name]
+                else -> name // treat as string literal
+            }
+        }
+
+    /**
+     * 执行 HTTP call 资源请求（suspend 版本）。
+     * url/headers/body 模板中可使用 {args[N]} 等，response 模板处理响应。
+     */
+    private suspend fun executeHttpCall(
+        config: CallConfig,
+        args: List<Any?>,
+        data: ByteArray,
+        headers: Map<String, String>,
+        context: Map<String, String>,
+        callVars: Map<String, Any?>,
+        ruleName: String
+    ): Any? {
+        val maxAttempts = config.retry?.maxAttempts ?: 1
+        var lastException: Exception? = null
+        repeat(maxAttempts) { attempt ->
+            try {
+                val result = doHttpCall(config, args, data, headers, context, callVars)
+                return result
+            } catch (e: Exception) {
+                lastException = e
+                if (attempt < maxAttempts - 1) {
+                    val interval = config.retry?.interval?.millis ?: 1000L
+                    LogManager.logDebug("RULE", "Rule [$ruleName] call [${config.name}] retry ${attempt + 1}/$maxAttempts after ${interval}ms")
+                    delay(interval)
+                }
+            }
+        }
+        throw lastException ?: IllegalStateException("HTTP call failed after $maxAttempts attempts")
+    }
+
+    /** 同步版本 */
+    private fun executeHttpCallSync(
+        config: CallConfig,
+        args: List<Any?>,
+        data: ByteArray,
+        headers: Map<String, String>,
+        context: Map<String, String>,
+        callVars: Map<String, Any?>,
+        ruleName: String
+    ): Any? {
+        val maxAttempts = config.retry?.maxAttempts ?: 1
+        var lastException: Exception? = null
+        repeat(maxAttempts) { attempt ->
+            try {
+                return doHttpCall(config, args, data, headers, context, callVars)
+            } catch (e: Exception) {
+                lastException = e
+                if (attempt < maxAttempts - 1) {
+                    val interval = config.retry?.interval?.millis ?: 1000L
+                    Thread.sleep(interval)
+                }
+            }
+        }
+        throw lastException ?: IllegalStateException("HTTP call failed after $maxAttempts attempts")
+    }
+
+    /**
+     * 实际发起 HTTP 请求（OkHttp 同步调用，可在 IO 线程或 runBlocking 中使用）。
+     */
+    private fun doHttpCall(
+        config: CallConfig,
+        args: List<Any?>,
+        data: ByteArray,
+        headers: Map<String, String>,
+        context: Map<String, String>,
+        callVars: Map<String, Any?>
+    ): Any? {
+        val timeoutMillis = config.timeout.millis
+
+        // Build a per-request client with the configured timeout
+        val client = callHttpClient.newBuilder()
+            .connectTimeout(timeoutMillis, TimeUnit.MILLISECONDS)
+            .readTimeout(timeoutMillis, TimeUnit.MILLISECONDS)
+            .writeTimeout(timeoutMillis, TimeUnit.MILLISECONDS)
+            .build()
+
+        // Evaluate URL template
+        val url = expressionEngine.evaluateFormatTemplateWithExtras(
+            config.url, data, headers, context, args, callVars
+        )
+
+        // Evaluate request headers
+        val requestHeaders = config.headers.mapValues { (_, v) ->
+            expressionEngine.evaluateFormatTemplateWithExtras(v, data, headers, context, args, callVars)
+        }
+
+        // Evaluate body template (defaults to current data if not set)
+        val bodyStr = if (config.body != null) {
+            expressionEngine.evaluateFormatTemplateWithExtras(config.body, data, headers, context, args, callVars)
+        } else {
+            String(data)
+        }
+        val contentType = requestHeaders["content-type"]
+            ?: requestHeaders["Content-Type"]
+            ?: "application/octet-stream"
+        val requestBody = bodyStr.toRequestBody(contentType.toMediaType())
+
+        val requestBuilder = Request.Builder().url(url)
+        requestHeaders.forEach { (k, v) -> requestBuilder.header(k, v) }
+        requestBuilder.method(config.method, if (config.method == "GET" || config.method == "HEAD") null else requestBody)
+
+        client.newCall(requestBuilder.build()).execute().use { response ->
+            val responseCode = response.code
+            val responseBody = response.body?.string() ?: ""
+            val responseHeaders =
+                response.headers.names().associate { name ->
+                    name to (response.headers[name] ?: "")
+                }
+            LogManager.logDebug(
+                "RULE",
+                "Call [${config.name}] ${config.method} $url -> $responseCode, bodyLen=${responseBody.length}"
+            )
+            return evaluateResponseTemplate(config.response, responseBody, responseHeaders, responseCode, data, headers, context, args, callVars)
+        }
+    }
+
+    /**
+     * 处理 response 模板，生成 call 调用的最终结果值。
+     * 如果 response 为 null，返回原始响应体字符串。
+     * 模板中 {response} 代表响应体，可返回字符串、map 或 list。
+     */
+    private fun evaluateResponseTemplate(
+        template: String?,
+        responseBody: String,
+        responseHeaders: Map<String, String>,
+        responseCode: Int,
+        data: ByteArray,
+        headers: Map<String, String>,
+        context: Map<String, String>,
+        args: List<Any?>,
+        callVars: Map<String, Any?>
+    ): Any? {
+        if (template == null) {
+            return tryParseJson(responseBody) ?: responseBody
+        }
+        val extendedContext =
+            context + mapOf(
+                "responseCode" to responseCode.toString(),
+                "response" to responseBody,
+            )
+        val extendedCallVars = callVars + mapOf("response" to (tryParseJson(responseBody) ?: responseBody))
+        val responseHeaders2 = headers + responseHeaders.mapKeys { "response.${it.key}" }
+        val evaluated = expressionEngine.evaluateFormatTemplateWithExtras(
+            template, data, responseHeaders2, extendedContext, args, extendedCallVars
+        )
+        return tryParseJson(evaluated) ?: evaluated
+    }
+
+    private fun tryParseJson(str: String): Any? {
+        if (str.isBlank()) return null
+        return try {
+            JSONObject(str)
+        } catch (_: Exception) {
+            try {
+                org.json.JSONArray(str)
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
+    private fun toMap(value: Any?): Map<String, Any?>? {
+        if (value == null) return null
+        if (value is JSONObject) {
+            return value.keys().asSequence().associateWith { key -> value.opt(key) }
+        }
+        if (value is Map<*, *>) {
+            @Suppress("UNCHECKED_CAST")
+            return value as? Map<String, Any?>
+        }
+        return null
+    }
+
+    // ==================== Enrich ====================
 
     /**
      * Apply enrich step: parse "type:parameter" → find enricher → call enrich()

@@ -52,7 +52,8 @@ class ExpressionEngine {
         // 预编译正则，避免热路径每次重新编译
         private val ARRAY_ACCESS_REGEX = Regex("""\[(\d+)\](.*)""")
         private val PATH_PART_REGEX = Regex("""\.?(\w+)?\[(\d+)\]""")
-        private val FUNC_CALL_REGEX = Regex("""^(\w+)\((.*)\)$""")
+        internal val FUNC_CALL_REGEX = Regex("""^(\w+)\((.*)\)$""")
+        private val ARGS_INDEX_REGEX = Regex("""^args\[(\d+)\](?:\.(.+))?$""")
     }
 
     // 预编译表达式缓存
@@ -1674,7 +1675,7 @@ class ExpressionEngine {
         }
     }
 
-    private fun parseFunctionArgs(argsStr: String): List<String> {
+    internal fun parseFunctionArgs(argsStr: String): List<String> {
         if (argsStr.isEmpty()) return emptyList()
 
         val args = mutableListOf<String>()
@@ -2098,6 +2099,158 @@ class ExpressionEngine {
             }
         }
         return result.toString().toByteArray()
+    }
+
+    /**
+     * 将任意值转换为字符串，用于 call 参数/结果序列化。
+     * Map/JSONObject/JSONArray 序列化为 JSON 字符串，其他直接 toString。
+     */
+    internal fun anyValueToString(value: Any?): String {
+        if (value == null) return ""
+        return when (value) {
+            is Map<*, *> -> JSONObject(value as Map<*, *>).toString()
+            is List<*> -> {
+                val arr = org.json.JSONArray()
+                value.forEach { arr.put(it) }
+                arr.toString()
+            }
+            is org.json.JSONArray -> value.toString()
+            is JSONObject -> value.toString()
+            else -> value.toString()
+        }
+    }
+
+    /**
+     * 从任意值中按路径提取子值，用于 call 变量的 {varName.path} 提取。
+     * value 可以是 JSONObject、Map、JSONArray、List 或字符串（尝试解析为 JSON）。
+     */
+    internal fun extractFromAny(value: Any?, path: String): Any? {
+        if (value == null || path.isBlank()) return value
+        val json =
+            when (value) {
+                is JSONObject -> value
+                is Map<*, *> ->
+                    try {
+                        JSONObject(value as Map<*, *>)
+                    } catch (_: Exception) {
+                        null
+                    }
+                is String ->
+                    try {
+                        JSONObject(value)
+                    } catch (_: Exception) {
+                        null
+                    }
+                else -> null
+            }
+        return if (json != null) extractPath(json, path, emptyMap()) else null
+    }
+
+    /**
+     * 带有扩展上下文的格式化模板求值。
+     * 在标准格式化功能基础上支持：
+     * - {args[N]} / {args[N].path} — 对应 callArgs 列表中的参数
+     * - {varName} / {varName.path} — 对应 callVars 中的已命名变量
+     * - {response} — callVars["response"] 的别名
+     */
+    fun evaluateFormatTemplateWithExtras(
+        template: String,
+        data: ByteArray,
+        headers: Map<String, String>,
+        context: Map<String, String> = emptyMap(),
+        callArgs: List<Any?> = emptyList(),
+        callVars: Map<String, Any?> = emptyMap()
+    ): String {
+        val dataStr = String(data)
+        val json =
+            try {
+                JSONObject(dataStr)
+            } catch (_: Exception) {
+                null
+            }
+        val result = StringBuilder()
+        var i = 0
+        while (i < template.length) {
+            if (template[i] == '{') {
+                if (i + 1 < template.length && template[i + 1] == '{') {
+                    result.append('{')
+                    i += 2
+                    continue
+                }
+                val closeIdx = template.indexOf('}', i + 1)
+                if (closeIdx < 0) {
+                    result.append(template[i])
+                    i++
+                    continue
+                }
+                val expr = template.substring(i + 1, closeIdx).trim()
+                val resolved =
+                    resolveFormatExpressionWithExtras(
+                        expr,
+                        dataStr,
+                        json,
+                        headers,
+                        context,
+                        callArgs,
+                        callVars,
+                    )
+                result.append(resolved)
+                i = closeIdx + 1
+            } else {
+                result.append(template[i])
+                i++
+            }
+        }
+        return result.toString()
+    }
+
+    private fun resolveFormatExpressionWithExtras(
+        expr: String,
+        dataStr: String,
+        json: JSONObject?,
+        headers: Map<String, String>,
+        context: Map<String, String>,
+        callArgs: List<Any?>,
+        callVars: Map<String, Any?>
+    ): String {
+        // {args[N]} or {args[N].path}
+        val argsMatch = ARGS_INDEX_REGEX.find(expr)
+        if (argsMatch != null) {
+            val idx = argsMatch.groupValues[1].toIntOrNull() ?: return ""
+            val path = argsMatch.groupValues[2]
+            val arg = callArgs.getOrNull(idx) ?: return ""
+            return if (path.isBlank()) anyValueToString(arg)
+            else anyValueToString(extractFromAny(arg, path))
+        }
+
+        // {response} → alias for callVars["response"]
+        val effectiveExpr = if (expr == "response") "\$response" else expr
+
+        // {$varName} or {varName} matching a call var
+        if (effectiveExpr.startsWith("\$")) {
+            val varKey = effectiveExpr.substring(1)
+            val dotIdx = varKey.indexOf('.')
+            val baseName = if (dotIdx >= 0) varKey.substring(0, dotIdx) else varKey
+            val subPath = if (dotIdx >= 0) varKey.substring(dotIdx + 1) else ""
+            if (callVars.containsKey(baseName)) {
+                val varValue = callVars[baseName]
+                return if (subPath.isBlank()) anyValueToString(varValue)
+                else anyValueToString(extractFromAny(varValue, subPath))
+            }
+        } else {
+            // bare varName or varName.path
+            val dotIdx = effectiveExpr.indexOf('.')
+            val baseName = if (dotIdx >= 0) effectiveExpr.substring(0, dotIdx) else effectiveExpr
+            val subPath = if (dotIdx >= 0) effectiveExpr.substring(dotIdx + 1) else ""
+            if (callVars.containsKey(baseName)) {
+                val varValue = callVars[baseName]
+                return if (subPath.isBlank()) anyValueToString(varValue)
+                else anyValueToString(extractFromAny(varValue, subPath))
+            }
+        }
+
+        // Fall back to standard expression resolver
+        return resolveFormatExpression(expr, dataStr, json, headers, context)
     }
 
     private fun resolveFormatExpression(

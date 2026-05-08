@@ -8,6 +8,7 @@
 | `inputs` | object |  |  | Input source configurations |
 | `queues` | object |  |  | Queue system configuration |
 | `outputs` | object |  |  | Output sink configurations |
+| `call` | list[object] |  |  | Named call resource definitions (callable from pipeline transform.call) |
 | `rules` | list[object] |  |  | Message forwarding rules |
 | `deadLetter` | object |  |  | Dead-letter handling for messages that exhausted all retries |
 | `quickSettings` | object |  |  | Quick-settings tile configuration |
@@ -371,6 +372,48 @@ Internal output sinks (clipboard, file, broadcast, notify)
 | `name` | string | ✓ |  |  |
 | `delay` | duration |  | `0s` | Enqueue delay before the message is first processed |
 
+## `call`
+
+Named call resource definitions (callable from pipeline transform.call)
+
+- **Type**: list[object]
+
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `name` | string | ✓ |  | Unique call resource name referenced in pipeline transform.call |
+| `type` | enum |  | `http` | Call resource type (currently only http) `http` |
+| `url` | string | ✓ |  | Target URL, supports format templates (e.g. '{args[0]}') |
+| `method` | string |  | `POST` | HTTP method |
+| `headers` | object |  |  | HTTP request headers; values support format templates |
+| `body` | string |  |  | Request body template; if omitted, current data is sent. Supports format templates. |
+| `response` | string |  |  | Response processing template; '{response}' is the raw response body. Can return string, map, or list. If result has 'data'/'headers' keys they override current pipeline variables. |
+| `timeout` | duration |  | `15s` | Request timeout |
+| `retry` | object |  |  | Retry policy |
+
+### `headers`
+
+HTTP request headers; values support format templates
+
+- **Type**: object
+
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `*` | any |  |  | Header value (supports format templates) |
+
+### `retry`
+
+Retry policy
+
+- **Type**: object
+
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `maxAttempts` | int |  | `3` | Maximum number of attempts |
+| `interval` | duration |  | `1s` | Delay between retries |
+
 ## `rules`
 
 Message forwarding rules
@@ -415,6 +458,7 @@ Data transformation to apply
 | `extract` | string |  |  | GJSON path or '$raw', e.g. 'data.temperature' |
 | `format` | string |  |  | Template string, e.g. '{data.title}: {data.message}' |
 | `formatSteps` | list[string] |  |  | Structured format steps (mutually exclusive with format) |
+| `call` | any |  |  | List of call invocations: [{varName: 'callName(arg1, arg2)'}]. Executed sequentially; later entries may use vars from earlier ones. |
 | `breakOnReject` | boolean |  | `false` | Abort pipeline when filter rejects |
 
 ### `onError`
@@ -470,6 +514,7 @@ Data transformation to apply
 | `extract` | string |  |  | GJSON path or '$raw' |
 | `format` | string |  |  | Template string |
 | `formatSteps` | list[string] |  |  | Structured format steps |
+| `call` | any |  |  | List of call invocations: [{varName: 'callName(arg1, arg2)'}]. |
 | `breakOnReject` | boolean |  | `false` | Abort pipeline when filter rejects |
 
 ## `quickSettings`

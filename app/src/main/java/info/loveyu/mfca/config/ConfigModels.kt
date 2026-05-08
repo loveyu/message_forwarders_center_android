@@ -19,6 +19,7 @@ data class AppConfig(
     val inputs: InputsConfig = InputsConfig(),
     val queues: QueuesConfig = QueuesConfig(),
     val outputs: OutputsConfig = OutputsConfig(),
+    val calls: List<CallConfig> = emptyList(),
     val rules: List<RuleConfig> = emptyList(),
     val deadLetter: DeadLetterConfig = DeadLetterConfig(),
     val quickSettings: QuickSettingsConfig = QuickSettingsConfig()
@@ -398,12 +399,42 @@ data class TransformConfig(
     val formatSteps: List<OutputFormatStep>? = null,
     val enrich: String? = null,  // "enricherType:parameter", e.g., "gotifyIcon:gotify_link"
     /**
+     * Call 步骤列表，每项为 {varName: "callName(arg1, arg2, ...)"} 的 map。
+     * 按顺序执行，后一项可以使用前一项产生的变量。
+     * 如果调用返回包含 data 或 headers 键的对象，会覆盖当前消息的对应变量。
+     */
+    val call: List<Map<String, String>>? = null,
+    /**
      * 过滤拒绝时是否中断整个管道流程。
      * 默认 false：过滤拒绝仅跳过当前步骤，继续执行后续管道步骤。
      * 设为 true：过滤拒绝时中断整个管道，不再执行后续步骤。
      */
     val breakOnReject: Boolean = false
 )
+
+/**
+ * Call 资源配置，定义可在 pipeline 中调用的外部服务。
+ * 目前支持 http 类型，后续可扩展。
+ */
+data class CallConfig(
+    val name: String,
+    val type: CallType = CallType.http,
+    /** 目标 URL，支持格式化模板（可使用 {args[N]} 等） */
+    val url: String = "",
+    val method: String = "POST",
+    /** 请求 headers，值支持格式化模板 */
+    val headers: Map<String, String> = emptyMap(),
+    /** 请求 body 模板，未配置时默认发送当前 data */
+    val body: String? = null,
+    /** 响应处理模板，支持 {response}（响应体）、{$responseCode}（状态码）等，可为函数调用 */
+    val response: String? = null,
+    val timeout: Duration = Duration("15s"),
+    val retry: RetryConfig? = null
+)
+
+enum class CallType {
+    http
+}
 
 /**
  * 死信队列配置
