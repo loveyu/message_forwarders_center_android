@@ -1,0 +1,154 @@
+# Call 资源示例
+# 演示：在 pipeline 中通过 transform.call 调用外部 HTTP 服务并将结果注入后续步骤
+#
+# call 资源定义在顶层 call: 数组中，可在任意规则的 transform.call 中按名称调用。
+#
+# ─── 模板变量说明（url / headers / body / response 均支持）─────────────────
+#   {args[0]}              第 0 个调用参数（原始值；Map 被序列化为 JSON 字符串）
+#   {args[0].field}        第 0 个参数中的字段（参数为 JSON 对象时）
+#   {args[1].content-type} 第 1 个参数（Map）中键为 content-type 的值
+#   {varName}              上一个 call 步骤存储的变量（整体）
+#   {varName.field}        上一个 call 步骤结果中的字段
+#   {response}             HTTP 响应体原始字符串
+#   {$responseCode}        HTTP 响应状态码
+#   其他 {data} / {data.field} / {$headers.X} 等标准模板变量照常可用
+#
+# ─── call 调用格式 ──────────────────────────────────────────────────────────
+#   call:
+#     - varName: "callName(arg1, arg2)"   # 调用 call 资源并将结果存为 varName
+#     - varName2: "callName2(varName)"    # 可使用前一步骤的变量作为参数
+#
+# ─── 变量覆盖规则 ────────────────────────────────────────────────────────────
+#   若调用返回值是包含 data 键的对象  → 覆盖当前 pipeline 的 data
+#   若调用返回值是包含 headers 键的对象 → 覆盖当前 pipeline 的 headers
+#   否则结果仅作为命名变量供后续步骤使用
+
+
+links:
+  - id: mqtt_broker
+    dsn: mqtt://localhost:1883
+
+inputs:
+  link:
+    - name: gotify_input
+      linkId: mqtt_broker
+      role: consumer
+      topic: gotify/messages
+      qos: 1
+
+  http:
+    - name: webhook_input
+      dsn: "http://0.0.0.0:8080?bearerToken=my-secret-token"
+      paths:
+        - /upload
+
+outputs:
+  internal:
+    - name: notify_out
+      type: notify
+      channel: default
+
+    - name: test_log
+      type: clipboard
+
+  http:
+    - name: ai_api
+      url: http://ai.example.com/result
+      method: POST
+
+
+# ─── Call 资源定义 ──────────────────────────────────────────────────────────
+call:
+  # 示例1：上传文件并获取资源 URL
+  - name: resource-upload
+    type: http
+    url: http://files.example.com/upload
+    method: POST
+    headers:
+      content-type: "{args[1].content-type}"   # 从第 2 个参数（headers map）取 content-type
+      x-source: "flowgate"
+    body: "{args[0]}"                           # 第 1 个参数作为 body（data 字符串）
+    response: "{response}"                      # 直接返回响应体（JSON 或字符串）
+    timeout: 15s
+    retry:
+      maxAttempts: 3
+      interval: 1s
+
+  # 示例2：调用 AI 分析接口，接收 JSON 结果
+  - name: ai-analyze
+    type: http
+    url: http://ai.example.com/analyze
+    method: POST
+    headers:
+      content-type: "application/json"
+      authorization: "Bearer my-api-key"
+    body: '{{"input":"{args[0]}","context":"{args[1]}"}}'
+    response: "{response}"                      # 返回解析后的 JSON 对象（含 answer/tokens 等字段）
+    timeout: 30s
+    retry:
+      maxAttempts: 2
+      interval: 2s
+
+  # 示例3：发送通知并返回状态码
+  - name: send-notification
+    type: http
+    url: http://notify.example.com/send
+    method: POST
+    headers:
+      content-type: "application/json"
+    body: '{{"title":"{args[0]}","body":"{args[1]}"}}'
+    response: "{$responseCode}"                 # 只返回 HTTP 状态码字符串
+    timeout: 10s
+
+
+# ─── 规则示例 ────────────────────────────────────────────────────────────────
+rules:
+  # ── 规则1：上传附件，再将 URL 传给 AI 分析，最后格式化输出 ───────────────
+  - name: gotify_notify
+    from: gotify_input
+    pipeline:
+      - transform:
+          # call 步骤按顺序执行：
+          # 1. 上传原始 data，以 headers 作为第 2 个参数（取其 content-type）
+          # 2. 将上传结果（resourceUrl）和原始 data 传给 AI 分析
+          call:
+            - uploadResponse: "resource-upload(data, headers)"
+            - aiResponse: "ai-analyze(uploadResponse, data)"
+          # call 完成后，后续 format 可直接使用 call 变量
+          format: "{aiResponse.answer}"
+        to: [test_log]
+
+  # ── 规则2：webhook 触发，上传 body，然后发送通知 ─────────────────────────
+  - name: webhook_upload_notify
+    from: webhook_input
+    pipeline:
+      - transform:
+          call:
+            - uploaded: "resource-upload(data, headers)"
+            # 使用上一步结果的字段作为通知标题和内容
+            - notifyStatus: "send-notification(uploaded.title, uploaded.url)"
+          format: "上传完成，通知状态: {notifyStatus}"
+        to: [test_log]
+
+  # ── 规则3：仅调用一次外部服务，将结果写入剪贴板 ──────────────────────────
+  - name: simple_ai_call
+    from: webhook_input
+    pipeline:
+      - transform:
+          call:
+            - result: "ai-analyze(data, data)"
+          format: "AI 回答: {result.answer}\n耗时 Token: {result.tokens}"
+        to: [test_log]
+
+  # ── 规则4：call + filter 组合 ─────────────────────────────────────────────
+  # call 在 filter 之前执行，可先调用外部服务获取数据，再按结果过滤
+  - name: conditional_notify
+    from: gotify_input
+    pipeline:
+      - transform:
+          call:
+            - aiResult: "ai-analyze(data, data)"
+          # call 完成后，若 AI 返回 needsAlert 则继续，否则跳过
+          filter: '"{aiResult.needsAlert}" == "true"'
+          format: "【告警】{aiResult.summary}"
+        to: [notify_out]

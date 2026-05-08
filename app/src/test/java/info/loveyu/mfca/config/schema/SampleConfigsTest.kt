@@ -2,6 +2,7 @@ package info.loveyu.mfca.config.schema
 
 import info.loveyu.mfca.config.ConfigLoader
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -83,6 +84,21 @@ class SampleConfigsTest {
         val enriched = linkOutputs.firstOrNull { it.name == "mqtt_enriched" }
         assertNotNull("mqtt_enriched output should exist", enriched)
         assertNotNull("mqtt_enriched should have format steps", enriched!!.format)
+    }
+
+    @Test
+    fun `19 call resource parses correctly`() {
+        val config = loadSample("19_call_resource.yaml")
+        assertTrue("calls should be non-empty", config.calls.isNotEmpty())
+        val uploadCall = config.calls.firstOrNull { it.name == "resource-upload" }
+        assertNotNull("resource-upload call should exist", uploadCall)
+        assertEquals("http://files.example.com/upload", uploadCall!!.url)
+        assertNotNull("resource-upload should have retry", uploadCall.retry)
+        val ruleWithCall = config.rules.firstOrNull { it.name == "gotify_notify" }
+        assertNotNull("gotify_notify rule should exist", ruleWithCall)
+        val callSteps = ruleWithCall!!.pipeline.first().transform?.call
+        assertNotNull("gotify_notify pipeline should have call steps", callSteps)
+        assertTrue("call steps should have 2 entries", callSteps!!.size == 2)
     }
 
     @Test

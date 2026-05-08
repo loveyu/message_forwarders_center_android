@@ -325,6 +325,10 @@ private fun loadSampleFiles(context: Context): List<SampleFile> {
             description = "输出格式化 - 每个输出独立格式化 data/header，不影响 pipeline"
         ),
         SampleFileInfo(
+            fileName = "19_call_resource.yaml",
+            description = "Call 资源调用 - 在 pipeline 中调用外部 HTTP 服务并注入结果"
+        ),
+        SampleFileInfo(
             fileName = "99_full_demo.yaml",
             description = "完整演示 - 智能家居场景"
         )
