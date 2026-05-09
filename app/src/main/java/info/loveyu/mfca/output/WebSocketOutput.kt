@@ -1,10 +1,12 @@
 package info.loveyu.mfca.output
 
+import android.content.Context
 import info.loveyu.mfca.config.LinkOutputConfig
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.queue.QueueManager
 import info.loveyu.mfca.util.LogManager
+import info.loveyu.mfca.util.NetworkChecker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,6 +24,7 @@ import kotlinx.coroutines.launch
  *   将消息放入失败队列异步重试，队列消费者会路由回本输出
  */
 class WebSocketOutput(
+    private val context: Context,
     override val name: String,
     private val config: LinkOutputConfig
 ) : Output {
@@ -121,6 +124,8 @@ class WebSocketOutput(
     }
 
     override fun isAvailable(): Boolean {
+        if (!NetworkChecker.shouldEnable(context, config.whenCondition, config.deny)) return false
+        if (!LinkManager.shouldEnableLink(config.linkId)) return false
         val link = wsLink ?: return false
         return link.isConnected()
     }

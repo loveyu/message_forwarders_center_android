@@ -1,9 +1,11 @@
 package info.loveyu.mfca.output
 
+import android.content.Context
 import info.loveyu.mfca.config.HttpOutputConfig
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.queue.QueueManager
 import info.loveyu.mfca.util.LogManager
+import info.loveyu.mfca.util.NetworkChecker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,6 +25,7 @@ import java.util.zip.InflaterInputStream
  * HTTP 输出（OkHttp 连接池复用）
  */
 class HttpOutput(
+    private val context: Context? = null,
     override val name: String,
     private val config: HttpOutputConfig
 ) : Output {
@@ -30,9 +33,6 @@ class HttpOutput(
     override val type: OutputType = OutputType.http
     override val formatSteps get() = config.effectiveFormatSteps
     override val queueRef get() = config.queue
-
-    @Volatile
-    private var available = true
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -141,7 +141,6 @@ class HttpOutput(
                 }
             }
         } catch (e: Exception) {
-            available = false
             OutputResult.Failure(e.message ?: "Unknown error", e)
         }
     }
@@ -203,7 +202,10 @@ class HttpOutput(
         return headers.remove(matchedKey)
     }
 
-    override fun isAvailable(): Boolean = available
+    override fun isAvailable(): Boolean {
+        val ctx = context ?: return true
+        return NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)
+    }
 
     fun shutdown() {
         scope.cancel()

@@ -312,6 +312,8 @@ object AppConfigSchema {
                 any("format") {
                     description = "Output format: string template or list of format steps"
                 }
+                string("when") { description = "Enable condition (e.g. network=wifi&ssid=MyWiFi)" }
+                string("deny") { description = "Disable condition (e.g. network=mobile)" }
             }
 
             objectList(
@@ -398,6 +400,8 @@ object AppConfigSchema {
                 any("format") {
                     description = "Output format: string template or list of format steps"
                 }
+                string("when") { description = "Enable condition (e.g. network=wifi&ssid=MyWiFi)" }
+                string("deny") { description = "Disable condition (e.g. network=mobile)" }
             }
         }
 

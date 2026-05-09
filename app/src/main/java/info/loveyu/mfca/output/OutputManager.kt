@@ -23,7 +23,8 @@ object OutputManager {
 
         // HTTP outputs
         config.outputs.http.forEach { httpConfig ->
-            outputs[httpConfig.name] = HttpOutput(httpConfig.name, httpConfig)
+            val ctx = contextRef?.get() ?: return
+            outputs[httpConfig.name] = HttpOutput(ctx, httpConfig.name, httpConfig)
             LogManager.logDebug(
                 "OUTPUT",
                 "Registered HTTP output: ${httpConfig.name} -> ${httpConfig.url}"
@@ -152,11 +153,12 @@ object OutputManager {
     }
 
     private fun createLinkOutput(config: info.loveyu.mfca.config.LinkOutputConfig): Output {
+        val ctx = contextRef?.get() ?: throw IllegalStateException("OutputManager not initialized")
         val dsn = info.loveyu.mfca.link.LinkManager.getLinkConfig(config.linkId)?.dsn ?: config.linkId
         return when (info.loveyu.mfca.config.LinkType.fromDsn(dsn)) {
-            info.loveyu.mfca.config.LinkType.websocket -> WebSocketOutput(config.name, config)
-            info.loveyu.mfca.config.LinkType.tcp -> TcpOutput(config.name, config)
-            else -> MqttOutput(config.name, config)
+            info.loveyu.mfca.config.LinkType.websocket -> WebSocketOutput(ctx, config.name, config)
+            info.loveyu.mfca.config.LinkType.tcp -> TcpOutput(ctx, config.name, config)
+            else -> MqttOutput(ctx, config.name, config)
         }
     }
 

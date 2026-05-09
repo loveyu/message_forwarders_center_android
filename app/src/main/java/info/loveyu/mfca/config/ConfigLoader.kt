@@ -341,6 +341,8 @@ object ConfigLoader {
                     retry = parseRetry(map["retry"]),
                     onFailureQueue = parseQueueRef(map["onFailureQueue"]),
                     queue = parseQueueRef(map["queue"]),
+                    whenCondition = map["when"] as? String,
+                    deny = map["deny"] as? String,
                     format = parseFormatSteps(map["format"])
                 )
             }
@@ -408,6 +410,8 @@ object ConfigLoader {
                     options = map["options"] as? Map<String, Any>,
                     channel = map["channel"] as? String,
                     queue = parseQueueRef(map["queue"]),
+                    whenCondition = map["when"] as? String,
+                    deny = map["deny"] as? String,
                     format = parseFormatSteps(map["format"])
                 )
             }

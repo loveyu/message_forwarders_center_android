@@ -247,6 +247,8 @@ data class HttpOutputConfig(
     val retry: RetryConfig? = null,
     val onFailureQueue: QueueRefConfig? = null,
     val queue: QueueRefConfig? = null,
+    val whenCondition: String? = null,
+    val deny: String? = null,
     /** 输出前的数据格式化步骤 */
     val format: List<OutputFormatStep>? = null
 ) {
@@ -308,6 +310,8 @@ data class InternalOutputConfig(
     val options: Map<String, Any>? = null,
     val channel: String? = null,
     val queue: QueueRefConfig? = null,
+    val whenCondition: String? = null,
+    val deny: String? = null,
     /** 输出前的数据格式化步骤 */
     val format: List<OutputFormatStep>? = null
 )

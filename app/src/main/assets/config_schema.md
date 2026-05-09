@@ -254,6 +254,8 @@ HTTP output sinks
 | `onFailureQueue` | object |  |  | Queue to enqueue message after all retries are exhausted (for async retry) |
 | `queue` | object |  |  | Queue reference for async delivery |
 | `format` | any |  |  | Output format: string template or list of format steps |
+| `when` | string |  |  | Enable condition (e.g. network=wifi&ssid=MyWiFi) |
+| `deny` | string |  |  | Disable condition (e.g. network=mobile) |
 
 #### `retry`
 
@@ -361,6 +363,8 @@ Internal output sinks (clipboard, file, broadcast, notify)
 | `channel` | string |  |  | Notification channel ID |
 | `queue` | object |  |  |  |
 | `format` | any |  |  | Output format: string template or list of format steps |
+| `when` | string |  |  | Enable condition (e.g. network=wifi&ssid=MyWiFi) |
+| `deny` | string |  |  | Disable condition (e.g. network=mobile) |
 
 #### `queue`
 

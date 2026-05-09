@@ -38,6 +38,8 @@ class NotifyOutput(
     override val name: String,
     private val config: InternalOutputConfig
 ) : InternalOutput {
+    override val internalContext: Context get() = context
+    override val internalConfig: InternalOutputConfig get() = config
 
     override val type: OutputType = OutputType.internal
     override val formatSteps get() = config.format
