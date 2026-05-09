@@ -183,13 +183,13 @@ fun getAllComponentStatuses(context: Context): List<ComponentStatus> {
             statuses.add(buildRuleStatus(context, ruleConfig))
         }
         appConfig.outputs.http.forEach { httpOutputConfig ->
-            statuses.add(buildHttpOutputStatus(httpOutputConfig))
+            statuses.add(buildHttpOutputStatus(context, httpOutputConfig))
         }
         appConfig.outputs.link.forEach { linkOutputConfig ->
             statuses.add(buildLinkOutputStatus(context, linkOutputConfig))
         }
         appConfig.outputs.internal.forEach { internalOutputConfig ->
-            statuses.add(buildInternalOutputStatus(internalOutputConfig))
+            statuses.add(buildInternalOutputStatus(context, internalOutputConfig))
         }
     }
 
@@ -563,8 +563,9 @@ private fun isWildcardHost(host: String): Boolean {
     return host == "0.0.0.0" || host == "::" || host == "*"
 }
 
-private fun buildHttpOutputStatus(config: HttpOutputConfig): ComponentStatus {
-    val isRunning = OutputManager.getOutput(config.name)?.isAvailable() ?: false
+private fun buildHttpOutputStatus(context: Context, config: HttpOutputConfig): ComponentStatus {
+    val enableResult = NetworkChecker.getEnableReason(context, config.whenCondition, config.deny)
+    val isRunning = enableResult.enabled && (OutputManager.getOutput(config.name)?.isAvailable() ?: false)
     val details = buildString {
         append("Type: HTTP")
         append("\nURL: ${config.url}")
@@ -572,13 +573,17 @@ private fun buildHttpOutputStatus(config: HttpOutputConfig): ComponentStatus {
         config.timeout.let { append("\nTimeout: ${it.value}") }
         config.retry?.let { append("\nRetry: max ${it.maxAttempts} × ${it.interval.value}") }
         config.queue?.name?.let { append("\nQueue: $it") }
+        if (config.whenCondition != null || config.deny != null) {
+            append("\n\n${NetworkChecker.getMatchedConditions(context, config.whenCondition, config.deny)}")
+        }
     }
     return ComponentStatus(
         id = config.name,
         name = config.name,
         type = ComponentType.OUTPUT,
-        isEnabled = true,
+        isEnabled = enableResult.enabled,
         isRunning = isRunning,
+        notEnabledReason = enableResult.reason,
         details = details
     )
 }
@@ -606,6 +611,27 @@ private fun buildLinkOutputStatus(context: Context, config: LinkOutputConfig): C
     }
 
     val isRunning = outputEnableResult.enabled && (OutputManager.getOutput(config.name)?.isAvailable() ?: false)
+
+    // Output is network-"enabled" only when output conditions pass AND at least one upstream link's conditions pass
+    val anyLinkNetworkEnabled = upstreamLinks.any { it.isNetworkEnabled }
+    val isEnabled = outputEnableResult.enabled && (anyLinkNetworkEnabled || config.linkIds.isEmpty())
+    val notEnabledReason = when {
+        !outputEnableResult.enabled -> outputEnableResult.reason
+        !anyLinkNetworkEnabled && config.linkIds.isNotEmpty() -> {
+            if (config.linkIds.size == 1) {
+                val linkId = config.linkIds.first()
+                val linkConfig = LinkManager.getLinkConfig(linkId)
+                if (linkConfig != null) {
+                    NetworkChecker.getEnableReason(context, linkConfig.whenCondition, linkConfig.deny).reason
+                } else {
+                    "Link $linkId not found"
+                }
+            } else {
+                "All upstream links disabled by network conditions"
+            }
+        }
+        else -> null
+    }
 
     val typeStr = if (isMultiLink) {
         "Fan-out (${config.linkIds.size} links)"
@@ -641,15 +667,17 @@ private fun buildLinkOutputStatus(context: Context, config: LinkOutputConfig): C
         id = config.name,
         name = config.name,
         type = ComponentType.OUTPUT,
-        isEnabled = outputEnableResult.enabled,
+        isEnabled = isEnabled,
         isRunning = isRunning,
-        notEnabledReason = outputEnableResult.reason,
+        notEnabledReason = notEnabledReason,
         details = details,
         upstreamLinks = upstreamLinks
     )
 }
 
-private fun buildInternalOutputStatus(config: InternalOutputConfig): ComponentStatus {    val isRunning = OutputManager.getOutput(config.name)?.isAvailable() ?: false
+private fun buildInternalOutputStatus(context: Context, config: InternalOutputConfig): ComponentStatus {
+    val enableResult = NetworkChecker.getEnableReason(context, config.whenCondition, config.deny)
+    val isRunning = enableResult.enabled && (OutputManager.getOutput(config.name)?.isAvailable() ?: false)
     val typeStr =
         when (config.type) {
             InternalOutputType.clipboard -> "Clipboard"
@@ -663,13 +691,17 @@ private fun buildInternalOutputStatus(config: InternalOutputConfig): ComponentSt
         config.basePath?.let { append("\nPath: $it") }
         config.fileName?.let { append("\nFile: $it") }
         config.channel?.let { append("\nChannel: $it") }
+        if (config.whenCondition != null || config.deny != null) {
+            append("\n\n${NetworkChecker.getMatchedConditions(context, config.whenCondition, config.deny)}")
+        }
     }
     return ComponentStatus(
         id = config.name,
         name = config.name,
         type = ComponentType.OUTPUT,
-        isEnabled = true,
+        isEnabled = enableResult.enabled,
         isRunning = isRunning,
+        notEnabledReason = enableResult.reason,
         details = details
     )
 }
