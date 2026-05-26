@@ -98,7 +98,7 @@ private fun ClipboardPreviewScreen(recordId: Long, onBack: () -> Unit) {
 
     val isDark = isSystemInDarkTheme()
     val previewHtml = when (r.contentType) {
-        "html" -> r.content
+        "html" -> htmlToPreviewHtml(r.content, isDark)
         "json" -> codeToHtml(prettifyJson(r.content), "json", isDark)
         "yaml" -> codeToHtml(r.content, "yaml", isDark)
         else -> markdownToHtml(r.content, isDark)
@@ -182,6 +182,60 @@ private fun prettifyJson(content: String): String {
 // --- Code (JSON/YAML) to highlighted HTML ---
 
 private const val HLJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0"
+
+private fun htmlToPreviewHtml(html: String, isDark: Boolean): String {
+    val shellBg = if (isDark) "#0d1117" else "#f6f8fa"
+    val frameBg = "#ffffff"
+    val borderColor = if (isDark) "#30363d" else "#d0d7de"
+    val shadowColor = if (isDark) "rgba(1, 4, 9, 0.45)" else "rgba(31, 35, 40, 0.08)"
+    val escapedHtml = html
+        .replace("&", "&amp;")
+        .replace("\"", "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+
+    return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta name="color-scheme" content="${if (isDark) "dark" else "light"}">
+            <style>
+                html, body {
+                    margin: 0;
+                    padding: 0;
+                    min-height: 100%;
+                    background: $shellBg;
+                }
+                body {
+                    padding: 12px;
+                    box-sizing: border-box;
+                }
+                .preview-frame {
+                    overflow: hidden;
+                    border: 1px solid $borderColor;
+                    border-radius: 12px;
+                    background: $frameBg;
+                    box-shadow: 0 12px 32px $shadowColor;
+                }
+                iframe {
+                    display: block;
+                    width: 100%;
+                    min-height: calc(100vh - 26px);
+                    border: 0;
+                    background: $frameBg;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="preview-frame">
+                <iframe srcdoc="$escapedHtml" sandbox="allow-same-origin"></iframe>
+            </div>
+        </body>
+        </html>
+    """.trimIndent()
+}
 
 private fun codeToHtml(code: String, language: String, isDark: Boolean): String {
     val theme = if (isDark) "github-dark-dimmed" else "github"

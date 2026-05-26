@@ -11,10 +11,10 @@
 links:
   - id: mqtt_zzc
     # DSN 格式: mqtt://user:pass@host:port?param=value
-    dsn: mqtt://foo:foo@10.4.125.53:1883?connectTimeout=3&keepAliveInterval=60&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60&clientId=foo
+    dsn: mqtt://foo:foo@10.4.125.53:1883?connectTimeout=3&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60&clientId=foo
 
   - id: mqtt_home
-    dsn: mqtt://foo:foo@10.11.11.8:1883?connectTimeout=3&keepAliveInterval=60&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60&clientId=foo
+    dsn: mqtt://foo:foo@10.11.11.8:1883?connectTimeout=3&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60&clientId=foo
 
 inputs:
   link:

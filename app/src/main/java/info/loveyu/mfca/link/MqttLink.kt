@@ -7,7 +7,6 @@ import info.loveyu.mfca.config.LinkType
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.CertResolver
 import info.loveyu.mfca.util.LogManager
-import info.loveyu.mfca.util.ScreenStateTracker
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
 import org.eclipse.paho.client.mqttv3.MqttAsyncClient
 import org.eclipse.paho.client.mqttv3.MqttCallback
@@ -50,10 +49,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
     @Volatile private var resolvedIp: String? = null
 
     // Heartbeat monitoring
-    private var baseKeepAliveSeconds = 60
-    private var screenOffKeepAliveSeconds = 120
-    private var negotiatedKeepAliveSeconds = 120
-    private var effectiveKeepAliveSeconds = 60
+    private var effectiveKeepAliveSeconds = FIXED_KEEP_ALIVE_SECONDS
     private var connectedAt = 0L
     @Volatile private var lastOutboundActivity = 0L
 
@@ -68,6 +64,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
     companion object {
         private const val MAX_CONSECUTIVE_FAILURES = 5
         private const val DEFAULT_RETRY_INTERVAL_MS = 10_000L // 10 seconds
+        private const val FIXED_KEEP_ALIVE_SECONDS = 60
     }
 
     @Synchronized
@@ -98,11 +95,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         // Parse DSN first to extract params
         val (rawBroker, params) = parseBrokerUrl(broker)
 
-        baseKeepAliveSeconds = params["keepAliveInterval"]?.toIntOrNull()?.takeIf { it > 0 } ?: 60
-        screenOffKeepAliveSeconds = params["screenOffKeepAliveInterval"]?.toIntOrNull()?.takeIf { it > 0 }
-            ?: (baseKeepAliveSeconds * 2)
-        negotiatedKeepAliveSeconds = maxOf(baseKeepAliveSeconds, screenOffKeepAliveSeconds)
-        effectiveKeepAliveSeconds = resolveKeepAliveSeconds()
+        effectiveKeepAliveSeconds = FIXED_KEEP_ALIVE_SECONDS
 
         // Resolve retry interval: DSN param > config.reconnect > default
         retryIntervalMs = params["reconnectInterval"]?.toLongOrNull()?.let { it * 1000 }
@@ -142,7 +135,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                 isAutomaticReconnect = false
 
                 connectionTimeout = params["connectTimeout"]?.toIntOrNull() ?: 10
-                keepAliveInterval = negotiatedKeepAliveSeconds
+                keepAliveInterval = FIXED_KEEP_ALIVE_SECONDS
 
                 // User credentials: priority to URL params, then URL userinfo
                 val user = params["username"]
@@ -210,7 +203,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
                     }
                 } catch (_: Exception) {}
                 (client as? TickDrivenMqttAsyncClient)?.applyKeepAliveSeconds(effectiveKeepAliveSeconds)
-                LogManager.logInfo("MQTT", "Connected successfully for $id (keepAlive=${effectiveKeepAliveSeconds}s, screenOffKeepAlive=${screenOffKeepAliveSeconds}s)")
+                LogManager.logInfo("MQTT", "Connected successfully for $id (keepAlive=${effectiveKeepAliveSeconds}s)")
                 connectedAt = System.currentTimeMillis()
                 lastOutboundActivity = connectedAt
                 ForwardService.triggerTick()
@@ -285,18 +278,12 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         val now = System.currentTimeMillis()
         val uptimeSec = (now - connectedAt) / 1000
         val idleSec = (now - lastOutboundActivity) / 1000
-        return "Heartbeat[$id]: uptime=${uptimeSec}s, idle=${idleSec}s, keepAlive=${effectiveKeepAliveSeconds}s, screenOn=${ScreenStateTracker.isScreenOn}, pingExpected=${idleSec >= effectiveKeepAliveSeconds}"
+        return "Heartbeat[$id]: uptime=${uptimeSec}s, idle=${idleSec}s, keepAlive=${effectiveKeepAliveSeconds}s, pingExpected=${idleSec >= effectiveKeepAliveSeconds}"
     }
 
     fun onTick(now: Long = System.currentTimeMillis()): Long? {
         if (!connected) return null
         val mqttClient = client as? TickDrivenMqttAsyncClient ?: return null
-        val desiredKeepAliveSeconds = resolveKeepAliveSeconds()
-        if (desiredKeepAliveSeconds != effectiveKeepAliveSeconds) {
-            effectiveKeepAliveSeconds = desiredKeepAliveSeconds
-            mqttClient.applyKeepAliveSeconds(effectiveKeepAliveSeconds)
-            LogManager.logInfo("MQTT", "Adjusted keepAlive for $id: ${effectiveKeepAliveSeconds}s (screenOn=${ScreenStateTracker.isScreenOn})")
-        }
         return try {
             mqttClient.onTick(now)
             mqttClient.getDelayUntilNextCheck(now)
@@ -440,7 +427,7 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
 
     /**
      * Parse broker URL and extract connection parameters from query string and userinfo.
-     * Example: mqtt://admin:123456@10.4.125.53:1883?connectTimeout=3&keepAliveInterval=60
+     * Example: mqtt://admin:123456@10.4.125.53:1883?connectTimeout=3
      * Returns pair of (cleanBrokerUrl, paramsMap)
      */
     private fun parseBrokerUrl(broker: String): Pair<String, Map<String, String>> {
@@ -500,13 +487,6 @@ class MqttLink(override val config: LinkConfig, private val context: Context) : 
         return "mfca_${Build.BOARD}_${Build.BRAND}_${Build.DEVICE}_${Build.MODEL}_${Build.PRODUCT}".hashCode().toString(16)
     }
 
-    private fun resolveKeepAliveSeconds(): Int {
-        return if (ScreenStateTracker.isScreenOn) {
-            baseKeepAliveSeconds
-        } else {
-            screenOffKeepAliveSeconds
-        }
-    }
 }
 
 private class TickDrivenMqttAsyncClient(

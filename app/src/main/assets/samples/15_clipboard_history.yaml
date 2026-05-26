@@ -26,7 +26,7 @@
 
 links:
   - id: mqtt_broker
-    dsn: mqtt://user:pass@192.168.1.1:1883?connectTimeout=3&keepAliveInterval=60&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60&clientId=mfca-clipboard
+    dsn: mqtt://user:pass@192.168.1.1:1883?connectTimeout=3&automaticReconnect=true&reconnectInterval=5&reconnectMaxInterval=60&clientId=mfca-clipboard
 
 inputs:
   link:
