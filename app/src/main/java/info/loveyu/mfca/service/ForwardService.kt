@@ -25,6 +25,8 @@ import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.NetworkChecker
 import info.loveyu.mfca.util.Preferences
+import info.loveyu.mfca.vpn.MfcaVpnService
+import info.loveyu.mfca.vpn.VpnManager
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
@@ -138,6 +140,8 @@ class ForwardService : Service() {
                     NetworkChecker.shouldEnable(ctx, input.whenCondition, input.deny)
                 } + config.inputs.link.count { input ->
                     NetworkChecker.shouldEnable(ctx, input.whenCondition, input.deny)
+                } + config.inputs.vpn.count { input ->
+                    input.enabled && NetworkChecker.shouldEnable(ctx, input.whenCondition, input.deny)
                 }
                 // HTTP and Internal outputs don't have whenCondition/deny, so always enabled
                 // Only Link outputs have whenCondition/deny
@@ -272,6 +276,10 @@ class ForwardService : Service() {
 
         // 1. Link 健康检查 + MQTT 心跳
         val nextLinkTickDelayMs = LinkManager.onTick()
+        VpnManager.refresh()
+        if (VpnManager.state.value.isEnabled) {
+            MfcaVpnService.sync(this)
+        }
 
         // 2. Input 健康检查
         InputManager.onTick()
@@ -631,6 +639,7 @@ class ForwardService : Service() {
 
         currentConfig = config
         legacyMode = false
+        VpnManager.initialize(this, config.inputs.vpn)
 
         // Initialize components in order
         try {
@@ -721,6 +730,7 @@ class ForwardService : Service() {
         QueueManager.stopAll()
         LinkManager.disconnectAll()
         OutputManager.clear()
+        VpnManager.clear()
         releaseLocks()
         cancelEarlyTick()
         isRunning = false

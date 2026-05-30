@@ -84,6 +84,7 @@ Input source configurations
 |------|------|:----:|--------|------|
 | `http` | list[object] |  |  | HTTP server input sources |
 | `link` | list[object] |  |  | Link-based input sources (MQTT subscriber, WebSocket, TCP) |
+| `vpn` | list[object] |  |  | VPN inputs backed by a remote mihomo config and downloadable core |
 
 ### `http`
 
@@ -140,6 +141,24 @@ Message replay configuration
 | `baseUrl` | string |  |  | Provider base URL |
 | `token` | string |  |  | Provider authentication token |
 | `applicationId` | int |  |  | Provider application ID filter |
+
+### `vpn`
+
+VPN inputs backed by a remote mihomo config and downloadable core
+
+- **Type**: list[object]
+
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `name` | string | ✓ |  | Unique VPN candidate name |
+| `configUrl` | string | ✓ |  | Remote mihomo config URL |
+| `coreVersion` | string |  | `latest` | Requested mihomo core version (tag name or latest) |
+| `enabled` | boolean |  | `true` | Whether this VPN candidate is enabled by default |
+| `accessControlMode` | enum |  | `acceptAll` | App access control mode for this VPN profile `acceptAll` / `include` / `exclude` |
+| `packages` | list[string] |  |  | Package names for include/exclude access control |
+| `when` | string |  |  | Enable condition |
+| `deny` | string |  |  | Disable condition |
 
 ## `queues`
 

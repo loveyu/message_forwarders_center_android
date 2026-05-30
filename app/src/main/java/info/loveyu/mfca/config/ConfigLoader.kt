@@ -113,7 +113,8 @@ object ConfigLoader {
         val map = inputs as Map<String, Any>
         return InputsConfig(
             http = parseHttpInputs(map["http"]),
-            link = parseLinkInputs(map["link"])
+            link = parseLinkInputs(map["link"]),
+            vpn = parseVpnInputs(map["vpn"])
         )
     }
 
@@ -162,6 +163,33 @@ object ConfigLoader {
             "consumer" -> LinkRole.consumer
             "producer" -> LinkRole.producer
             else -> LinkRole.consumer
+        }
+    }
+
+    private fun parseVpnInputs(vpn: Any?): List<VpnInputConfig> {
+        if (vpn == null) return emptyList()
+
+        return (vpn as List<*>).mapNotNull { input ->
+            (input as? Map<String, Any>)?.let { map ->
+                VpnInputConfig(
+                    name = map["name"] as? String ?: return@mapNotNull null,
+                    configUrl = map["configUrl"] as? String ?: return@mapNotNull null,
+                    coreVersion = map["coreVersion"] as? String ?: "latest",
+                    whenCondition = map["when"] as? String,
+                    deny = map["deny"] as? String,
+                    enabled = map["enabled"] as? Boolean ?: true,
+                    accessControlMode = parseVpnAccessControlMode(map["accessControlMode"] as? String),
+                    packages = (map["packages"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                )
+            }
+        }
+    }
+
+    private fun parseVpnAccessControlMode(mode: String?): VpnAccessControlMode {
+        return when (mode?.lowercase()) {
+            "include" -> VpnAccessControlMode.include
+            "exclude" -> VpnAccessControlMode.exclude
+            else -> VpnAccessControlMode.acceptAll
         }
     }
 

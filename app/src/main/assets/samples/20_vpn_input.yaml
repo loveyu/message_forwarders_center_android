@@ -1,0 +1,22 @@
+version: "1.0"
+
+inputs:
+  vpn:
+    - name: home_vpn_primary
+      configUrl: https://example.com/vpn/home-primary.yaml
+      coreVersion: latest
+      enabled: true
+      when: network=wifi&ssid=HomeWiFi
+      accessControlMode: include
+      packages:
+        - com.android.chrome
+        - com.termux
+
+    - name: home_vpn_backup
+      configUrl: https://example.com/vpn/home-backup.yaml
+      coreVersion: v1.19.10
+      enabled: true
+      when: network=wifi&ssid=HomeWiFi
+      accessControlMode: exclude
+      packages:
+        - info.loveyu.mfca

@@ -155,6 +155,37 @@ object AppConfigSchema {
                 string("deny") { description = "Disable condition" }
             }
 
+            objectList(
+                "vpn",
+                block = { description = "VPN inputs backed by a remote mihomo config and downloadable core" },
+            ) {
+                string("name") {
+                    required()
+                    description = "Unique VPN candidate name"
+                }
+                string("configUrl") {
+                    required()
+                    description = "Remote mihomo config URL"
+                }
+                string("coreVersion") {
+                    description = "Requested mihomo core version (tag name or latest)"
+                    default = "latest"
+                }
+                boolean("enabled") {
+                    description = "Whether this VPN candidate is enabled by default"
+                    default = true
+                }
+                enum("accessControlMode", listOf("acceptAll", "include", "exclude")) {
+                    description = "App access control mode for this VPN profile"
+                    default = "acceptAll"
+                }
+                stringList("packages") {
+                    description = "Package names for include/exclude access control"
+                }
+                string("when") { description = "Enable condition" }
+                string("deny") { description = "Disable condition" }
+            }
+
         }
 
         objectNode("queues") {
