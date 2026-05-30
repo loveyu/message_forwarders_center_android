@@ -138,6 +138,15 @@ L链路数 I输入数 O输出数
 - `READ_EXTERNAL_STORAGE` - 读取外部存储（Android 12 及以下）
 - `WRITE_EXTERNAL_STORAGE` - 写入外部存储（Android 10 及以下）
 - `MANAGE_EXTERNAL_STORAGE` - 管理所有文件（Android 11+，用于 sdcard:// 路径写入）
+- `QUERY_ALL_PACKAGES` - 枚举已安装应用，用于每个 VPN 的包含/排除应用过滤
+
+## VPN 输入（当前为骨架阶段）
+
+- 在 `inputs.vpn` 下定义 VPN 候选
+- 每个候选包含远程 `configUrl` 和所需 `coreVersion`
+- `when` / `deny` 继续控制候选可用性，同一网络工况下可以存在多个可用 VPN 候选
+- 通过 `accessControlMode` + `packages` 为每个 VPN 单独设置应用包含/排除列表
+- 当前分支已完成配置解析、候选选择/历史、应用过滤 UI 以及 mihomo 核心/配置预下载准备；真正的隧道数据面接管仍待后续接入
 
 ## 构建
 

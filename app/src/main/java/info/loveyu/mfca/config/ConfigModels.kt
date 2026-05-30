@@ -100,7 +100,8 @@ data class TlsConfig(
  */
 data class InputsConfig(
     val http: List<HttpInputConfig> = emptyList(),
-    val link: List<LinkInputConfig> = emptyList()
+    val link: List<LinkInputConfig> = emptyList(),
+    val vpn: List<VpnInputConfig> = emptyList()
 )
 
 data class HttpInputConfig(
@@ -163,6 +164,21 @@ data class LinkInputConfig(
 
 enum class LinkRole {
     consumer, producer
+}
+
+data class VpnInputConfig(
+    val name: String,
+    val configUrl: String,
+    val coreVersion: String = "latest",
+    val whenCondition: String? = null,
+    val deny: String? = null,
+    val enabled: Boolean = true,
+    val accessControlMode: VpnAccessControlMode = VpnAccessControlMode.acceptAll,
+    val packages: List<String> = emptyList()
+)
+
+enum class VpnAccessControlMode {
+    acceptAll, include, exclude
 }
 
 data class ReplayConfig(

@@ -133,6 +133,15 @@ Example: `L3 I2 O4 | Pause Forward | WLock`
 - `READ_EXTERNAL_STORAGE` - Read external storage (Android 12 and below)
 - `WRITE_EXTERNAL_STORAGE` - Write external storage (Android 10 and below)
 - `MANAGE_EXTERNAL_STORAGE` - Manage all files (Android 11+, for sdcard:// path writes)
+- `QUERY_ALL_PACKAGES` - Enumerate installed apps for per-VPN include/exclude filtering
+
+## VPN Input (scaffold)
+
+- Add VPN profiles under `inputs.vpn`
+- Each profile uses a remote `configUrl` plus a requested `coreVersion`
+- `when` / `deny` still control candidate availability, and multiple VPN profiles can coexist under the same network condition
+- Per-profile `accessControlMode` + `packages` define include/exclude app filters
+- This branch currently provides config parsing, candidate selection/history, app filtering UI, and mihomo core/profile download preparation; actual tunnel data-plane wiring is still pending
 
 ## Build
 

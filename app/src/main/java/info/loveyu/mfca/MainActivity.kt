@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -24,6 +25,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -43,10 +45,13 @@ import info.loveyu.mfca.ui.MainScreen
 import info.loveyu.mfca.ui.MainTopBar
 import info.loveyu.mfca.ui.NotifyHistoryContent
 import info.loveyu.mfca.ui.NotifyHistoryTopBar
+import info.loveyu.mfca.ui.VpnScreen
+import info.loveyu.mfca.ui.VpnTopBar
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import info.loveyu.mfca.util.AppStatusManager
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
+import info.loveyu.mfca.vpn.VpnManager
 import kotlinx.coroutines.launch
 
 enum class BottomTab(
@@ -55,7 +60,8 @@ enum class BottomTab(
 ) {
     HOME(Icons.Default.Home, R.string.tab_home),
     NOTIFY_HISTORY(Icons.Default.Notifications, R.string.tab_notify_history),
-    CLIPBOARD_HISTORY(Icons.Default.ContentPaste, R.string.tab_clipboard_history)
+    CLIPBOARD_HISTORY(Icons.Default.ContentPaste, R.string.tab_clipboard_history),
+    VPN(Icons.Default.Security, R.string.tab_vpn),
 }
 
 class MainActivity : ComponentActivity() {
@@ -222,12 +228,29 @@ private fun MainContent(
     var highlightNotifyId by remember { mutableStateOf<Int?>(null) }
     var refreshTrigger by remember { mutableIntStateOf(0) }
     var lastTabClickTime by remember { mutableStateOf(0L) }
+    val vpnUiState by VpnManager.state.collectAsState()
+    val tabs = remember(vpnUiState.hasVpnConfig) {
+        buildList {
+            add(BottomTab.HOME)
+            add(BottomTab.NOTIFY_HISTORY)
+            add(BottomTab.CLIPBOARD_HISTORY)
+            if (vpnUiState.hasVpnConfig) {
+                add(BottomTab.VPN)
+            }
+        }
+    }
 
     LaunchedEffect(pendingHighlight.value) {
         if (pendingHighlight.value && pendingNotifyId.intValue != -1) {
             highlightNotifyId = pendingNotifyId.intValue
             selectedTab = BottomTab.NOTIFY_HISTORY
             pendingHighlight.value = false
+        }
+    }
+
+    LaunchedEffect(tabs, selectedTab) {
+        if (selectedTab !in tabs) {
+            selectedTab = BottomTab.HOME
         }
     }
 
@@ -267,13 +290,14 @@ private fun MainContent(
                     onCleanPasswords = { cleanPasswordsTrigger++ },
                     onCleanVerificationCodes = { cleanVerificationCodesTrigger++ }
                 )
+                BottomTab.VPN -> VpnTopBar()
             }
         },
         bottomBar = {
             NavigationBar(
                 modifier = if (!showTabLabel) Modifier.height(96.dp) else Modifier,
             ) {
-                BottomTab.entries.forEach { tab ->
+                tabs.forEach { tab ->
                     NavigationBarItem(
                         icon = { Icon(tab.icon, contentDescription = null) },
                         label = if (showTabLabel) {
@@ -333,6 +357,8 @@ private fun MainContent(
                     cleanVerificationCodesTrigger = 0
                 }
             )
+
+            BottomTab.VPN -> VpnScreen(contentPadding = innerPadding)
         }
     }
 }

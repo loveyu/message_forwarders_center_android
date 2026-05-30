@@ -40,6 +40,102 @@ plugins {
     alias(libs.plugins.spotless)
 }
 
+data class GoBridgeTarget(
+    val abi: String,
+    val goArch: String,
+    val goArm: String? = null,
+    val clangTriple: String,
+)
+
+val vpnBridgeTargets =
+    listOf(
+        GoBridgeTarget("arm64-v8a", "arm64", clangTriple = "aarch64-linux-android33-clang"),
+        GoBridgeTarget("armeabi-v7a", "arm", "7", "armv7a-linux-androideabi33-clang"),
+        GoBridgeTarget("x86_64", "amd64", clangTriple = "x86_64-linux-android33-clang"),
+        GoBridgeTarget("x86", "386", clangTriple = "i686-linux-android33-clang"),
+    )
+
+val goToolchainVersion = "1.24.1"
+val goToolchainArchive = "go${goToolchainVersion}.linux-amd64.tar.gz"
+val goToolchainUrl = "https://go.dev/dl/$goToolchainArchive"
+val goToolchainRootDir = layout.buildDirectory.dir("tools/go/$goToolchainVersion")
+val goBinary = goToolchainRootDir.map { it.file("bin/go").asFile }
+val androidNdkVersion = "r27c"
+val androidNdkArchive = "android-ndk-$androidNdkVersion-linux.zip"
+val androidNdkUrl = "https://dl.google.com/android/repository/$androidNdkArchive"
+val androidNdkRootDir = layout.buildDirectory.dir("tools/android-ndk/$androidNdkVersion")
+val vpnBridgeSourceDir = layout.projectDirectory.dir("src/main/go/vpnbridge")
+val vpnBridgeAssetDir = layout.buildDirectory.dir("generated/assets/vpnbridge")
+val ensureGoToolchain =
+    tasks.register<Exec>("ensureGoToolchain") {
+        outputs.dir(goToolchainRootDir)
+        onlyIf { !goBinary.get().exists() }
+        val toolchainRoot = goToolchainRootDir.get().asFile
+        toolchainRoot.parentFile.mkdirs()
+        commandLine(
+            "bash",
+            "-lc",
+            """
+            set -euo pipefail
+            tmpdir=${'$'}(mktemp -d)
+            trap 'rm -rf "${'$'}tmpdir"' EXIT
+            curl -L "$goToolchainUrl" -o "${'$'}tmpdir/$goToolchainArchive"
+            rm -rf "${toolchainRoot.absolutePath}"
+            mkdir -p "${toolchainRoot.parentFile.absolutePath}"
+            tar -C "${toolchainRoot.parentFile.absolutePath}" -xzf "${'$'}tmpdir/$goToolchainArchive"
+            mv "${toolchainRoot.parentFile.absolutePath}/go" "${toolchainRoot.absolutePath}"
+            """.trimIndent(),
+        )
+    }
+val ensureAndroidNdk =
+    tasks.register<Exec>("ensureAndroidNdk") {
+        outputs.dir(androidNdkRootDir)
+        val ndkRoot = androidNdkRootDir.get().asFile
+        onlyIf { !ndkRoot.resolve("toolchains/llvm/prebuilt/linux-x86_64/bin/clang").exists() }
+        ndkRoot.parentFile.mkdirs()
+        commandLine(
+            "bash",
+            "-lc",
+            """
+            set -euo pipefail
+            tmpdir=${'$'}(mktemp -d)
+            trap 'rm -rf "${'$'}tmpdir"' EXIT
+            curl -L "$androidNdkUrl" -o "${'$'}tmpdir/$androidNdkArchive"
+            rm -rf "${ndkRoot.absolutePath}"
+            mkdir -p "${ndkRoot.parentFile.absolutePath}"
+            unzip -q "${'$'}tmpdir/$androidNdkArchive" -d "${ndkRoot.parentFile.absolutePath}"
+            mv "${ndkRoot.parentFile.absolutePath}/android-ndk-$androidNdkVersion" "${ndkRoot.absolutePath}"
+            """.trimIndent(),
+        )
+    }
+val buildVpnBridgeBinaries =
+    tasks.register<Exec>("buildVpnBridgeBinaries") {
+        dependsOn(ensureGoToolchain)
+        dependsOn(ensureAndroidNdk)
+        inputs.dir(vpnBridgeSourceDir)
+        outputs.dir(vpnBridgeAssetDir)
+        val outputRoot = vpnBridgeAssetDir.get().asFile
+        outputRoot.mkdirs()
+        val ndkBinDir = androidNdkRootDir.get().asFile.resolve("toolchains/llvm/prebuilt/linux-x86_64/bin")
+        val buildScript =
+            buildString {
+                appendLine("set -euo pipefail")
+                appendLine("cd '${vpnBridgeSourceDir.asFile.absolutePath}'")
+                appendLine("'${goBinary.get().absolutePath}' mod tidy")
+                vpnBridgeTargets.forEach { target ->
+                    appendLine("mkdir -p '${outputRoot.resolve("vpnbridge/${target.abi}").absolutePath}'")
+                    append("GOOS=android GOARCH=${target.goArch} CGO_ENABLED=1 CC='${ndkBinDir.resolve(target.clangTriple).absolutePath}' ")
+                    if (target.goArm != null) {
+                        append("GOARM=${target.goArm} ")
+                    }
+                    appendLine(
+                        "'${goBinary.get().absolutePath}' build -trimpath -o '${outputRoot.resolve("vpnbridge/${target.abi}/vpnbridge").absolutePath}' .",
+                    )
+                }
+            }
+        commandLine("bash", "-lc", buildScript)
+    }
+
 android {
     namespace = "info.loveyu.mfca"
     compileSdk = 36
@@ -118,6 +214,7 @@ android {
         compose = true
         buildConfig = true
     }
+    sourceSets.getByName("main").assets.srcDir(vpnBridgeAssetDir.get().asFile)
 }
 
 spotless {
@@ -167,5 +264,9 @@ afterEvaluate {
         }
         systemProperty("generateConfigDoc", "true")
         outputs.upToDateWhen { false }
+    }
+
+    tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+        dependsOn(buildVpnBridgeBinaries)
     }
 }

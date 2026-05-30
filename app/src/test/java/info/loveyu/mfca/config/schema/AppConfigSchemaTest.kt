@@ -119,6 +119,31 @@ class AppConfigSchemaTest {
     }
 
     @Test
+    fun `vpn input config passes validation and parsing`() {
+        val yaml =
+            """
+            inputs:
+              vpn:
+                - name: office_vpn
+                  configUrl: https://example.com/mihomo.yaml
+                  coreVersion: v1.19.10
+                  enabled: true
+                  when: network=wifi
+                  accessControlMode: exclude
+                  packages:
+                    - info.loveyu.mfca
+                    - com.android.chrome
+            """.trimIndent()
+
+        val config = ConfigLoader.loadConfig(yaml)
+        assertEquals(1, config.inputs.vpn.size)
+        assertEquals("office_vpn", config.inputs.vpn[0].name)
+        assertEquals("https://example.com/mihomo.yaml", config.inputs.vpn[0].configUrl)
+        assertEquals("v1.19.10", config.inputs.vpn[0].coreVersion)
+        assertEquals(2, config.inputs.vpn[0].packages.size)
+    }
+
+    @Test
     fun `invalid overflow enum fails validation`() {
         val yaml =
             """
