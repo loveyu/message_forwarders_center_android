@@ -114,6 +114,7 @@ object ConfigLoader {
         return InputsConfig(
             http = parseHttpInputs(map["http"]),
             link = parseLinkInputs(map["link"]),
+            udp2raw = parseUdp2RawInputs(map["udp2raw"]),
             vpn = parseVpnInputs(map["vpn"])
         )
     }
@@ -183,6 +184,22 @@ object ConfigLoader {
                     enabled = map["enabled"] as? Boolean ?: true,
                     accessControlMode = parseVpnAccessControlMode(map["accessControlMode"] as? String),
                     packages = (map["packages"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                )
+            }
+        }
+    }
+
+    private fun parseUdp2RawInputs(udp2raw: Any?): List<Udp2RawInputConfig> {
+        if (udp2raw == null) return emptyList()
+
+        return (udp2raw as List<*>).mapNotNull { input ->
+            (input as? Map<String, Any>)?.let { map ->
+                Udp2RawInputConfig(
+                    name = map["name"] as? String ?: return@mapNotNull null,
+                    args = (map["args"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+                    enabled = map["enabled"] as? Boolean ?: true,
+                    whenCondition = map["when"] as? String,
+                    deny = map["deny"] as? String
                 )
             }
         }

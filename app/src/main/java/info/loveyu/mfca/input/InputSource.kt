@@ -19,7 +19,7 @@ interface InputSource {
 }
 
 enum class InputType {
-    http, mqtt, websocket, tcp, vpn
+    http, mqtt, websocket, tcp, vpn, udp2raw
 }
 
 /**

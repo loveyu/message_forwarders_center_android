@@ -153,6 +153,9 @@ val buildVpnBridgeBinaries =
 
 val mihomoVersion = "1.19.25"
 val mihomoJniLibDir = layout.buildDirectory.dir("generated/jniLibs/mihomo")
+val udp2rawVersion = (project.findProperty("udp2rawVersion") as String?) ?: "v2026.05.31-android.1"
+val udp2rawJniLibDir = layout.buildDirectory.dir("generated/jniLibs/udp2raw")
+val udp2rawAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
 
 data class MihomoTarget(val abi: String, val archiveName: String)
 
@@ -188,6 +191,32 @@ val prepareMihomoLibraries =
                         "gunzip -c \"\$tmpdir/${target.archiveName}\" > '${abiDir.resolve("libmihomo.so").absolutePath}'",
                     )
                 }
+            }
+        commandLine("bash", "-lc", buildScript)
+    }
+
+val prepareUdp2RawLibraries =
+    tasks.register<Exec>("prepareUdp2RawLibraries") {
+        val outDir = udp2rawJniLibDir.get().asFile
+        outputs.dir(outDir)
+        inputs.property("udp2rawVersion", udp2rawVersion)
+        onlyIf {
+            udp2rawAbis.any { abi ->
+                !outDir.resolve("$abi/libudp2raw.so").exists()
+            }
+        }
+        val releaseZipUrl =
+            "https://github.com/loveyu/udp2raw/releases/download/$udp2rawVersion/udp2raw-android-jniLibs.zip"
+        val buildScript =
+            buildString {
+                appendLine("set -euo pipefail")
+                appendLine("tmpdir=\$(mktemp -d)")
+                appendLine("trap 'rm -rf \"\$tmpdir\"' EXIT")
+                appendLine("curl -fsSL '$releaseZipUrl' -o \"\$tmpdir/udp2raw-android-jniLibs.zip\"")
+                appendLine("rm -rf '${outDir.absolutePath}'")
+                appendLine("mkdir -p '${outDir.absolutePath}'")
+                appendLine("unzip -q \"\$tmpdir/udp2raw-android-jniLibs.zip\" -d \"\$tmpdir/unpack\"")
+                appendLine("cp -R \"\$tmpdir/unpack/jniLibs/.\" '${outDir.absolutePath}'")
             }
         commandLine("bash", "-lc", buildScript)
     }
@@ -271,6 +300,7 @@ android {
         buildConfig = true
     }
     sourceSets.getByName("main").jniLibs.srcDir(mihomoJniLibDir.get().asFile)
+    sourceSets.getByName("main").jniLibs.srcDir(udp2rawJniLibDir.get().asFile)
     sourceSets.getByName("main").jniLibs.srcDir(vpnBridgeJniLibDir.get().asFile)
     packaging {
         jniLibs {
@@ -330,6 +360,7 @@ afterEvaluate {
 
     tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach {
         dependsOn(prepareMihomoLibraries)
+        dependsOn(prepareUdp2RawLibraries)
         dependsOn(buildVpnBridgeBinaries)
     }
 }

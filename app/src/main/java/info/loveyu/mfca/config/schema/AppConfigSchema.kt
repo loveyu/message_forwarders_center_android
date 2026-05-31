@@ -186,6 +186,26 @@ object AppConfigSchema {
                 string("deny") { description = "Disable condition" }
             }
 
+            objectList(
+                "udp2raw",
+                block = { description = "Local udp2raw process inputs for raw UDP forwarding" },
+            ) {
+                string("name") {
+                    required()
+                    description = "Unique udp2raw input name referenced by rules"
+                }
+                stringList("args") {
+                    required()
+                    description = "udp2raw command arguments, for example: ['-s', '-l0.0.0.0:4096', '-r127.0.0.1:53', '--raw-mode', 'faketcp']"
+                }
+                boolean("enabled") {
+                    description = "Whether this udp2raw input is enabled"
+                    default = true
+                }
+                string("when") { description = "Enable condition" }
+                string("deny") { description = "Disable condition" }
+            }
+
         }
 
         objectNode("queues") {

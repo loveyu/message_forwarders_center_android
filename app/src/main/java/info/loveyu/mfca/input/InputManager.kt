@@ -3,6 +3,7 @@ package info.loveyu.mfca.input
 import android.content.Context
 import info.loveyu.mfca.config.AppConfig
 import info.loveyu.mfca.config.HttpInputConfig
+import info.loveyu.mfca.config.Udp2RawInputConfig
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.NetworkChecker
@@ -33,6 +34,7 @@ object InputManager {
      */
     private data class InputSourceConfig(
         val name: String,
+        val enabled: Boolean = true,
         val isLinkBased: Boolean = false,
         val linkId: String? = null,
         val isSharedServer: Boolean = false,
@@ -50,7 +52,10 @@ object InputManager {
         clear()
         globalMessageListener = messageHandler
         linkInputConfigs.addAll(config.inputs.link)
-        LogManager.logDebug("INPUT", "Initializing InputManager with ${config.inputs.http.size} HTTP inputs, ${config.inputs.link.size} link inputs")
+        LogManager.logDebug(
+            "INPUT",
+            "Initializing InputManager with ${config.inputs.http.size} HTTP inputs, ${config.inputs.link.size} link inputs, ${config.inputs.udp2raw.size} udp2raw inputs",
+        )
 
         val timestampedHandler: (InputMessage) -> Unit = { msg ->
             val enriched =
@@ -78,6 +83,7 @@ object InputManager {
                 input = input,
                 config = InputSourceConfig(
                     name = httpConfig.name,
+                    enabled = true,
                     isLinkBased = false,
                     linkId = null,
                     whenCondition = httpConfig.whenCondition,
@@ -108,6 +114,7 @@ object InputManager {
                     input = virtualInput,
                     config = InputSourceConfig(
                         name = httpConfig.name,
+                        enabled = true,
                         isLinkBased = false,
                         linkId = linkId,
                         whenCondition = httpConfig.whenCondition,
@@ -123,6 +130,7 @@ object InputManager {
                 input = sharedInput,
                 config = InputSourceConfig(
                     name = sharedInput.inputName,
+                    enabled = true,
                     isLinkBased = false,
                     linkId = linkId,
                     isSharedServer = true,
@@ -144,6 +152,7 @@ object InputManager {
                     input = input,
                     config = InputSourceConfig(
                         name = linkConfig.name,
+                        enabled = true,
                         isLinkBased = true,
                         linkId = linkId,
                         whenCondition = linkConfig.whenCondition,
@@ -154,6 +163,8 @@ object InputManager {
                 LogManager.logDebug("INPUT", "Registered ${linkConfig.role} input: ${linkConfig.name} (link: $linkId)")
             }
         }
+
+        registerUdp2RawInputs(config.inputs.udp2raw)
 
         LogManager.logDebug("INPUT", "InputManager initialized: ${entries.size} inputs registered")
     }
@@ -177,6 +188,14 @@ object InputManager {
         entries.forEach { entry ->
             val input = entry.input
             val config = entry.config
+
+            if (!config.enabled) {
+                if (input.isRunning()) {
+                    LogManager.logDebug("INPUT", "Stopping ${config.name}: input disabled")
+                    input.stop()
+                }
+                return@forEach
+            }
 
             // SharedHttpInput server entries manage a shared NanoHTTPD lifecycle
             // Virtual inputs (HttpVirtualInput) always report running, skip health check
@@ -253,6 +272,10 @@ object InputManager {
         entries.forEach { entry ->
             try {
                 // Check input's own network conditions (when/deny)
+                if (!entry.config.enabled) {
+                    LogManager.logDebug("INPUT", "Skipping ${entry.config.name}: input disabled")
+                    return@forEach
+                }
                 if (ctx != null && !NetworkChecker.shouldEnable(ctx, entry.config.whenCondition, entry.config.deny)) {
                     LogManager.logDebug("INPUT", "Skipping ${entry.config.name}: network conditions not met")
                     return@forEach
@@ -361,6 +384,32 @@ object InputManager {
             info.loveyu.mfca.config.LinkType.mqtt -> MqttInput(config)
             info.loveyu.mfca.config.LinkType.websocket -> WebSocketInput(config)
             else -> TcpInput(config)
+        }
+    }
+
+    private fun registerUdp2RawInputs(configs: List<Udp2RawInputConfig>) {
+        val ctx = applicationContext
+        if (configs.isNotEmpty() && ctx == null) {
+            LogManager.logError("INPUT", "Skipping udp2raw inputs: application context not set")
+            return
+        }
+        configs.forEach { udp2rawConfig ->
+            val input = Udp2RawInput(requireNotNull(ctx), udp2rawConfig)
+            entries.add(
+                InputEntry(
+                    input = input,
+                    config =
+                        InputSourceConfig(
+                            name = udp2rawConfig.name,
+                            enabled = udp2rawConfig.enabled,
+                            isLinkBased = false,
+                            linkId = null,
+                            whenCondition = udp2rawConfig.whenCondition,
+                            deny = udp2rawConfig.deny,
+                        ),
+                ),
+            )
+            LogManager.logDebug("INPUT", "Registered udp2raw input: ${udp2rawConfig.name}")
         }
     }
 }

@@ -66,6 +66,7 @@ import info.loveyu.mfca.config.LinkConfig
 import info.loveyu.mfca.config.LinkInputConfig
 import info.loveyu.mfca.config.LinkOutputConfig
 import info.loveyu.mfca.config.LinkType
+import info.loveyu.mfca.config.Udp2RawInputConfig
 import info.loveyu.mfca.input.HttpInput
 import info.loveyu.mfca.input.HttpVirtualInput
 import info.loveyu.mfca.input.InputManager
@@ -178,6 +179,9 @@ fun getAllComponentStatuses(context: Context): List<ComponentStatus> {
                     )
                 )
             }
+        }
+        appConfig.inputs.udp2raw.forEach { udp2rawConfig ->
+            statuses.add(buildUdp2RawInputStatus(context, udp2rawConfig))
         }
         appConfig.rules.forEach { ruleConfig ->
             statuses.add(buildRuleStatus(context, ruleConfig))
@@ -421,6 +425,37 @@ private fun buildLinkInputStatus(
         isRunning = input?.isRunning() ?: false,
         notEnabledReason = notEnabledReason,
         details = details
+    )
+}
+
+private fun buildUdp2RawInputStatus(
+    context: Context,
+    config: Udp2RawInputConfig
+): ComponentStatus {
+    val input = InputManager.getInput(config.name)
+    val networkEnableResult = NetworkChecker.getEnableReason(context, config.whenCondition, config.deny)
+    val isEnabled = config.enabled && networkEnableResult.enabled
+    val notEnabledReason = when {
+        !config.enabled -> "Input disabled"
+        !networkEnableResult.enabled -> networkEnableResult.reason
+        else -> null
+    }
+    val details = buildString {
+        append("Type: udp2raw")
+        append("\nArgs: ${if (config.args.isNotEmpty()) config.args.joinToString(" ") else "(none)"}")
+        if (config.whenCondition != null || config.deny != null) {
+            append("\n\n${NetworkChecker.getMatchedConditions(context, config.whenCondition, config.deny)}")
+        }
+    }
+    return ComponentStatus(
+        id = config.name,
+        name = config.name,
+        type = ComponentType.LINK_INPUT,
+        isEnabled = isEnabled,
+        isRunning = input?.isRunning() ?: false,
+        notEnabledReason = notEnabledReason,
+        details = details,
+        error = input?.getError()
     )
 }
 

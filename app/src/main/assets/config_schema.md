@@ -85,6 +85,7 @@ Input source configurations
 | `http` | list[object] |  |  | HTTP server input sources |
 | `link` | list[object] |  |  | Link-based input sources (MQTT subscriber, WebSocket, TCP) |
 | `vpn` | list[object] |  |  | VPN inputs backed by a remote mihomo config and bundled core |
+| `udp2raw` | list[object] |  |  | Local udp2raw process inputs for raw UDP forwarding |
 
 ### `http`
 
@@ -157,6 +158,21 @@ VPN inputs backed by a remote mihomo config and bundled core
 | `enabled` | boolean |  | `true` | Whether this VPN candidate is enabled by default |
 | `accessControlMode` | enum |  | `acceptAll` | App access control mode for this VPN profile `acceptAll` / `include` / `exclude` |
 | `packages` | list[string] |  |  | Package names for include/exclude access control |
+| `when` | string |  |  | Enable condition |
+| `deny` | string |  |  | Disable condition |
+
+### `udp2raw`
+
+Local udp2raw process inputs for raw UDP forwarding
+
+- **Type**: list[object]
+
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `name` | string | ✓ |  | Unique udp2raw input name referenced by rules |
+| `args` | list[string] | ✓ |  | udp2raw command arguments, for example: ['-s', '-l0.0.0.0:4096', '-r127.0.0.1:53', '--raw-mode', 'faketcp'] |
+| `enabled` | boolean |  | `true` | Whether this udp2raw input is enabled |
 | `when` | string |  |  | Enable condition |
 | `deny` | string |  |  | Disable condition |
 

@@ -101,6 +101,7 @@ data class TlsConfig(
 data class InputsConfig(
     val http: List<HttpInputConfig> = emptyList(),
     val link: List<LinkInputConfig> = emptyList(),
+    val udp2raw: List<Udp2RawInputConfig> = emptyList(),
     val vpn: List<VpnInputConfig> = emptyList()
 )
 
@@ -175,6 +176,14 @@ data class VpnInputConfig(
     val enabled: Boolean = true,
     val accessControlMode: VpnAccessControlMode = VpnAccessControlMode.acceptAll,
     val packages: List<String> = emptyList()
+)
+
+data class Udp2RawInputConfig(
+    val name: String,
+    val args: List<String> = emptyList(),
+    val enabled: Boolean = true,
+    val whenCondition: String? = null,
+    val deny: String? = null
 )
 
 enum class VpnAccessControlMode {

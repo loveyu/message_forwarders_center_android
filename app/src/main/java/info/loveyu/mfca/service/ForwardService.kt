@@ -141,6 +141,8 @@ class ForwardService : Service() {
                     NetworkChecker.shouldEnable(ctx, input.whenCondition, input.deny)
                 } + config.inputs.link.count { input ->
                     NetworkChecker.shouldEnable(ctx, input.whenCondition, input.deny)
+                } + config.inputs.udp2raw.count { input ->
+                    input.enabled && NetworkChecker.shouldEnable(ctx, input.whenCondition, input.deny)
                 } + config.inputs.vpn.count { input ->
                     input.enabled && NetworkChecker.shouldEnable(ctx, input.whenCondition, input.deny)
                 }
