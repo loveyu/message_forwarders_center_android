@@ -27,6 +27,7 @@ import info.loveyu.mfca.util.NetworkChecker
 import info.loveyu.mfca.util.Preferences
 import info.loveyu.mfca.vpn.MfcaVpnService
 import info.loveyu.mfca.vpn.VpnManager
+import androidx.core.content.ContextCompat
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
@@ -276,9 +277,14 @@ class ForwardService : Service() {
 
         // 1. Link 健康检查 + MQTT 心跳
         val nextLinkTickDelayMs = LinkManager.onTick()
+        val vpnConfigChanged = VpnManager.onTick(this)
         VpnManager.refresh()
         if (VpnManager.state.value.isEnabled) {
-            MfcaVpnService.sync(this)
+            if (vpnConfigChanged) {
+                ContextCompat.startForegroundService(this, MfcaVpnService.refreshIntent(this, forceRestart = true))
+            } else {
+                MfcaVpnService.sync(this)
+            }
         }
 
         // 2. Input 健康检查

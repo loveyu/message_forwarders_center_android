@@ -174,6 +174,10 @@ object ConfigLoader {
                 VpnInputConfig(
                     name = map["name"] as? String ?: return@mapNotNull null,
                     configUrl = map["configUrl"] as? String ?: return@mapNotNull null,
+                    refreshIntervalMs = (map["refreshInterval"] as? String)
+                        ?.takeIf { it.isNotBlank() && it != "0" }
+                        ?.let { Duration(it).millis }
+                        ?: 0L,
                     whenCondition = map["when"] as? String,
                     deny = map["deny"] as? String,
                     enabled = map["enabled"] as? Boolean ?: true,

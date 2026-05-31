@@ -167,6 +167,10 @@ object AppConfigSchema {
                     required()
                     description = "Remote mihomo config URL"
                 }
+                duration("refreshInterval") {
+                    description = "Auto-refresh interval for the config (e.g. '1h', '24h'); omit or set to '0' to disable"
+                    default = "0"
+                }
                 boolean("enabled") {
                     description = "Whether this VPN candidate is enabled by default"
                     default = true

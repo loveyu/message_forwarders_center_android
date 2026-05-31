@@ -4,6 +4,7 @@ inputs:
   vpn:
     - name: home_vpn_primary
       configUrl: https://example.com/vpn/home-primary.yaml
+      refreshInterval: "24h"
       enabled: true
       when: network=wifi&ssid=HomeWiFi
       accessControlMode: include

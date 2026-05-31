@@ -19,11 +19,19 @@ data class VpnCoreState(
     val path: String? = null,
 )
 
+data class VpnConfigCacheState(
+    val isCached: Boolean = false,
+    val lastUpdatedMs: Long? = null,
+    val nextRefreshMs: Long? = null,
+    val filePath: String? = null,
+)
+
 data class VpnCandidateState(
     val config: VpnInputConfig,
     val effectiveAccessControlMode: VpnAccessControlMode,
     val effectivePackages: List<String>,
     val coreState: VpnCoreState,
+    val configCacheState: VpnConfigCacheState,
     val isAvailable: Boolean,
     val availabilityReason: String? = null,
     val isSelected: Boolean = false,

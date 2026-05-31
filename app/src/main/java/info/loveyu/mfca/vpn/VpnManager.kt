@@ -67,6 +67,61 @@ object VpnManager {
         return stateFlow.value.candidates.firstOrNull { it.isSelected && it.isAvailable }
     }
 
+    fun downloadConfig(context: Context, candidateName: String): Result<VpnConfigCacheState> {
+        val config =
+            configs.firstOrNull { it.name == candidateName }
+                ?: return Result.failure(IllegalArgumentException("Unknown VPN candidate: $candidateName"))
+        LogManager.logInfo("VPN", "Downloading config for $candidateName: ${config.configUrl}")
+        return VpnConfigCacheManager.downloadConfig(context, config).map {
+            rebuildState()
+            VpnConfigCacheManager.inspect(context, config)
+        }
+    }
+
+    fun deleteConfigCache(context: Context, candidateName: String): Result<VpnConfigCacheState> {
+        val config =
+            configs.firstOrNull { it.name == candidateName }
+                ?: return Result.failure(IllegalArgumentException("Unknown VPN candidate: $candidateName"))
+        return VpnConfigCacheManager.deleteCache(context, candidateName).map {
+            rebuildState()
+            VpnConfigCacheManager.inspect(context, config)
+        }
+    }
+
+    /**
+     * Called on every tick. Checks each candidate's auto-refresh schedule and downloads
+     * if due. Returns true if a running candidate's config changed (caller should restart VPN).
+     */
+    fun onTick(context: Context): Boolean {
+        val now = System.currentTimeMillis()
+        var runningConfigChanged = false
+        configs.forEach { config ->
+            if (config.refreshIntervalMs <= 0) return@forEach
+            val cacheState = VpnConfigCacheManager.inspect(context, config)
+            val nextRefreshMs = cacheState.nextRefreshMs ?: return@forEach
+            if (now < nextRefreshMs) return@forEach
+            LogManager.logInfo("VPN", "Auto-refreshing config for ${config.name}")
+            VpnConfigCacheManager.downloadConfig(context, config)
+                .onSuccess { changed ->
+                    rebuildState()
+                    if (changed && stateFlow.value.runningCandidateName == config.name) {
+                        LogManager.logInfo(
+                            "VPN",
+                            "Config changed for running candidate ${config.name}, signalling restart",
+                        )
+                        runningConfigChanged = true
+                    }
+                }
+                .onFailure { error ->
+                    LogManager.logWarn(
+                        "VPN",
+                        "Auto-refresh failed for ${config.name}: ${error.message}",
+                    )
+                }
+        }
+        return runningConfigChanged
+    }
+
     fun prepareSelectedCandidate(context: Context): Result<PreparedVpnArtifacts> {
         val selected = getSelectedCandidate()
             ?: return Result.failure(IllegalStateException("No available VPN candidate selected"))
@@ -75,7 +130,17 @@ object VpnManager {
         return MihomoCoreManager.ensureCore(context).fold(
             onSuccess = { coreFile ->
                 LogManager.logInfo("VPN", "Prepared mihomo core for ${selected.config.name}: ${coreFile.absolutePath}")
-                VpnProfileManager.ensureProfile(context, selected.config, LOCAL_PROXY_PORT).map { profileFile ->
+                val cachedSource =
+                    VpnConfigCacheManager.getCachedSourceFile(context, selected.config.name)
+                        ?: return@fold Result.failure(
+                            IllegalStateException("配置未缓存，请先下载 ${selected.config.name} 的配置"),
+                        )
+                VpnProfileManager.buildRuntimeProfile(
+                    context,
+                    selected.config.name,
+                    cachedSource.readText(),
+                    LOCAL_PROXY_PORT,
+                ).map { profileFile ->
                     LogManager.logInfo("VPN", "Prepared VPN profile for ${selected.config.name}: ${profileFile.absolutePath}")
                     PreparedVpnArtifacts(
                         candidate = selected.config,
@@ -134,19 +199,25 @@ object VpnManager {
         val candidates = configs.map { config ->
             val effectiveMode = stateStore.getAccessControlMode(config.name, config.accessControlMode)
             val effectivePackages = stateStore.getPackages(config.name, config.packages)
-            val availability = if (!config.enabled) {
+            val networkAvailability = if (!config.enabled) {
                 NetworkChecker.EnableResult(enabled = false, reason = "Disabled in config")
             } else {
                 NetworkChecker.getEnableReason(context, config.whenCondition, config.deny)
             }
             val coreState = MihomoCoreManager.inspectCore(context)
+            val configCacheState = VpnConfigCacheManager.inspect(context, config)
             VpnCandidateState(
                 config = config,
                 effectiveAccessControlMode = effectiveMode,
                 effectivePackages = effectivePackages,
                 coreState = coreState,
-                isAvailable = availability.enabled,
-                availabilityReason = availability.reason,
+                configCacheState = configCacheState,
+                isAvailable = networkAvailability.enabled && configCacheState.isCached,
+                availabilityReason = when {
+                    !networkAvailability.enabled -> networkAvailability.reason
+                    !configCacheState.isCached -> "配置未缓存，请先下载配置"
+                    else -> null
+                },
             )
         }
         val activeName = resolveActiveCandidateName(candidates, selectionHistory)

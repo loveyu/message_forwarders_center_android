@@ -169,6 +169,7 @@ enum class LinkRole {
 data class VpnInputConfig(
     val name: String,
     val configUrl: String,
+    val refreshIntervalMs: Long = 0L,
     val whenCondition: String? = null,
     val deny: String? = null,
     val enabled: Boolean = true,
