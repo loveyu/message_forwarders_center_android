@@ -17,7 +17,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Kr328/tun2socket"
+	"info.loveyu.mfca/vpnbridge/internal/nat"
 	"golang.org/x/sys/unix"
 )
 
@@ -32,7 +32,8 @@ const (
 )
 
 type bridge struct {
-	stack      *tun2socket.Tun2Socket
+	tcp        *nat.TCP
+	udp        *nat.UDP
 	socksAddr  string
 	udpLock    sync.Mutex
 	udpSession map[string]*udpAssociation
@@ -78,18 +79,21 @@ func main() {
 	}
 
 	device := os.NewFile(uintptr(fd), "/dev/tun")
-	stack, err := tun2socket.StartTun2Socket(device, network, portal)
+	tcp, udp, err := nat.Start(device, network, portal)
 	if err != nil {
 		_ = device.Close()
 		log.Fatalf("start tun2socket failed: %v", err)
 	}
-	defer stack.Close()
+	defer tcp.Close()
+	defer udp.Close()
+	defer device.Close()
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
 	b := &bridge{
-		stack:      stack,
+		tcp:        tcp,
+		udp:        udp,
 		socksAddr:  socksAddr,
 		udpSession: make(map[string]*udpAssociation),
 	}
@@ -102,7 +106,7 @@ func main() {
 
 func (b *bridge) runTCP(ctx context.Context) {
 	for {
-		conn, err := b.stack.TCP().Accept()
+		conn, err := b.tcp.Accept()
 		if err != nil {
 			if ctx.Err() != nil || errors.Is(err, net.ErrClosed) {
 				return
@@ -148,7 +152,7 @@ func (b *bridge) handleTCP(conn net.Conn) {
 func (b *bridge) runUDP(ctx context.Context) {
 	buf := make([]byte, 65535)
 	for {
-		n, source, destination, err := b.stack.UDP().ReadFrom(buf)
+		n, source, destination, err := b.udp.ReadFrom(buf)
 		if err != nil {
 			if ctx.Err() != nil || errors.Is(err, net.ErrClosed) {
 				return
@@ -248,7 +252,7 @@ func (u *udpAssociation) readLoop() {
 			continue
 		}
 
-		if _, err := u.bridge.stack.UDP().WriteTo(payload, remoteAddr, u.localAddr); err != nil {
+		if _, err := u.bridge.udp.WriteTo(payload, remoteAddr, u.localAddr); err != nil {
 			log.Printf("udp write back failed: %v", err)
 			u.bridge.removeUDPAssociation(u.localAddr.String())
 			return

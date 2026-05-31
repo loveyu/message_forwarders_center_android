@@ -19,6 +19,10 @@ object MihomoProcessManager {
     )
 
     @Volatile private var runningProcess: RunningProcess? = null
+    @Volatile private var lastLogFiles: Pair<File, File>? = null
+
+    fun getLastLogFiles(): Pair<File, File>? = lastLogFiles
+    fun isRunning(): Boolean = current() != null
 
     @Synchronized
     fun current(): RunningProcess? {
@@ -44,6 +48,7 @@ object MihomoProcessManager {
             }
             val stdoutLog = File(workDir, "mihomo.stdout.log").apply { writeText("") }
             val stderrLog = File(workDir, "mihomo.stderr.log").apply { writeText("") }
+            lastLogFiles = Pair(stdoutLog, stderrLog)
             LogManager.logInfo(
                 "VPN",
                 "Starting mihomo for ${artifacts.candidate.name}: core=${artifacts.coreFilePath}, profile=${artifacts.profileFilePath}, workDir=${workDir.absolutePath}",
