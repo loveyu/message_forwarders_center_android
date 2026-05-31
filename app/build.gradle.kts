@@ -73,7 +73,7 @@ val androidNdkRootDir =
         .map { file(it) }
         .orElse(layout.buildDirectory.dir("tools/android-ndk/$androidNdkVersion").map { it.asFile })
 val vpnBridgeSourceDir = layout.projectDirectory.dir("src/main/go/vpnbridge")
-val vpnBridgeAssetDir = layout.buildDirectory.dir("generated/assets/vpnbridge")
+val vpnBridgeJniLibDir = layout.buildDirectory.dir("generated/jniLibs/vpnbridge")
 val ensureGoToolchain =
     tasks.register<Exec>("ensureGoToolchain") {
         outputs.dir(goToolchainRootDir)
@@ -123,11 +123,11 @@ val buildVpnBridgeBinaries =
         inputs.dir(vpnBridgeSourceDir)
         inputs.property("goToolchainVersion", goToolchainVersion)
         inputs.property("androidNdkVersion", androidNdkVersion)
-        outputs.dir(vpnBridgeAssetDir)
-        val outputRoot = vpnBridgeAssetDir.get().asFile
+        outputs.dir(vpnBridgeJniLibDir)
+        val outputRoot = vpnBridgeJniLibDir.get().asFile
         onlyIf {
             vpnBridgeTargets.any { target ->
-                !outputRoot.resolve("vpnbridge/${target.abi}/vpnbridge").exists()
+                !outputRoot.resolve("${target.abi}/libvpnbridge.so").exists()
             }
         }
         outputRoot.mkdirs()
@@ -138,13 +138,13 @@ val buildVpnBridgeBinaries =
                 appendLine("cd '${vpnBridgeSourceDir.asFile.absolutePath}'")
                 appendLine("'${goBinary.get().absolutePath}' mod tidy")
                 vpnBridgeTargets.forEach { target ->
-                    appendLine("mkdir -p '${outputRoot.resolve("vpnbridge/${target.abi}").absolutePath}'")
+                    appendLine("mkdir -p '${outputRoot.resolve(target.abi).absolutePath}'")
                     append("GOOS=android GOARCH=${target.goArch} CGO_ENABLED=1 CC='${ndkBinDir.resolve(target.clangTriple).absolutePath}' ")
                     if (target.goArm != null) {
                         append("GOARM=${target.goArm} ")
                     }
                     appendLine(
-                        "'${goBinary.get().absolutePath}' build -trimpath -o '${outputRoot.resolve("vpnbridge/${target.abi}/vpnbridge").absolutePath}' .",
+                        "'${goBinary.get().absolutePath}' build -trimpath -o '${outputRoot.resolve("${target.abi}/libvpnbridge.so").absolutePath}' .",
                     )
                 }
             }
@@ -270,8 +270,8 @@ android {
         compose = true
         buildConfig = true
     }
-    sourceSets.getByName("main").assets.srcDir(vpnBridgeAssetDir.get().asFile)
     sourceSets.getByName("main").jniLibs.srcDir(mihomoJniLibDir.get().asFile)
+    sourceSets.getByName("main").jniLibs.srcDir(vpnBridgeJniLibDir.get().asFile)
     packaging {
         jniLibs {
             useLegacyPackaging = true
@@ -328,11 +328,8 @@ afterEvaluate {
         outputs.upToDateWhen { false }
     }
 
-    tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
-        dependsOn(buildVpnBridgeBinaries)
-    }
-
     tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach {
         dependsOn(prepareMihomoLibraries)
+        dependsOn(buildVpnBridgeBinaries)
     }
 }

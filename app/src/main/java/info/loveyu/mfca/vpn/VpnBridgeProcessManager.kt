@@ -3,7 +3,6 @@ package info.loveyu.mfca.vpn
 import android.content.Context
 import android.net.LocalServerSocket
 import android.net.LocalSocket
-import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.system.Os
 import info.loveyu.mfca.util.LogManager
@@ -139,29 +138,13 @@ object VpnBridgeProcessManager {
     }
 
     private fun ensureBridgeBinary(context: Context): File {
-        val abi = currentAbiDirectory()
-        val targetDir = File(context.getDir("vpn_bridge_exec", Context.MODE_PRIVATE), abi).apply { mkdirs() }
-        Os.chmod(targetDir.absolutePath, 0b111_101_101) // 0755
-        val targetFile = File(targetDir, "vpnbridge")
-        if (targetFile.exists() && targetFile.canExecute()) {
-            return targetFile
-        }
-
-        context.assets.open("vpnbridge/$abi/vpnbridge").use { input ->
-            targetFile.outputStream().use { output -> input.copyTo(output) }
-        }
-        Os.chmod(targetFile.absolutePath, 0b111_101_101) // 0755
-        return targetFile
-    }
-
-    private fun currentAbiDirectory(): String {
-        return when {
-            Build.SUPPORTED_ABIS.any { it.contains("arm64") } -> "arm64-v8a"
-            Build.SUPPORTED_ABIS.any { it.contains("armeabi") || it == "arm" } -> "armeabi-v7a"
-            Build.SUPPORTED_ABIS.any { it.contains("x86_64") } -> "x86_64"
-            Build.SUPPORTED_ABIS.any { it == "x86" } -> "x86"
-            else -> throw IllegalStateException("Unsupported ABI: ${Build.SUPPORTED_ABIS.joinToString()}")
-        }
+        val lib = File(context.applicationInfo.nativeLibraryDir, "libvpnbridge.so")
+        require(lib.exists()) { "内置 vpnbridge 不存在: ${lib.absolutePath}" }
+        val symlink = File(context.filesDir, "vpn/core/vpnbridge")
+        symlink.parentFile?.mkdirs()
+        symlink.delete()
+        Os.symlink(lib.absolutePath, symlink.absolutePath)
+        return symlink
     }
 
     private fun readFailureOutput(stdoutLog: File, stderrLog: File): String {
