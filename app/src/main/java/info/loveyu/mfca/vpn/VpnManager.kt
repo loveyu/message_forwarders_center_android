@@ -71,7 +71,7 @@ object VpnManager {
         val selected = getSelectedCandidate()
             ?: return Result.failure(IllegalStateException("No available VPN candidate selected"))
         updateRuntimeStatus(VpnRuntimeStatus.preparing, "Preparing ${selected.config.name}")
-        return MihomoCoreManager.ensureCore(context, selected.config.coreVersion).fold(
+        return MihomoCoreManager.ensureCore(context, selected.config.coreUrl).fold(
             onSuccess = { coreFile ->
                 VpnProfileManager.ensureProfile(context, selected.config, LOCAL_PROXY_PORT).map { profileFile ->
                     PreparedVpnArtifacts(

@@ -167,9 +167,9 @@ object AppConfigSchema {
                     required()
                     description = "Remote mihomo config URL"
                 }
-                string("coreVersion") {
-                    description = "Requested mihomo core version (tag name or latest)"
-                    default = "latest"
+                string("coreUrl") {
+                    required()
+                    description = "Full download URL for the mihomo core package or binary"
                 }
                 boolean("enabled") {
                     description = "Whether this VPN candidate is enabled by default"

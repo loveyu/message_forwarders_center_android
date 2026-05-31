@@ -106,7 +106,7 @@
     <string name="vpn_establish_failed">建立 VPN 接口失败</string>
     <string name="vpn_candidate_available">可用</string>
     <string name="vpn_candidate_unavailable">不可用</string>
-    <string name="vpn_core_version">核心版本: %1$s</string>
+    <string name="vpn_core_url">核心地址: %1$s</string>
     <string name="vpn_access_summary">过滤: %1$s · %2$d 个应用</string>
     <string name="vpn_selected">已选中</string>
     <string name="vpn_select">选为首选</string>

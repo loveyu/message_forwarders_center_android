@@ -174,7 +174,7 @@ object ConfigLoader {
                 VpnInputConfig(
                     name = map["name"] as? String ?: return@mapNotNull null,
                     configUrl = map["configUrl"] as? String ?: return@mapNotNull null,
-                    coreVersion = map["coreVersion"] as? String ?: "latest",
+                    coreUrl = map["coreUrl"] as? String ?: return@mapNotNull null,
                     whenCondition = map["when"] as? String,
                     deny = map["deny"] as? String,
                     enabled = map["enabled"] as? Boolean ?: true,

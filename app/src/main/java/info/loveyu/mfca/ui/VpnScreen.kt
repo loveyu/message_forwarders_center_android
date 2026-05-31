@@ -193,7 +193,7 @@ fun VpnScreen(contentPadding: PaddingValues) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         AssistChip(
                             onClick = { },
-                            label = { Text(context.getString(R.string.vpn_core_version, candidate.config.coreVersion)) },
+                            label = { Text(context.getString(R.string.vpn_core_url, candidate.config.coreUrl)) },
                         )
                         AssistChip(
                             onClick = { },

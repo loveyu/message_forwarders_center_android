@@ -126,7 +126,7 @@ class AppConfigSchemaTest {
               vpn:
                 - name: office_vpn
                   configUrl: https://example.com/mihomo.yaml
-                  coreVersion: v1.19.10
+                  coreUrl: https://example.com/mihomo-v1.19.10-android-arm64-v8a.gz
                   enabled: true
                   when: network=wifi
                   accessControlMode: exclude
@@ -139,7 +139,7 @@ class AppConfigSchemaTest {
         assertEquals(1, config.inputs.vpn.size)
         assertEquals("office_vpn", config.inputs.vpn[0].name)
         assertEquals("https://example.com/mihomo.yaml", config.inputs.vpn[0].configUrl)
-        assertEquals("v1.19.10", config.inputs.vpn[0].coreVersion)
+        assertEquals("https://example.com/mihomo-v1.19.10-android-arm64-v8a.gz", config.inputs.vpn[0].coreUrl)
         assertEquals(2, config.inputs.vpn[0].packages.size)
     }
 

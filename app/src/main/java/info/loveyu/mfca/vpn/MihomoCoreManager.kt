@@ -1,84 +1,33 @@
 package info.loveyu.mfca.vpn
 
 import android.content.Context
-import android.os.Build
-import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
 
 object MihomoCoreManager {
-    private const val API_BASE = "https://api.github.com/repos/MetaCubeX/mihomo/releases"
-
-    fun ensureCore(context: Context, requestedVersion: String): Result<File> {
+    fun ensureCore(context: Context, coreUrl: String): Result<File> {
         return runCatching {
-            val release = fetchReleaseInfo(requestedVersion)
-            val targetDir = File(context.filesDir, "vpn/mihomo/${release.tag}")
+            val normalizedUrl = coreUrl.trim()
+            require(normalizedUrl.isNotEmpty()) { "VPN coreUrl cannot be blank" }
+            val sourceUrl = URL(normalizedUrl)
+            val targetDir = File(context.filesDir, "vpn/mihomo/${sha256(normalizedUrl)}")
             val targetFile = File(targetDir, "mihomo")
             if (targetFile.exists() && targetFile.canExecute()) {
                 return@runCatching targetFile
             }
 
             targetDir.mkdirs()
-            val tempFile = File(targetDir, "download.tmp")
-            downloadToFile(release.assetUrl, tempFile)
+            val tempFile = File(targetDir, sourceUrl.path.substringAfterLast('/').ifBlank { "download.tmp" })
+            downloadToFile(normalizedUrl, tempFile)
             extractBinary(tempFile, targetFile)
             tempFile.delete()
             targetFile.setExecutable(true)
             targetFile
-        }
-    }
-
-    private fun fetchReleaseInfo(requestedVersion: String): ReleaseInfo {
-        val normalizedVersion = requestedVersion.trim().ifBlank { "latest" }
-        val apiUrl = if (normalizedVersion == "latest") {
-            "$API_BASE/latest"
-        } else {
-            "$API_BASE/tags/$normalizedVersion"
-        }
-        val json = requestString(apiUrl)
-        val payload = JSONObject(json)
-        val tag = payload.optString("tag_name").ifBlank { normalizedVersion }
-        val assets = payload.optJSONArray("assets") ?: throw IllegalStateException("No release assets for $normalizedVersion")
-        val assetUrl = selectAssetUrl(assets) ?: throw IllegalStateException("No Android mihomo asset for ${Build.SUPPORTED_ABIS.firstOrNull()}")
-        return ReleaseInfo(tag = tag, assetUrl = assetUrl)
-    }
-
-    private fun selectAssetUrl(assets: org.json.JSONArray): String? {
-        val preferredKeywords = currentAbiKeywords()
-        val candidates = mutableListOf<Pair<String, String>>()
-        for (index in 0 until assets.length()) {
-            val asset = assets.optJSONObject(index) ?: continue
-            val name = asset.optString("name")
-            val url = asset.optString("browser_download_url")
-            if (name.isBlank() || url.isBlank()) continue
-            candidates += name to url
-        }
-
-        preferredKeywords.forEach { keyword ->
-            candidates.firstOrNull { (name, _) ->
-                name.contains("android", ignoreCase = true) &&
-                    name.contains(keyword, ignoreCase = true) &&
-                    (name.endsWith(".gz") || name.endsWith(".zip"))
-            }?.let { return it.second }
-        }
-
-        return candidates.firstOrNull { (name, _) ->
-            name.contains("android", ignoreCase = true) &&
-                (name.endsWith(".gz") || name.endsWith(".zip"))
-        }?.second
-    }
-
-    private fun currentAbiKeywords(): List<String> {
-        return when {
-            Build.SUPPORTED_ABIS.any { it.contains("arm64") } -> listOf("arm64", "aarch64")
-            Build.SUPPORTED_ABIS.any { it.contains("armeabi") || it.contains("arm") } -> listOf("armv7", "armv7a", "arm")
-            Build.SUPPORTED_ABIS.any { it.contains("x86_64") } -> listOf("x86_64", "amd64")
-            Build.SUPPORTED_ABIS.any { it.contains("x86") } -> listOf("386", "x86")
-            else -> emptyList()
         }
     }
 
@@ -95,20 +44,10 @@ object MihomoCoreManager {
         }
     }
 
-    private fun requestString(url: String): String {
-        val connection = openConnection(url)
-        return try {
-            connection.inputStream.bufferedReader().use { reader -> reader.readText() }
-        } finally {
-            connection.disconnect()
-        }
-    }
-
     private fun openConnection(url: String): HttpURLConnection {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
             readTimeout = 30_000
-            setRequestProperty("Accept", "application/vnd.github+json")
             setRequestProperty("User-Agent", "FlowGate-Android")
         }
         if (connection.responseCode !in 200..299) {
@@ -145,8 +84,9 @@ object MihomoCoreManager {
         }
     }
 
-    private data class ReleaseInfo(
-        val tag: String,
-        val assetUrl: String,
-    )
+    private fun sha256(value: String): String {
+        return MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+    }
 }
