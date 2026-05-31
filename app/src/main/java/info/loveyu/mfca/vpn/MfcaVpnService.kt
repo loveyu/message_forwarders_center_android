@@ -1,7 +1,6 @@
 package info.loveyu.mfca.vpn
 
 import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
@@ -14,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
+import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.LogManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -60,13 +60,14 @@ class MfcaVpnService : VpnService() {
         val notification = buildNotification(content)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
-                NOTIFICATION_ID,
+                ForwardService.NOTIFICATION_ID,
                 notification,
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
             )
         } else {
-            startForeground(NOTIFICATION_ID, notification)
+            startForeground(ForwardService.NOTIFICATION_ID, notification)
         }
+        ForwardService.refreshNotification()
     }
 
     override fun onRevoke() {
@@ -218,7 +219,7 @@ class MfcaVpnService : VpnService() {
             )
         }
         if (stopService) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopForeground(STOP_FOREGROUND_DETACH)
             stopSelf()
         } else {
             updateNotification(VpnManager.state.value.statusMessage)
@@ -354,13 +355,15 @@ class MfcaVpnService : VpnService() {
     }
 
     private fun updateNotification(content: String) {
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, buildNotification(content))
+        ForwardService.refreshNotification()
+        if (!ForwardService.isServiceAlive()) {
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.notify(ForwardService.NOTIFICATION_ID, buildNotification(content))
+        }
     }
 
     private fun buildNotification(content: String): Notification {
-        ensureChannel()
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        return NotificationCompat.Builder(this, ForwardService.CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(getString(R.string.vpn_notification_title))
             .setContentText(content)
@@ -368,7 +371,7 @@ class MfcaVpnService : VpnService() {
             .setContentIntent(
                 PendingIntent.getActivity(
                     this,
-                    NOTIFICATION_ID,
+                    ForwardService.NOTIFICATION_ID,
                     Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 ),
@@ -376,22 +379,7 @@ class MfcaVpnService : VpnService() {
             .build()
     }
 
-    private fun ensureChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
-        manager.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                getString(R.string.vpn_notification_channel),
-                NotificationManager.IMPORTANCE_LOW,
-            ),
-        )
-    }
-
     companion object {
-        private const val CHANNEL_ID = "mfca_vpn_runtime"
-        private const val NOTIFICATION_ID = 1202
         private const val MAX_RETRY_ATTEMPTS = 3
         private const val RETRY_DELAY_MS = 5_000L
         const val TUN_MTU = 1500

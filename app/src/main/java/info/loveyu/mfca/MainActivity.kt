@@ -206,13 +206,15 @@ class MainActivity : ComponentActivity() {
 
     private fun promptBatteryOptimization() {
         val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
-        if (!pm.isIgnoringBatteryOptimizations(packageName)) {
-            try {
-                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                    data = android.net.Uri.parse("package:$packageName")
-                })
-            } catch (_: Exception) {
-            }
+        if (pm.isIgnoringBatteryOptimizations(packageName)) return
+        val prefs = Preferences(this)
+        if (prefs.batteryOptPrompted) return
+        prefs.batteryOptPrompted = true
+        try {
+            startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = android.net.Uri.parse("package:$packageName")
+            })
+        } catch (_: Exception) {
         }
     }
 }

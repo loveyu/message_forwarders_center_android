@@ -235,12 +235,17 @@ fun VpnScreen(contentPadding: PaddingValues) {
                                 if (candidate.coreState.isReady) R.string.vpn_core_ready else R.string.vpn_core_missing,
                             ),
                         )
-                        VpnStatusChip(
-                            label = context.getString(
-                                R.string.vpn_access_summary,
-                                candidate.effectiveAccessControlMode.name,
-                                candidate.effectivePackages.size,
-                            ),
+                        AssistChip(
+                            onClick = { editingCandidate = candidate },
+                            label = {
+                                Text(
+                                    context.getString(
+                                        R.string.vpn_access_summary,
+                                        candidate.effectiveAccessControlMode.name,
+                                        candidate.effectivePackages.size,
+                                    ),
+                                )
+                            },
                         )
                     }
 

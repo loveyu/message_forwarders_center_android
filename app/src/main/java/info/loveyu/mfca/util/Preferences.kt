@@ -53,6 +53,10 @@ class Preferences(context: Context) {
         get() = prefs.getBoolean("show_tab_label", true)
         set(value) = prefs.edit().putBoolean("show_tab_label", value).apply()
 
+    var batteryOptPrompted: Boolean
+        get() = prefs.getBoolean("battery_opt_prompted", false)
+        set(value) = prefs.edit().putBoolean("battery_opt_prompted", value).apply()
+
     fun saveFullConfig(configJson: String) {
         prefs.edit().putString("full_config", configJson).apply()
     }
