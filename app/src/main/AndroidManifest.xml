@@ -17,6 +17,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- 远程消息推送类型前台服务权限（Android 14+，无时间限制，适用于 MQTT/WebSocket/TCP 长连接） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+    <!-- VPN 前台服务类型权限（Android 14+） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- 添加开机自启动权限 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- 添加电池优化豁免权限 -->
@@ -105,7 +107,11 @@
         <service
             android:name=".vpn.MfcaVpnService"
             android:exported="false"
+            android:foregroundServiceType="specialUse"
             android:permission="android.permission.BIND_VPN_SERVICE">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="vpn" />
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>

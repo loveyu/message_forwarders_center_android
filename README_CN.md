@@ -130,6 +130,7 @@ L链路数 I输入数 O输出数
 - `ACCESS_BACKGROUND_LOCATION` - 后台定位权限（Android 10+ 后台获取 WiFi SSID/BSSID）
 - `FOREGROUND_SERVICE` - 前台服务
 - `FOREGROUND_SERVICE_REMOTE_MESSAGING` - 远程消息前台服务类型（Android 14+，适用于 MQTT/WebSocket/TCP 长连接）
+- `FOREGROUND_SERVICE_SPECIAL_USE` - VPN 前台服务类型（Android 14+，用于内置 VPN 运行时）
 - `WAKE_LOCK` - 唤醒锁（保持 CPU 在熄屏后运行）
 - `RECEIVE_BOOT_COMPLETED` - 开机自启动
 - `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` - 电池优化豁免

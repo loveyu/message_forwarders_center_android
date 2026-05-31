@@ -125,6 +125,7 @@ Example: `L3 I2 O4 | Pause Forward | WLock`
 - `ACCESS_BACKGROUND_LOCATION` - Background location (Android 10+ for background WiFi SSID/BSSID)
 - `FOREGROUND_SERVICE` - Foreground service
 - `FOREGROUND_SERVICE_REMOTE_MESSAGING` - Remote messaging foreground service type (Android 14+, for MQTT/WebSocket/TCP long connections)
+- `FOREGROUND_SERVICE_SPECIAL_USE` - VPN foreground service type (Android 14+, for the built-in VPN runtime)
 - `WAKE_LOCK` - Wake lock (keep CPU running with screen off)
 - `RECEIVE_BOOT_COMPLETED` - Boot auto-start
 - `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` - Battery optimization exemption

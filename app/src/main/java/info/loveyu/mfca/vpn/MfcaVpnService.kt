@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.ParcelFileDescriptor
 import android.net.VpnService
 import android.os.Build
@@ -27,7 +28,7 @@ class MfcaVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_ENABLE -> {
-                startForeground(NOTIFICATION_ID, buildNotification("Preparing VPN"))
+                startVpnForeground("Preparing VPN")
                 serviceScope.launch {
                     VpnManager.setEnabled(true)
                     syncRuntime(forceRestart = intent.getBooleanExtra(EXTRA_FORCE_RESTART, false))
@@ -35,7 +36,7 @@ class MfcaVpnService : VpnService() {
             }
 
             ACTION_REFRESH -> {
-                startForeground(NOTIFICATION_ID, buildNotification(VpnManager.state.value.statusMessage.ifBlank { "Refreshing VPN" }))
+                startVpnForeground(VpnManager.state.value.statusMessage.ifBlank { "Refreshing VPN" })
                 serviceScope.launch {
                     syncRuntime(forceRestart = intent.getBooleanExtra(EXTRA_FORCE_RESTART, false))
                 }
@@ -48,6 +49,19 @@ class MfcaVpnService : VpnService() {
             }
         }
         return START_STICKY
+    }
+
+    private fun startVpnForeground(content: String) {
+        val notification = buildNotification(content)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     override fun onRevoke() {
