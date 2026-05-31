@@ -63,6 +63,24 @@ object VpnManager {
         rebuildState()
     }
 
+    fun getOverridePort(candidateName: String): Int? = store?.getLocalPort(candidateName)
+
+    fun setOverridePort(candidateName: String, port: Int?) {
+        store?.setLocalPort(candidateName, port)
+    }
+
+    fun getOverrideRuleMode(candidateName: String): VpnRuleMode? = store?.getRuleMode(candidateName)
+
+    fun setOverrideRuleMode(candidateName: String, mode: VpnRuleMode?) {
+        store?.setRuleMode(candidateName, mode)
+    }
+
+    fun getOverrideLogLevel(candidateName: String): VpnLogLevel? = store?.getLogLevel(candidateName)
+
+    fun setOverrideLogLevel(candidateName: String, level: VpnLogLevel?) {
+        store?.setLogLevel(candidateName, level)
+    }
+
     fun getSelectedCandidate(): VpnCandidateState? {
         return stateFlow.value.candidates.firstOrNull { it.isSelected && it.isAvailable }
     }
@@ -135,18 +153,23 @@ object VpnManager {
                         ?: return@fold Result.failure(
                             IllegalStateException("配置未缓存，请先下载 ${selected.config.name} 的配置"),
                         )
+                val effectivePort = store?.getLocalPort(selected.config.name) ?: LOCAL_PROXY_PORT
+                val effectiveRuleMode = store?.getRuleMode(selected.config.name)
+                val effectiveLogLevel = store?.getLogLevel(selected.config.name)
                 VpnProfileManager.buildRuntimeProfile(
                     context,
                     selected.config.name,
                     cachedSource.readText(),
-                    LOCAL_PROXY_PORT,
+                    effectivePort,
+                    effectiveRuleMode,
+                    effectiveLogLevel,
                 ).map { profileFile ->
                     LogManager.logInfo("VPN", "Prepared VPN profile for ${selected.config.name}: ${profileFile.absolutePath}")
                     PreparedVpnArtifacts(
                         candidate = selected.config,
                         coreFilePath = coreFile.absolutePath,
                         profileFilePath = profileFile.absolutePath,
-                        localProxyPort = LOCAL_PROXY_PORT,
+                        localProxyPort = effectivePort,
                     )
                 }
             },

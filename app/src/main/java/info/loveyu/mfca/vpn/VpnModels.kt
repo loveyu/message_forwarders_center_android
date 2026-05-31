@@ -3,6 +3,20 @@ package info.loveyu.mfca.vpn
 import info.loveyu.mfca.config.VpnAccessControlMode
 import info.loveyu.mfca.config.VpnInputConfig
 
+enum class VpnRuleMode {
+    rule,
+    global,
+    direct,
+}
+
+enum class VpnLogLevel {
+    debug,
+    info,
+    warning,
+    error,
+    silent,
+}
+
 enum class VpnRuntimeStatus {
     disabled,
     idle,

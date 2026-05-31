@@ -72,6 +72,39 @@ class VpnStateStore(context: Context) {
             .apply()
     }
 
+    fun getLocalPort(candidateName: String): Int? {
+        val value = preferences.getInt(portKey(candidateName), -1)
+        return if (value < 0) null else value
+    }
+
+    fun setLocalPort(candidateName: String, port: Int?) {
+        val editor = preferences.edit()
+        if (port == null) editor.remove(portKey(candidateName)) else editor.putInt(portKey(candidateName), port)
+        editor.apply()
+    }
+
+    fun getRuleMode(candidateName: String): VpnRuleMode? {
+        val raw = preferences.getString(ruleModeKey(candidateName), null) ?: return null
+        return VpnRuleMode.entries.firstOrNull { it.name == raw }
+    }
+
+    fun setRuleMode(candidateName: String, mode: VpnRuleMode?) {
+        val editor = preferences.edit()
+        if (mode == null) editor.remove(ruleModeKey(candidateName)) else editor.putString(ruleModeKey(candidateName), mode.name)
+        editor.apply()
+    }
+
+    fun getLogLevel(candidateName: String): VpnLogLevel? {
+        val raw = preferences.getString(logLevelKey(candidateName), null) ?: return null
+        return VpnLogLevel.entries.firstOrNull { it.name == raw }
+    }
+
+    fun setLogLevel(candidateName: String, level: VpnLogLevel?) {
+        val editor = preferences.edit()
+        if (level == null) editor.remove(logLevelKey(candidateName)) else editor.putString(logLevelKey(candidateName), level.name)
+        editor.apply()
+    }
+
     companion object {
         private const val KEY_GLOBAL_ENABLED = "global_enabled"
         private const val KEY_SELECTION_HISTORY = "selection_history"
@@ -79,6 +112,12 @@ class VpnStateStore(context: Context) {
         private fun modeKey(candidateName: String): String = "mode_${sanitize(candidateName)}"
 
         private fun packagesKey(candidateName: String): String = "packages_${sanitize(candidateName)}"
+
+        private fun portKey(candidateName: String): String = "port_${sanitize(candidateName)}"
+
+        private fun ruleModeKey(candidateName: String): String = "rule_mode_${sanitize(candidateName)}"
+
+        private fun logLevelKey(candidateName: String): String = "log_level_${sanitize(candidateName)}"
 
         private fun sanitize(value: String): String = value.replace(Regex("[^a-zA-Z0-9._-]"), "_")
     }

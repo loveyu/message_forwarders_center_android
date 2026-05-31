@@ -99,6 +99,16 @@
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
+        <activity
+            android:name=".vpn.VpnAppSelectActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FlowGate" />
+
+        <activity
+            android:name=".vpn.VpnCandidateSettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FlowGate" />
+
         <service
             android:name=".service.ForwardService"
             android:exported="false"

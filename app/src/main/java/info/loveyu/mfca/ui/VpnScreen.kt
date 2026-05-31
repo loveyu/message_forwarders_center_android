@@ -1,8 +1,6 @@
 package info.loveyu.mfca.ui
 
 import android.app.Activity
-import android.content.Context
-import android.content.pm.ApplicationInfo
 import android.net.VpnService
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -12,34 +10,28 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -49,9 +41,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.R
-import info.loveyu.mfca.config.VpnAccessControlMode
 import info.loveyu.mfca.vpn.MfcaVpnService
-import info.loveyu.mfca.vpn.VpnCandidateState
+import info.loveyu.mfca.vpn.VpnAppSelectActivity
+import info.loveyu.mfca.vpn.VpnCandidateSettingsActivity
 import info.loveyu.mfca.vpn.VpnManager
 import info.loveyu.mfca.vpn.VpnRuntimeStatus
 import kotlinx.coroutines.Dispatchers
@@ -68,7 +60,6 @@ fun VpnTopBar() {
 fun VpnScreen(contentPadding: PaddingValues) {
     val context = LocalContext.current
     val uiState by VpnManager.state.collectAsState()
-    var editingCandidate by remember { mutableStateOf<VpnCandidateState?>(null) }
     val scope = rememberCoroutineScope()
     var workingConfigCandidateName by remember { mutableStateOf<String?>(null) }
     var configActionError by remember { mutableStateOf<String?>(null) }
@@ -236,7 +227,7 @@ fun VpnScreen(contentPadding: PaddingValues) {
                             ),
                         )
                         AssistChip(
-                            onClick = { editingCandidate = candidate },
+                            onClick = { context.startActivity(VpnAppSelectActivity.intent(context, candidate.config.name)) },
                             label = {
                                 Text(
                                     context.getString(
@@ -379,30 +370,16 @@ fun VpnScreen(contentPadding: PaddingValues) {
                                 },
                             )
                         }
-                        OutlinedButton(onClick = { editingCandidate = candidate }) {
+                        OutlinedButton(onClick = { context.startActivity(VpnAppSelectActivity.intent(context, candidate.config.name)) }) {
                             Text(stringResource(R.string.vpn_edit_apps))
+                        }
+                        OutlinedButton(onClick = { context.startActivity(VpnCandidateSettingsActivity.intent(context, candidate.config.name)) }) {
+                            Text(stringResource(R.string.vpn_settings))
                         }
                     }
                 }
             }
         }
-    }
-
-    editingCandidate?.let { candidate ->
-        VpnAccessControlDialog(
-            candidate = candidate,
-            onDismiss = { editingCandidate = null },
-            onSave = { mode, packages ->
-                VpnManager.updateAccessControl(candidate.config.name, mode, packages)
-                if (uiState.isEnabled) {
-                    ContextCompat.startForegroundService(
-                        context,
-                        MfcaVpnService.refreshIntent(context, forceRestart = true),
-                    )
-                }
-                editingCandidate = null
-            },
-        )
     }
 }
 
@@ -440,124 +417,4 @@ private fun runtimeStatusLabel(status: VpnRuntimeStatus): String {
             VpnRuntimeStatus.error -> R.string.vpn_status_error
         },
     )
-}
-
-@Composable
-private fun VpnAccessControlDialog(
-    candidate: VpnCandidateState,
-    onDismiss: () -> Unit,
-    onSave: (VpnAccessControlMode, List<String>) -> Unit,
-) {
-    val context = LocalContext.current
-    val apps by produceState(initialValue = emptyList<InstalledAppItem>(), context) {
-        value = loadInstalledApps(context)
-    }
-    var searchText by remember { mutableStateOf("") }
-    var selectedMode by remember(candidate.config.name) { mutableStateOf(candidate.effectiveAccessControlMode) }
-    var selectedPackages by remember(candidate.config.name) { mutableStateOf(candidate.effectivePackages.toMutableSet()) }
-
-    val filteredApps = remember(apps, searchText) {
-        val query = searchText.trim()
-        if (query.isBlank()) {
-            apps
-        } else {
-            apps.filter { app ->
-                app.label.contains(query, ignoreCase = true) ||
-                    app.packageName.contains(query, ignoreCase = true)
-            }
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = { onSave(selectedMode, selectedPackages.toList().sorted()) }) {
-                Text(stringResource(R.string.vpn_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.vpn_cancel))
-            }
-        },
-        title = { Text(candidate.config.name) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    VpnAccessControlMode.entries.forEach { mode ->
-                        FilterChip(
-                            selected = selectedMode == mode,
-                            onClick = { selectedMode = mode },
-                            label = { Text(mode.name) },
-                        )
-                    }
-                }
-                OutlinedTextField(
-                    value = searchText,
-                    onValueChange = { searchText = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.vpn_search_apps)) },
-                )
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 320.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(filteredApps, key = { it.packageName }) { app ->
-                        Row(
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(app.label, style = MaterialTheme.typography.bodyMedium)
-                                Text(app.packageName, style = MaterialTheme.typography.bodySmall)
-                            }
-                            Switch(
-                                checked = app.packageName in selectedPackages,
-                                onCheckedChange = { checked ->
-                                    selectedPackages = selectedPackages.toMutableSet().apply {
-                                        if (checked) {
-                                            add(app.packageName)
-                                        } else {
-                                            remove(app.packageName)
-                                        }
-                                    }
-                                },
-                            )
-                        }
-                    }
-                }
-            }
-        },
-    )
-}
-
-private data class InstalledAppItem(
-    val label: String,
-    val packageName: String,
-)
-
-private fun loadInstalledApps(context: Context): List<InstalledAppItem> {
-    val packageManager = context.packageManager
-    return getInstalledApplications(context).mapNotNull { app ->
-        if (app.flags and ApplicationInfo.FLAG_SYSTEM != 0) {
-            null
-        } else {
-            InstalledAppItem(
-                label = packageManager.getApplicationLabel(app).toString(),
-                packageName = app.packageName,
-            )
-        }
-    }.sortedBy { it.label.lowercase() }
-}
-
-private fun getInstalledApplications(context: Context): List<ApplicationInfo> {
-    val packageManager = context.packageManager
-    return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-        packageManager.getInstalledApplications(android.content.pm.PackageManager.ApplicationInfoFlags.of(0))
-    } else {
-        @Suppress("DEPRECATION")
-        packageManager.getInstalledApplications(0)
-    }
 }

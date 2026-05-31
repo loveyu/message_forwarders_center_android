@@ -137,4 +137,22 @@
     <string name="vpn_notification_title">FlowGate VPN</string>
     <string name="vpn_notification_channel">VPN 运行时</string>
     <string name="show_tab_label">显示底部导航标签</string>
+    <string name="vpn_select_all">全选</string>
+    <string name="vpn_select_none">取消全选</string>
+    <string name="vpn_select_invert">反选</string>
+    <string name="vpn_import_clipboard">从剪贴板导入</string>
+    <string name="vpn_export_clipboard">导出到剪贴板</string>
+    <string name="vpn_imported_packages">已导入 %1$d 个包名</string>
+    <string name="vpn_exported_packages">已导出 %1$d 个包名</string>
+    <string name="vpn_show_system_apps">显示系统应用</string>
+    <string name="vpn_selected_count">已选 %1$d / 共 %2$d 个应用</string>
+    <string name="vpn_settings">高级设置</string>
+    <string name="vpn_port_override">端口覆盖（mixed-port）</string>
+    <string name="vpn_port_hint">留空使用默认（17890）</string>
+    <string name="vpn_port_invalid">端口号无效，请输入 1024–65535</string>
+    <string name="vpn_rule_mode">规则模式</string>
+    <string name="vpn_log_level">日志级别</string>
+    <string name="vpn_override_default">跟随配置</string>
+    <string name="vpn_candidate_settings_title">%1$s 高级设置</string>
+    <string name="vpn_settings_note">以下设置会覆盖配置文件中的对应字段，重启 VPN 后生效。</string>
 </resources>

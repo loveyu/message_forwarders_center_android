@@ -16,17 +16,24 @@ object VpnProfileManager {
         candidateName: String,
         sourceContent: String,
         localProxyPort: Int,
+        ruleMode: VpnRuleMode? = null,
+        logLevel: VpnLogLevel? = null,
     ): Result<File> {
         return runCatching {
             val targetDir = File(context.filesDir, "vpn/profiles")
             val targetFile = File(targetDir, "$candidateName.runtime.yaml")
             targetDir.mkdirs()
-            targetFile.writeText(buildRuntimeProfileContent(sourceContent, localProxyPort))
+            targetFile.writeText(buildRuntimeProfileContent(sourceContent, localProxyPort, ruleMode, logLevel))
             targetFile
         }
     }
 
-    internal fun buildRuntimeProfileContent(source: String, localProxyPort: Int): String {
+    internal fun buildRuntimeProfileContent(
+        source: String,
+        localProxyPort: Int,
+        ruleMode: VpnRuleMode? = null,
+        logLevel: VpnLogLevel? = null,
+    ): String {
         val root =
             yamlLoad.loadFromString(source) as? Map<*, *>
                 ?: throw IllegalStateException("VPN profile must be a YAML mapping")
@@ -40,6 +47,8 @@ object VpnProfileManager {
         normalized["mixed-port"] = localProxyPort
         normalized["allow-lan"] = false
         normalized["bind-address"] = "127.0.0.1"
+        if (ruleMode != null) normalized["mode"] = ruleMode.name
+        if (logLevel != null) normalized["log-level"] = logLevel.name
         val tun =
             (normalized["tun"] as? Map<*, *>)?.let { existing ->
                 LinkedHashMap<String, Any?>().apply {
