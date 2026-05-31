@@ -300,18 +300,24 @@ private data class AppItem(
 
 private fun loadApps(context: Context, includeSystem: Boolean): List<AppItem> {
     val pm = context.packageManager
-    val installed =
+    val packages =
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            pm.getInstalledApplications(PackageManager.ApplicationInfoFlags.of(0))
+            pm.getInstalledPackages(PackageManager.PackageInfoFlags.of(PackageManager.GET_PERMISSIONS.toLong()))
         } else {
             @Suppress("DEPRECATION")
-            pm.getInstalledApplications(0)
+            pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)
         }
-    return installed
-        .filter { app ->
+    return packages
+        .filter { pkg ->
+            val app = pkg.applicationInfo ?: return@filter false
             if (!includeSystem && (app.flags and ApplicationInfo.FLAG_SYSTEM != 0)) return@filter false
-            pm.checkPermission(Manifest.permission.INTERNET, app.packageName) == PackageManager.PERMISSION_GRANTED
+            pkg.requestedPermissions?.contains(Manifest.permission.INTERNET) == true
         }
-        .map { app -> AppItem(label = pm.getApplicationLabel(app).toString(), packageName = app.packageName) }
+        .map { pkg ->
+            AppItem(
+                label = pm.getApplicationLabel(pkg.applicationInfo!!).toString(),
+                packageName = pkg.packageName,
+            )
+        }
         .sortedBy { it.label.lowercase() }
 }
