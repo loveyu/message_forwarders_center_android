@@ -2,6 +2,10 @@ name: Build APK
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  FLOWGATE_GO_TOOLCHAIN_DIR: ${{ github.workspace }}/.ci-cache/tools/go/1.24.1
+  FLOWGATE_ANDROID_NDK_DIR: ${{ github.workspace }}/.ci-cache/tools/android-ndk/r27c
+  GOMODCACHE: ${{ github.workspace }}/.ci-cache/go-mod
+  GOCACHE: ${{ github.workspace }}/.ci-cache/go-build
 
 on:
   push:
@@ -20,12 +24,12 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Set up JDK 21
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         java-version: '21'
         distribution: 'temurin'
@@ -36,7 +40,7 @@ jobs:
         sed -i '/maven.aliyun.com/d' settings.gradle.kts
 
     - name: Cache Gradle packages
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           ~/.gradle/caches
@@ -68,10 +72,10 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Set up JDK 21
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         java-version: '21'
         distribution: 'temurin'
@@ -84,7 +88,7 @@ jobs:
         sed -i '/maven.aliyun.com/d' settings.gradle.kts
 
     - name: Cache Gradle packages
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           ~/.gradle/caches
@@ -93,6 +97,24 @@ jobs:
         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
         restore-keys: |
           ${{ runner.os }}-gradle-
+
+    - name: Cache VPN bridge toolchains and Go caches
+      uses: actions/cache@v5
+      with:
+        path: |
+          ${{ env.FLOWGATE_GO_TOOLCHAIN_DIR }}
+          ${{ env.FLOWGATE_ANDROID_NDK_DIR }}
+          ${{ env.GOMODCACHE }}
+          ${{ env.GOCACHE }}
+        key: ${{ runner.os }}-vpn-bridge-tools-go1.24.1-ndkr27c-${{ hashFiles('app/src/main/go/vpnbridge/go.mod', 'app/src/main/go/vpnbridge/go.sum', 'app/build.gradle.kts') }}
+        restore-keys: |
+          ${{ runner.os }}-vpn-bridge-tools-go1.24.1-ndkr27c-
+
+    - name: Cache VPN bridge binaries
+      uses: actions/cache@v5
+      with:
+        path: app/build/generated/assets/vpnbridge
+        key: ${{ runner.os }}-vpn-bridge-binaries-${{ hashFiles('app/src/main/go/vpnbridge/**', 'app/build.gradle.kts') }}
 
     - name: Make gradlew executable
       run: chmod +x gradlew
@@ -125,7 +147,7 @@ jobs:
         echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
 
     - name: Upload Debug APK artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: MFCenter-${{ github.ref_name }}-debug-apk
         path: ${{ steps.find_apk.outputs.apk_path }}
@@ -145,10 +167,10 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Set up JDK 21
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         java-version: '21'
         distribution: 'temurin'
@@ -161,7 +183,7 @@ jobs:
         sed -i '/maven.aliyun.com/d' settings.gradle.kts
 
     - name: Cache Gradle packages
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           ~/.gradle/caches
@@ -170,6 +192,24 @@ jobs:
         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
         restore-keys: |
           ${{ runner.os }}-gradle-
+
+    - name: Cache VPN bridge toolchains and Go caches
+      uses: actions/cache@v5
+      with:
+        path: |
+          ${{ env.FLOWGATE_GO_TOOLCHAIN_DIR }}
+          ${{ env.FLOWGATE_ANDROID_NDK_DIR }}
+          ${{ env.GOMODCACHE }}
+          ${{ env.GOCACHE }}
+        key: ${{ runner.os }}-vpn-bridge-tools-go1.24.1-ndkr27c-${{ hashFiles('app/src/main/go/vpnbridge/go.mod', 'app/src/main/go/vpnbridge/go.sum', 'app/build.gradle.kts') }}
+        restore-keys: |
+          ${{ runner.os }}-vpn-bridge-tools-go1.24.1-ndkr27c-
+
+    - name: Cache VPN bridge binaries
+      uses: actions/cache@v5
+      with:
+        path: app/build/generated/assets/vpnbridge
+        key: ${{ runner.os }}-vpn-bridge-binaries-${{ hashFiles('app/src/main/go/vpnbridge/**', 'app/build.gradle.kts') }}
 
     - name: Make gradlew executable
       run: chmod +x gradlew
@@ -226,14 +266,14 @@ jobs:
         echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
 
     - name: Upload Release APK artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: MFCenter-${{ steps.build_info.outputs.version_name }}-release-apk
         path: ${{ steps.find_apk.outputs.apk_path }}
         retention-days: 30
 
     - name: Upload Raw Release APK artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: MFCenter-${{ steps.build_info.outputs.version_name }}-release-raw-apk
         path: ${{ steps.find_raw_apk.outputs.apk_path }}

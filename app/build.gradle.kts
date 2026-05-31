@@ -58,19 +58,27 @@ val vpnBridgeTargets =
 val goToolchainVersion = "1.24.1"
 val goToolchainArchive = "go${goToolchainVersion}.linux-amd64.tar.gz"
 val goToolchainUrl = "https://go.dev/dl/$goToolchainArchive"
-val goToolchainRootDir = layout.buildDirectory.dir("tools/go/$goToolchainVersion")
-val goBinary = goToolchainRootDir.map { it.file("bin/go").asFile }
+val goToolchainRootDir =
+    providers
+        .environmentVariable("FLOWGATE_GO_TOOLCHAIN_DIR")
+        .map { file(it) }
+        .orElse(layout.buildDirectory.dir("tools/go/$goToolchainVersion").map { it.asFile })
+val goBinary = goToolchainRootDir.map { it.resolve("bin/go") }
 val androidNdkVersion = "r27c"
 val androidNdkArchive = "android-ndk-$androidNdkVersion-linux.zip"
 val androidNdkUrl = "https://dl.google.com/android/repository/$androidNdkArchive"
-val androidNdkRootDir = layout.buildDirectory.dir("tools/android-ndk/$androidNdkVersion")
+val androidNdkRootDir =
+    providers
+        .environmentVariable("FLOWGATE_ANDROID_NDK_DIR")
+        .map { file(it) }
+        .orElse(layout.buildDirectory.dir("tools/android-ndk/$androidNdkVersion").map { it.asFile })
 val vpnBridgeSourceDir = layout.projectDirectory.dir("src/main/go/vpnbridge")
 val vpnBridgeAssetDir = layout.buildDirectory.dir("generated/assets/vpnbridge")
 val ensureGoToolchain =
     tasks.register<Exec>("ensureGoToolchain") {
         outputs.dir(goToolchainRootDir)
         onlyIf { !goBinary.get().exists() }
-        val toolchainRoot = goToolchainRootDir.get().asFile
+        val toolchainRoot = goToolchainRootDir.get()
         toolchainRoot.parentFile.mkdirs()
         commandLine(
             "bash",
@@ -90,7 +98,7 @@ val ensureGoToolchain =
 val ensureAndroidNdk =
     tasks.register<Exec>("ensureAndroidNdk") {
         outputs.dir(androidNdkRootDir)
-        val ndkRoot = androidNdkRootDir.get().asFile
+        val ndkRoot = androidNdkRootDir.get()
         onlyIf { !ndkRoot.resolve("toolchains/llvm/prebuilt/linux-x86_64/bin/clang").exists() }
         ndkRoot.parentFile.mkdirs()
         commandLine(
@@ -113,10 +121,17 @@ val buildVpnBridgeBinaries =
         dependsOn(ensureGoToolchain)
         dependsOn(ensureAndroidNdk)
         inputs.dir(vpnBridgeSourceDir)
+        inputs.property("goToolchainVersion", goToolchainVersion)
+        inputs.property("androidNdkVersion", androidNdkVersion)
         outputs.dir(vpnBridgeAssetDir)
         val outputRoot = vpnBridgeAssetDir.get().asFile
+        onlyIf {
+            vpnBridgeTargets.any { target ->
+                !outputRoot.resolve("vpnbridge/${target.abi}/vpnbridge").exists()
+            }
+        }
         outputRoot.mkdirs()
-        val ndkBinDir = androidNdkRootDir.get().asFile.resolve("toolchains/llvm/prebuilt/linux-x86_64/bin")
+        val ndkBinDir = androidNdkRootDir.get().resolve("toolchains/llvm/prebuilt/linux-x86_64/bin")
         val buildScript =
             buildString {
                 appendLine("set -euo pipefail")
