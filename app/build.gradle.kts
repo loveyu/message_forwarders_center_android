@@ -272,6 +272,11 @@ android {
     }
     sourceSets.getByName("main").assets.srcDir(vpnBridgeAssetDir.get().asFile)
     sourceSets.getByName("main").jniLibs.srcDir(mihomoJniLibDir.get().asFile)
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 spotless {
