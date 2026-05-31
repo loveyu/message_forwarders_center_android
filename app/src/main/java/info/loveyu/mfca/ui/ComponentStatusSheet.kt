@@ -26,10 +26,11 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -70,6 +71,8 @@ import info.loveyu.mfca.config.Udp2RawInputConfig
 import info.loveyu.mfca.input.HttpInput
 import info.loveyu.mfca.input.HttpVirtualInput
 import info.loveyu.mfca.input.InputManager
+import info.loveyu.mfca.input.Udp2RawInput
+import info.loveyu.mfca.input.Udp2RawLogActivity
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.service.ForwardService
@@ -101,6 +104,10 @@ import info.loveyu.mfca.ui.theme.LinkInputChipBgDark
 import info.loveyu.mfca.ui.theme.LinkInputChipBgLight
 import info.loveyu.mfca.ui.theme.LinkInputChipBorderDark
 import info.loveyu.mfca.ui.theme.LinkInputChipBorderLight
+import info.loveyu.mfca.ui.theme.Udp2RawChipBgDark
+import info.loveyu.mfca.ui.theme.Udp2RawChipBgLight
+import info.loveyu.mfca.ui.theme.Udp2RawChipBorderDark
+import info.loveyu.mfca.ui.theme.Udp2RawChipBorderLight
 import info.loveyu.mfca.ui.theme.StatusDisabledDark
 import info.loveyu.mfca.ui.theme.StatusDisabledLight
 import info.loveyu.mfca.ui.theme.StatusErrorDark
@@ -120,7 +127,7 @@ import java.net.URI
  * 组件类型
  */
 enum class ComponentType {
-    LINK, HTTP_INPUT, LINK_INPUT, RULE, OUTPUT, QUEUE
+    LINK, HTTP_INPUT, LINK_INPUT, UDP2RAW, RULE, OUTPUT, QUEUE
 }
 
 /**
@@ -440,9 +447,18 @@ private fun buildUdp2RawInputStatus(
         !networkEnableResult.enabled -> networkEnableResult.reason
         else -> null
     }
+    val resolvedRemote = (input as? info.loveyu.mfca.input.Udp2RawInput)?.getResolvedRemote()
     val details = buildString {
         append("Type: udp2raw")
-        append("\nArgs: ${if (config.args.isNotEmpty()) config.args.joinToString(" ") else "(none)"}")
+        if (config.dsn != null) {
+            append("\nDSN: ${config.dsn}")
+        }
+        if (config.args.isNotEmpty()) {
+            append("\nArgs: ${config.args.joinToString(" ")}")
+        } else if (config.dsn == null) {
+            append("\nArgs: (none)")
+        }
+        resolvedRemote?.let { append("\nResolved: $it") }
         if (config.whenCondition != null || config.deny != null) {
             append("\n\n${NetworkChecker.getMatchedConditions(context, config.whenCondition, config.deny)}")
         }
@@ -450,7 +466,7 @@ private fun buildUdp2RawInputStatus(
     return ComponentStatus(
         id = config.name,
         name = config.name,
-        type = ComponentType.LINK_INPUT,
+        type = ComponentType.UDP2RAW,
         isEnabled = isEnabled,
         isRunning = input?.isRunning() ?: false,
         notEnabledReason = notEnabledReason,
@@ -774,9 +790,10 @@ fun getComponentTypeOrder(type: ComponentType): Int {
         ComponentType.LINK -> 0
         ComponentType.HTTP_INPUT -> 1
         ComponentType.LINK_INPUT -> 2
-        ComponentType.RULE -> 3
-        ComponentType.OUTPUT -> 4
-        ComponentType.QUEUE -> 5
+        ComponentType.UDP2RAW -> 3
+        ComponentType.RULE -> 4
+        ComponentType.OUTPUT -> 5
+        ComponentType.QUEUE -> 6
     }
 }
 
@@ -919,6 +936,7 @@ fun ComponentCard(
             ComponentType.LINK -> if (isDark) LinkChipBgDark else LinkChipBgLight
             ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBgDark else HttpInputChipBgLight
             ComponentType.LINK_INPUT -> if (isDark) LinkInputChipBgDark else LinkInputChipBgLight
+            ComponentType.UDP2RAW -> if (isDark) Udp2RawChipBgDark else Udp2RawChipBgLight
             ComponentType.RULE -> if (isDark) LinkInputChipBgDark else LinkInputChipBgLight
             ComponentType.OUTPUT -> if (isDark) OutputChipBgDark else OutputChipBgLight
             ComponentType.QUEUE -> if (isDark) QueueChipBgDark else QueueChipBgLight
@@ -932,6 +950,7 @@ fun ComponentCard(
             ComponentType.LINK -> if (isDark) LinkChipBorderDark else LinkChipBorderLight
             ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBorderDark else HttpInputChipBorderLight
             ComponentType.LINK_INPUT -> if (isDark) LinkInputChipBorderDark else LinkInputChipBorderLight
+            ComponentType.UDP2RAW -> if (isDark) Udp2RawChipBorderDark else Udp2RawChipBorderLight
             ComponentType.RULE -> if (isDark) LinkInputChipBorderDark else LinkInputChipBorderLight
             ComponentType.OUTPUT -> if (isDark) OutputChipBorderDark else OutputChipBorderLight
             ComponentType.QUEUE -> if (isDark) QueueChipBorderDark else QueueChipBorderLight
@@ -1275,6 +1294,27 @@ fun ComponentDetailSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
+            // Log viewer button for udp2raw instances
+            if (component.type == ComponentType.UDP2RAW) {
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(8.dp))
+                TextButton(
+                    onClick = {
+                        context.startActivity(Udp2RawLogActivity.intent(context, component.name))
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("查看进程日志")
+                }
+            }
         }
     }
 }
@@ -1381,9 +1421,10 @@ fun getComponentIcon(type: ComponentType): ImageVector {
         ComponentType.LINK -> Icons.Default.Star
         ComponentType.HTTP_INPUT -> Icons.Default.PlayArrow
         ComponentType.LINK_INPUT -> Icons.Default.PlayArrow
+        ComponentType.UDP2RAW -> Icons.Default.PlayArrow
         ComponentType.RULE -> Icons.Default.Build
         ComponentType.OUTPUT -> Icons.AutoMirrored.Filled.Send
-        ComponentType.QUEUE -> Icons.Default.List
+        ComponentType.QUEUE -> Icons.Default.Settings
     }
 }
 
@@ -1392,6 +1433,7 @@ fun getComponentTypeName(type: ComponentType): String {
         ComponentType.LINK -> "Link"
         ComponentType.HTTP_INPUT -> "HTTP Input"
         ComponentType.LINK_INPUT -> "Link Input"
+        ComponentType.UDP2RAW -> "UDP2RAW"
         ComponentType.RULE -> "Rule"
         ComponentType.OUTPUT -> "Output"
         ComponentType.QUEUE -> "Queue"

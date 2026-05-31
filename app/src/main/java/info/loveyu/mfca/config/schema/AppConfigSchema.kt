@@ -194,9 +194,16 @@ object AppConfigSchema {
                     required()
                     description = "Unique udp2raw input name referenced by rules"
                 }
+                string("dsn") {
+                    description =
+                        "Connection DSN shorthand: udp2raw://[key@]remoteHost:remotePort?listen=localHost:localPort[&mode=faketcp][&role=client|server]. " +
+                            "Domain names in remoteHost are resolved to IP at every start. " +
+                            "If both dsn and args are set, args take precedence."
+                }
                 stringList("args") {
-                    required()
-                    description = "udp2raw command arguments, for example: ['-s', '-l0.0.0.0:4096', '-r127.0.0.1:53', '--raw-mode', 'faketcp']"
+                    description =
+                        "Raw udp2raw command arguments. Overrides dsn when both are set. " +
+                            "Example: ['-c', '-l0.0.0.0:4096', '-r127.0.0.1:53', '--raw-mode', 'faketcp']"
                 }
                 boolean("enabled") {
                     description = "Whether this udp2raw input is enabled"

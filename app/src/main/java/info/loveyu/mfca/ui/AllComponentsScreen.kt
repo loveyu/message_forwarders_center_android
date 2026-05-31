@@ -67,6 +67,10 @@ import info.loveyu.mfca.ui.theme.LinkInputChipBgDark
 import info.loveyu.mfca.ui.theme.LinkInputChipBgLight
 import info.loveyu.mfca.ui.theme.LinkInputChipBorderDark
 import info.loveyu.mfca.ui.theme.LinkInputChipBorderLight
+import info.loveyu.mfca.ui.theme.Udp2RawChipBgDark
+import info.loveyu.mfca.ui.theme.Udp2RawChipBgLight
+import info.loveyu.mfca.ui.theme.Udp2RawChipBorderDark
+import info.loveyu.mfca.ui.theme.Udp2RawChipBorderLight
 import info.loveyu.mfca.ui.theme.OutputChipBgDark
 import info.loveyu.mfca.ui.theme.OutputChipBgLight
 import info.loveyu.mfca.ui.theme.OutputChipBorderDark
@@ -218,6 +222,7 @@ private fun ComponentListItem(
             ComponentType.LINK -> if (isDark) LinkChipBgDark else LinkChipBgLight
             ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBgDark else HttpInputChipBgLight
             ComponentType.LINK_INPUT, ComponentType.RULE -> if (isDark) LinkInputChipBgDark else LinkInputChipBgLight
+            ComponentType.UDP2RAW -> if (isDark) Udp2RawChipBgDark else Udp2RawChipBgLight
             ComponentType.OUTPUT -> if (isDark) OutputChipBgDark else OutputChipBgLight
             ComponentType.QUEUE -> if (isDark) QueueChipBgDark else QueueChipBgLight
         }
@@ -229,6 +234,7 @@ private fun ComponentListItem(
             ComponentType.LINK -> if (isDark) LinkChipBorderDark else LinkChipBorderLight
             ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBorderDark else HttpInputChipBorderLight
             ComponentType.LINK_INPUT, ComponentType.RULE -> if (isDark) LinkInputChipBorderDark else LinkInputChipBorderLight
+            ComponentType.UDP2RAW -> if (isDark) Udp2RawChipBorderDark else Udp2RawChipBorderLight
             ComponentType.OUTPUT -> if (isDark) OutputChipBorderDark else OutputChipBorderLight
             ComponentType.QUEUE -> if (isDark) QueueChipBorderDark else QueueChipBorderLight
         }

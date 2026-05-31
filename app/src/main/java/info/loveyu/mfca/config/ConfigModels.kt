@@ -180,6 +180,7 @@ data class VpnInputConfig(
 
 data class Udp2RawInputConfig(
     val name: String,
+    val dsn: String? = null,
     val args: List<String> = emptyList(),
     val enabled: Boolean = true,
     val whenCondition: String? = null,

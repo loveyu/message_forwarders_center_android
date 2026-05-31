@@ -196,6 +196,7 @@ object ConfigLoader {
             (input as? Map<String, Any>)?.let { map ->
                 Udp2RawInputConfig(
                     name = map["name"] as? String ?: return@mapNotNull null,
+                    dsn = map["dsn"] as? String,
                     args = (map["args"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
                     enabled = map["enabled"] as? Boolean ?: true,
                     whenCondition = map["when"] as? String,

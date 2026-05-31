@@ -325,6 +325,24 @@ object InputManager {
         }
     }
 
+    /**
+     * 停止所有 udp2raw 进程。
+     * 网络丢失或网络类型切换时调用，使进程在下次 tick 重启时重新解析 DNS。
+     */
+    fun stopAllUdp2Raw() {
+        entries.forEach { entry ->
+            if (entry.input !is Udp2RawInput) return@forEach
+            try {
+                if (entry.input.isRunning()) {
+                    LogManager.logDebug("INPUT", "Stopping udp2raw on network change: ${entry.config.name}")
+                    entry.input.stop()
+                }
+            } catch (e: Exception) {
+                LogManager.logError("INPUT", "Error stopping udp2raw ${entry.config.name}: ${e.message}")
+            }
+        }
+    }
+
     fun clear() {
         stopAll()
         entries.clear()

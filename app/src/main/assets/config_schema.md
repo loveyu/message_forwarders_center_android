@@ -171,7 +171,8 @@ Local udp2raw process inputs for raw UDP forwarding
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|:----:|--------|------|
 | `name` | string | ✓ |  | Unique udp2raw input name referenced by rules |
-| `args` | list[string] | ✓ |  | udp2raw command arguments, for example: ['-s', '-l0.0.0.0:4096', '-r127.0.0.1:53', '--raw-mode', 'faketcp'] |
+| `dsn` | string |  |  | Connection DSN shorthand: udp2raw://[key@]remoteHost:remotePort?listen=localHost:localPort[&mode=faketcp][&role=client\|server]. Domain names in remoteHost are resolved to IP at every start. If both dsn and args are set, args take precedence. |
+| `args` | list[string] |  |  | Raw udp2raw command arguments. Overrides dsn when both are set. Example: ['-c', '-l0.0.0.0:4096', '-r127.0.0.1:53', '--raw-mode', 'faketcp'] |
 | `enabled` | boolean |  | `true` | Whether this udp2raw input is enabled |
 | `when` | string |  |  | Enable condition |
 | `deny` | string |  |  | Disable condition |

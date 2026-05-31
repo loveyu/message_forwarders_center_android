@@ -93,6 +93,12 @@ import info.loveyu.mfca.ui.theme.LinkInputChipBorderDark
 import info.loveyu.mfca.ui.theme.LinkInputChipBorderLight
 import info.loveyu.mfca.ui.theme.LinkInputChipTextDark
 import info.loveyu.mfca.ui.theme.LinkInputChipTextLight
+import info.loveyu.mfca.ui.theme.Udp2RawChipBgDark
+import info.loveyu.mfca.ui.theme.Udp2RawChipBgLight
+import info.loveyu.mfca.ui.theme.Udp2RawChipBorderDark
+import info.loveyu.mfca.ui.theme.Udp2RawChipBorderLight
+import info.loveyu.mfca.ui.theme.Udp2RawChipTextDark
+import info.loveyu.mfca.ui.theme.Udp2RawChipTextLight
 import info.loveyu.mfca.ui.theme.OutputChipBgDark
 import info.loveyu.mfca.ui.theme.OutputChipBgLight
 import info.loveyu.mfca.ui.theme.OutputChipBorderDark
@@ -420,6 +426,7 @@ fun ComponentChip(component: ComponentStatus, isEnabled: Boolean, onClick: () ->
             ComponentType.LINK -> if (isDark) LinkChipBgDark else LinkChipBgLight
             ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBgDark else HttpInputChipBgLight
             ComponentType.LINK_INPUT -> if (isDark) LinkInputChipBgDark else LinkInputChipBgLight
+            ComponentType.UDP2RAW -> if (isDark) Udp2RawChipBgDark else Udp2RawChipBgLight
             ComponentType.RULE -> if (isDark) LinkInputChipBgDark else LinkInputChipBgLight
             ComponentType.OUTPUT -> if (isDark) OutputChipBgDark else OutputChipBgLight
             ComponentType.QUEUE -> if (isDark) QueueChipBgDark else QueueChipBgLight
@@ -434,6 +441,7 @@ fun ComponentChip(component: ComponentStatus, isEnabled: Boolean, onClick: () ->
             ComponentType.LINK -> if (isDark) LinkChipBorderDark else LinkChipBorderLight
             ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBorderDark else HttpInputChipBorderLight
             ComponentType.LINK_INPUT -> if (isDark) LinkInputChipBorderDark else LinkInputChipBorderLight
+            ComponentType.UDP2RAW -> if (isDark) Udp2RawChipBorderDark else Udp2RawChipBorderLight
             ComponentType.RULE -> if (isDark) LinkInputChipBorderDark else LinkInputChipBorderLight
             ComponentType.OUTPUT -> if (isDark) OutputChipBorderDark else OutputChipBorderLight
             ComponentType.QUEUE -> if (isDark) QueueChipBorderDark else QueueChipBorderLight
@@ -447,6 +455,7 @@ fun ComponentChip(component: ComponentStatus, isEnabled: Boolean, onClick: () ->
             ComponentType.LINK -> if (isDark) LinkChipTextDark else LinkChipTextLight
             ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipTextDark else HttpInputChipTextLight
             ComponentType.LINK_INPUT -> if (isDark) LinkInputChipTextDark else LinkInputChipTextLight
+            ComponentType.UDP2RAW -> if (isDark) Udp2RawChipTextDark else Udp2RawChipTextLight
             ComponentType.RULE -> if (isDark) LinkInputChipTextDark else LinkInputChipTextLight
             ComponentType.OUTPUT -> if (isDark) OutputChipTextDark else OutputChipTextLight
             ComponentType.QUEUE -> if (isDark) QueueChipTextDark else QueueChipTextLight

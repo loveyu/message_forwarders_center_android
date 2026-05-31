@@ -138,6 +138,7 @@ object LinkManager {
                 if (!hasNetwork && initialized) {
                     disconnectAll()
                     InputManager.stopAllLinkBased()
+                    InputManager.stopAllUdp2Raw()
                 }
 
                 if (!hasNetwork) {
@@ -182,6 +183,8 @@ object LinkManager {
                 LogManager.logDebug("LINK", "Transport changed: $lastTransportType -> $newType")
                 lastTransportType = newType
                 resetAllFailureCounts()
+                // 网络类型切换时停止 udp2raw，使其重启时重新解析 DNS
+                InputManager.stopAllUdp2Raw()
                 updateNetworkType()
                 // 网络能力变更（WiFi↔移动网络等）触发 tick
                 ForwardService.triggerTick()
@@ -593,6 +596,7 @@ object LinkManager {
         if (!isNetworkAvailable) {
             disconnectAll()
             InputManager.stopAllLinkBased()
+            InputManager.stopAllUdp2Raw()
             return
         }
 
