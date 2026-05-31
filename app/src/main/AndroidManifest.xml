@@ -109,6 +109,11 @@
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
+        <activity
+            android:name=".vpn.VpnLogActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FlowGate" />
+
         <service
             android:name=".service.ForwardService"
             android:exported="false"

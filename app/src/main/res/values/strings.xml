@@ -106,6 +106,7 @@
     <string name="vpn_not_running">当前未运行核心</string>
     <string name="vpn_runtime_out_of_sync">当前运行候选与最新可用候选不一致，建议重新应用</string>
     <string name="vpn_refresh">刷新候选</string>
+    <string name="vpn_view_log">VPN 日志</string>
     <string name="vpn_prepare_selected">预下载核心与配置</string>
     <string name="vpn_apply_selected">应用当前候选</string>
     <string name="vpn_restart_selected">重启并应用</string>

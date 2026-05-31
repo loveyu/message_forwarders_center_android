@@ -46,7 +46,6 @@ import info.loveyu.mfca.ui.MainTopBar
 import info.loveyu.mfca.ui.NotifyHistoryContent
 import info.loveyu.mfca.ui.NotifyHistoryTopBar
 import info.loveyu.mfca.ui.VpnScreen
-import info.loveyu.mfca.ui.VpnTopBar
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import info.loveyu.mfca.util.AppStatusManager
 import info.loveyu.mfca.util.LogManager
@@ -292,7 +291,7 @@ private fun MainContent(
                     onCleanPasswords = { cleanPasswordsTrigger++ },
                     onCleanVerificationCodes = { cleanVerificationCodesTrigger++ }
                 )
-                BottomTab.VPN -> VpnTopBar()
+                BottomTab.VPN -> { }
             }
         },
         bottomBar = {

@@ -16,10 +16,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
@@ -44,17 +42,12 @@ import info.loveyu.mfca.R
 import info.loveyu.mfca.vpn.MfcaVpnService
 import info.loveyu.mfca.vpn.VpnAppSelectActivity
 import info.loveyu.mfca.vpn.VpnCandidateSettingsActivity
+import info.loveyu.mfca.vpn.VpnLogActivity
 import info.loveyu.mfca.vpn.VpnManager
 import info.loveyu.mfca.vpn.VpnRuntimeStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun VpnTopBar() {
-    CenterAlignedTopAppBar(title = { Text(stringResource(R.string.tab_vpn)) })
-}
 
 @Composable
 fun VpnScreen(contentPadding: PaddingValues) {
@@ -174,6 +167,9 @@ fun VpnScreen(contentPadding: PaddingValues) {
                                     },
                                 ),
                             )
+                        }
+                        OutlinedButton(onClick = { context.startActivity(VpnLogActivity.intent(context)) }) {
+                            Text(stringResource(R.string.vpn_view_log))
                         }
                     }
                 }
