@@ -1,6 +1,7 @@
 package info.loveyu.mfca.vpn
 
 import android.content.Context
+import android.system.Os
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.StoragePathResolver
 import java.io.File
@@ -64,6 +65,7 @@ object MihomoCoreManager {
 
             paths.archiveDir.mkdirs()
             paths.executableDir.mkdirs()
+            Os.chmod(paths.executableDir.absolutePath, 0b111_101_101) // 0755
             val source = resolveSource(context, normalizedUrl)
             when {
                 !forceRefresh && paths.archiveFile.exists() -> {
@@ -93,7 +95,7 @@ object MihomoCoreManager {
 
             LogManager.logInfo("VPN", "Extracting mihomo core to ${targetFile.absolutePath}")
             extractBinary(paths.archiveFile, targetFile)
-            targetFile.setExecutable(true)
+            Os.chmod(targetFile.absolutePath, 0b111_101_101) // 0755
             targetFile
         }
     }

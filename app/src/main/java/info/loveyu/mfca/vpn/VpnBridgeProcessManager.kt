@@ -5,6 +5,7 @@ import android.net.LocalServerSocket
 import android.net.LocalSocket
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.system.Os
 import info.loveyu.mfca.util.LogManager
 import java.io.File
 import java.util.UUID
@@ -140,6 +141,7 @@ object VpnBridgeProcessManager {
     private fun ensureBridgeBinary(context: Context): File {
         val abi = currentAbiDirectory()
         val targetDir = File(context.getDir("vpn_bridge_exec", Context.MODE_PRIVATE), abi).apply { mkdirs() }
+        Os.chmod(targetDir.absolutePath, 0b111_101_101) // 0755
         val targetFile = File(targetDir, "vpnbridge")
         if (targetFile.exists() && targetFile.canExecute()) {
             return targetFile
@@ -148,7 +150,7 @@ object VpnBridgeProcessManager {
         context.assets.open("vpnbridge/$abi/vpnbridge").use { input ->
             targetFile.outputStream().use { output -> input.copyTo(output) }
         }
-        targetFile.setExecutable(true)
+        Os.chmod(targetFile.absolutePath, 0b111_101_101) // 0755
         return targetFile
     }
 
