@@ -1,6 +1,7 @@
 package info.loveyu.mfca.vpn
 
 import android.content.Context
+import info.loveyu.mfca.util.LogManager
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -43,6 +44,10 @@ object MihomoProcessManager {
             }
             val stdoutLog = File(workDir, "mihomo.stdout.log").apply { writeText("") }
             val stderrLog = File(workDir, "mihomo.stderr.log").apply { writeText("") }
+            LogManager.logInfo(
+                "VPN",
+                "Starting mihomo for ${artifacts.candidate.name}: core=${artifacts.coreFilePath}, profile=${artifacts.profileFilePath}, workDir=${workDir.absolutePath}",
+            )
 
             val process = ProcessBuilder(
                 buildCommand(
@@ -99,6 +104,7 @@ object MihomoProcessManager {
         val current = runningProcess ?: return null
         current.stopping = true
         runningProcess = null
+        LogManager.logInfo("VPN", "Stopping mihomo for ${current.candidateName}")
         current.process.destroy()
         if (!current.process.waitFor(1500, TimeUnit.MILLISECONDS)) {
             current.process.destroyForcibly()

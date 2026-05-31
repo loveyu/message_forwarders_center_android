@@ -5,6 +5,7 @@ import android.net.LocalServerSocket
 import android.net.LocalSocket
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import info.loveyu.mfca.util.LogManager
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -51,6 +52,10 @@ object VpnBridgeProcessManager {
             val stderrLog = File(workDir, "bridge.stderr.log").apply { writeText("") }
             val controlName = "mfca_vpn_${UUID.randomUUID().toString().replace("-", "")}"
             val controlServer = LocalServerSocket(controlName)
+            LogManager.logInfo(
+                "VPN",
+                "Starting VPN bridge for ${artifacts.candidate.name}: binary=${bridgeBinary.absolutePath}, workDir=${workDir.absolutePath}, socks=127.0.0.1:${artifacts.localProxyPort}",
+            )
 
             val process = ProcessBuilder(
                 listOf(
@@ -121,6 +126,7 @@ object VpnBridgeProcessManager {
         val current = runningProcess ?: return null
         current.stopping = true
         runningProcess = null
+        LogManager.logInfo("VPN", "Stopping VPN bridge for ${current.candidateName}")
         runCatching { current.controlSocket.close() }
         runCatching { current.controlServer.close() }
         current.process.destroy()

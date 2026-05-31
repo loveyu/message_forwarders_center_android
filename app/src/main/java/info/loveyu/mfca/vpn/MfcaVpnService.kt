@@ -17,13 +17,18 @@ import info.loveyu.mfca.R
 import info.loveyu.mfca.util.LogManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MfcaVpnService : VpnService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var tunInterface: ParcelFileDescriptor? = null
+    @Volatile private var runtimeSessionId: Long = 0L
+    @Volatile private var retryAttempts: Int = 0
+    private var retryJob: Job? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -31,14 +36,14 @@ class MfcaVpnService : VpnService() {
                 startVpnForeground("Preparing VPN")
                 serviceScope.launch {
                     VpnManager.setEnabled(true)
-                    syncRuntime(forceRestart = intent.getBooleanExtra(EXTRA_FORCE_RESTART, false))
+                    syncRuntime(forceRestart = intent.getBooleanExtra(EXTRA_FORCE_RESTART, false), isRetry = false)
                 }
             }
 
             ACTION_REFRESH -> {
                 startVpnForeground(VpnManager.state.value.statusMessage.ifBlank { "Refreshing VPN" })
                 serviceScope.launch {
-                    syncRuntime(forceRestart = intent.getBooleanExtra(EXTRA_FORCE_RESTART, false))
+                    syncRuntime(forceRestart = intent.getBooleanExtra(EXTRA_FORCE_RESTART, false), isRetry = false)
                 }
             }
 
@@ -72,6 +77,7 @@ class MfcaVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        cancelPendingRetry("service destroyed")
         closeTunInterface()
         VpnBridgeProcessManager.stop()
         MihomoProcessManager.stop()
@@ -79,8 +85,13 @@ class MfcaVpnService : VpnService() {
         super.onDestroy()
     }
 
-    private suspend fun syncRuntime(forceRestart: Boolean) {
+    private suspend fun syncRuntime(forceRestart: Boolean, isRetry: Boolean) {
+        if (!isRetry) {
+            cancelPendingRetry("runtime sync requested")
+            retryAttempts = 0
+        }
         if (prepare(this) != null) {
+            resetRuntimeSession()
             VpnManager.clearRunningCandidate(VpnRuntimeStatus.error, getString(R.string.vpn_permission_required))
             updateNotification(VpnManager.state.value.statusMessage)
             return
@@ -88,6 +99,7 @@ class MfcaVpnService : VpnService() {
 
         val selected = VpnManager.getSelectedCandidate()
         if (selected == null) {
+            resetRuntimeSession()
             VpnBridgeProcessManager.stop()
             closeTunInterface()
             MihomoProcessManager.stop()
@@ -111,9 +123,13 @@ class MfcaVpnService : VpnService() {
             stopRuntime(disableVpn = false, stopService = false)
         }
 
+        val sessionId = nextRuntimeSessionId()
         val artifacts = VpnManager.prepareSelectedCandidate(this).getOrElse { error ->
-            VpnManager.clearRunningCandidate(VpnRuntimeStatus.error, error.message ?: "Failed to prepare VPN")
-            updateNotification(VpnManager.state.value.statusMessage)
+            handleRuntimeFailure(
+                candidateName = selected.config.name,
+                sessionId = sessionId,
+                message = error.message ?: "Failed to prepare VPN",
+            )
             return
         }
 
@@ -124,59 +140,76 @@ class MfcaVpnService : VpnService() {
             context = this,
             artifacts = artifacts,
             onUnexpectedExit = { exitCode, tail ->
-                val message = "Mihomo exited ($exitCode): $tail"
-                LogManager.logError("VPN", message)
-                VpnBridgeProcessManager.stop()
-                closeTunInterface()
-                VpnManager.clearRunningCandidate(VpnRuntimeStatus.error, message)
-                updateNotification(message)
+                serviceScope.launch {
+                    handleUnexpectedRuntimeExit(
+                        candidateName = artifacts.candidate.name,
+                        sessionId = sessionId,
+                        message = "Mihomo exited ($exitCode): $tail",
+                    )
+                }
             },
         ).getOrElse { error ->
-            LogManager.logError("VPN", "Failed to start mihomo: ${error.message}")
-            VpnManager.clearRunningCandidate(VpnRuntimeStatus.error, error.message ?: "Failed to start mihomo")
-            updateNotification(VpnManager.state.value.statusMessage)
+            handleRuntimeFailure(
+                candidateName = artifacts.candidate.name,
+                sessionId = sessionId,
+                message = error.message ?: "Failed to start mihomo",
+            )
             return
         }
 
         val tun = establishTun(selected) ?: run {
             MihomoProcessManager.stop()
-            VpnManager.clearRunningCandidate(VpnRuntimeStatus.error, getString(R.string.vpn_establish_failed))
-            updateNotification(VpnManager.state.value.statusMessage)
+            handleRuntimeFailure(
+                candidateName = artifacts.candidate.name,
+                sessionId = sessionId,
+                message = getString(R.string.vpn_establish_failed),
+            )
             return
         }
         tunInterface = tun
+        LogManager.logInfo("VPN", "Established TUN for ${artifacts.candidate.name}")
 
         val runningBridge = VpnBridgeProcessManager.start(
             context = this,
             artifacts = artifacts,
             tunInterface = tun,
             onUnexpectedExit = { exitCode, tail ->
-                val message = "VPN bridge exited ($exitCode): $tail"
-                LogManager.logError("VPN", message)
-                closeTunInterface()
-                MihomoProcessManager.stop()
-                VpnManager.clearRunningCandidate(VpnRuntimeStatus.error, message)
-                updateNotification(message)
+                serviceScope.launch {
+                    handleUnexpectedRuntimeExit(
+                        candidateName = artifacts.candidate.name,
+                        sessionId = sessionId,
+                        message = "VPN bridge exited ($exitCode): $tail",
+                    )
+                }
             },
         ).getOrElse { error ->
             LogManager.logError("VPN", "Failed to start bridge: ${error.message}")
             closeTunInterface()
             MihomoProcessManager.stop()
-            VpnManager.clearRunningCandidate(VpnRuntimeStatus.error, error.message ?: "Failed to start VPN bridge")
-            updateNotification(VpnManager.state.value.statusMessage)
+            handleRuntimeFailure(
+                candidateName = artifacts.candidate.name,
+                sessionId = sessionId,
+                message = error.message ?: "Failed to start VPN bridge",
+            )
             return
         }
 
+        cancelPendingRetry("runtime started")
+        retryAttempts = 0
         val message = "VPN 运行中: ${runningBridge.candidateName}"
         VpnManager.markRunning(runningCore.candidateName, message)
         updateNotification(message)
+        LogManager.logInfo("VPN", "VPN runtime started for ${runningCore.candidateName}")
     }
 
     private fun stopRuntime(disableVpn: Boolean, stopService: Boolean) {
+        cancelPendingRetry("runtime stopping")
+        resetRuntimeSession()
         val bridgeStopped = VpnBridgeProcessManager.stop()
         closeTunInterface()
         val stopped = MihomoProcessManager.stop() ?: bridgeStopped
         if (disableVpn) {
+            retryAttempts = 0
             VpnManager.setEnabled(false)
         } else {
             VpnManager.clearRunningCandidate(
@@ -190,6 +223,83 @@ class MfcaVpnService : VpnService() {
         } else {
             updateNotification(VpnManager.state.value.statusMessage)
         }
+    }
+
+    private suspend fun handleUnexpectedRuntimeExit(candidateName: String, sessionId: Long, message: String) {
+        handleRuntimeFailure(candidateName, sessionId, message)
+    }
+
+    private suspend fun handleRuntimeFailure(candidateName: String, sessionId: Long, message: String) {
+        val retryReason = nextRetryReason(candidateName, sessionId)
+        LogManager.logError("VPN", message)
+        resetRuntimeSession()
+        VpnBridgeProcessManager.stop()
+        closeTunInterface()
+        MihomoProcessManager.stop()
+
+        if (retryReason == null) {
+            scheduleRetry(candidateName, message)
+            return
+        }
+
+        retryAttempts = 0
+        LogManager.logInfo("VPN", "Skip VPN retry for $candidateName: $retryReason")
+        VpnManager.clearRunningCandidate(VpnRuntimeStatus.error, message)
+        updateNotification(message)
+    }
+
+    private fun nextRetryReason(candidateName: String, sessionId: Long): String? {
+        if (sessionId != runtimeSessionId) {
+            return "runtime already replaced by another VPN candidate"
+        }
+        val state = VpnManager.state.value
+        if (!state.isEnabled) {
+            return "vpn is disabled"
+        }
+        if (state.activeCandidateName != candidateName) {
+            return "another VPN candidate is now preferred"
+        }
+        if (retryAttempts >= MAX_RETRY_ATTEMPTS) {
+            return "retry limit reached"
+        }
+        return null
+    }
+
+    private fun scheduleRetry(candidateName: String, message: String) {
+        cancelPendingRetry("scheduling next retry")
+        retryAttempts += 1
+        val retryMessage = getString(R.string.vpn_retrying, candidateName, retryAttempts, MAX_RETRY_ATTEMPTS)
+        LogManager.logWarn("VPN", "$message. $retryMessage")
+        VpnManager.clearRunningCandidate(VpnRuntimeStatus.error, retryMessage)
+        updateNotification(retryMessage)
+        retryJob = serviceScope.launch {
+            delay(RETRY_DELAY_MS * retryAttempts)
+            val state = VpnManager.state.value
+            if (!state.isEnabled || state.activeCandidateName != candidateName) {
+                LogManager.logInfo("VPN", "Cancel pending retry for $candidateName because runtime target changed")
+                return@launch
+            }
+            LogManager.logInfo("VPN", "Retrying VPN startup for $candidateName")
+            syncRuntime(forceRestart = true, isRetry = true)
+        }
+    }
+
+    private fun cancelPendingRetry(reason: String) {
+        if (retryJob?.isActive == true) {
+            LogManager.logInfo("VPN", "Canceling pending VPN retry: $reason")
+        }
+        retryJob?.cancel()
+        retryJob = null
+    }
+
+    private fun nextRuntimeSessionId(): Long {
+        val next = System.nanoTime()
+        runtimeSessionId = next
+        return next
+    }
+
+    private fun resetRuntimeSession() {
+        runtimeSessionId = 0L
     }
 
     private fun establishTun(candidate: info.loveyu.mfca.vpn.VpnCandidateState): ParcelFileDescriptor? {
@@ -236,6 +346,9 @@ class MfcaVpnService : VpnService() {
     }
 
     private fun closeTunInterface() {
+        if (tunInterface != null) {
+            LogManager.logInfo("VPN", "Closing TUN interface")
+        }
         runCatching { tunInterface?.close() }
         tunInterface = null
     }
@@ -279,6 +392,8 @@ class MfcaVpnService : VpnService() {
     companion object {
         private const val CHANNEL_ID = "mfca_vpn_runtime"
         private const val NOTIFICATION_ID = 1202
+        private const val MAX_RETRY_ATTEMPTS = 3
+        private const val RETRY_DELAY_MS = 5_000L
         const val TUN_MTU = 1500
         const val TUN_SUBNET_PREFIX = 30
         const val TUN_GATEWAY = "172.19.0.1"

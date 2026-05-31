@@ -153,7 +153,7 @@ VPN inputs backed by a remote mihomo config and downloadable core
 |------|------|:----:|--------|------|
 | `name` | string | ✓ |  | Unique VPN candidate name |
 | `configUrl` | string | ✓ |  | Remote mihomo config URL |
-| `coreUrl` | string | ✓ |  | Full download URL for the mihomo core package or binary |
+| `coreUrl` | string | ✓ |  | Full mihomo core source, supports http(s):// plus data://, cache://, sdcard:// and file:// |
 | `enabled` | boolean |  | `true` | Whether this VPN candidate is enabled by default |
 | `accessControlMode` | enum |  | `acceptAll` | App access control mode for this VPN profile `acceptAll` / `include` / `exclude` |
 | `packages` | list[string] |  |  | Package names for include/exclude access control |

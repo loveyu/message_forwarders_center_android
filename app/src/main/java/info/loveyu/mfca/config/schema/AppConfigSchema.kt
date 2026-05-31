@@ -169,7 +169,7 @@ object AppConfigSchema {
                 }
                 string("coreUrl") {
                     required()
-                    description = "Full download URL for the mihomo core package or binary"
+                    description = "Full mihomo core source, supports http(s):// plus data://, cache://, sdcard:// and file://"
                 }
                 boolean("enabled") {
                     description = "Whether this VPN candidate is enabled by default"

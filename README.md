@@ -139,10 +139,10 @@ Example: `L3 I2 O4 | Pause Forward | WLock`
 ## VPN Input (scaffold)
 
 - Add VPN profiles under `inputs.vpn`
-- Each profile uses a remote `configUrl` plus a full `coreUrl` download address for the mihomo binary/package
+- Each profile uses a remote `configUrl` plus a full `coreUrl` source for the mihomo binary/package; `coreUrl` supports `http(s)://`, `data://`, `cache://`, `sdcard://`, and `file://`
 - `when` / `deny` still control candidate availability, and multiple VPN profiles can coexist under the same network condition
 - Per-profile `accessControlMode` + `packages` define include/exclude app filters
-- This branch currently provides config parsing, candidate selection/history, app filtering UI, and mihomo core/profile download preparation; actual tunnel data-plane wiring is still pending
+- The VPN tab can pre-download, replace, or delete a cached core; startup reuses cached cores by source path/url and only re-fetches when the cache is missing or you manually replace it
 
 ## Build
 

@@ -14,10 +14,27 @@ enum class VpnRuntimeStatus {
     error,
 }
 
+enum class VpnCoreSourceType {
+    remote,
+    local,
+}
+
+data class VpnCoreState(
+    val source: String,
+    val sourceType: VpnCoreSourceType,
+    val resolvedSourcePath: String? = null,
+    val cachePath: String? = null,
+    val archivePath: String? = null,
+    val sourceExists: Boolean = true,
+    val isReady: Boolean = false,
+    val errorMessage: String? = null,
+)
+
 data class VpnCandidateState(
     val config: VpnInputConfig,
     val effectiveAccessControlMode: VpnAccessControlMode,
     val effectivePackages: List<String>,
+    val coreState: VpnCoreState,
     val isAvailable: Boolean,
     val availabilityReason: String? = null,
     val isSelected: Boolean = false,
