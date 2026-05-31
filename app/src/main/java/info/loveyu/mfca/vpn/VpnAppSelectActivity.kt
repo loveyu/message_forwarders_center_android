@@ -7,10 +7,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,10 +21,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Checkbox
@@ -45,13 +49,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.drawable.toBitmap
 import info.loveyu.mfca.R
 import info.loveyu.mfca.config.VpnAccessControlMode
 import info.loveyu.mfca.ui.theme.MfcaTheme
@@ -264,11 +272,12 @@ private fun VpnAppSelectScreen(
                 ) {
                     items(filteredApps, key = { it.packageName }) { app ->
                         Row(
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         ) {
-                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                            AppIcon(packageName = app.packageName, modifier = Modifier.size(40.dp))
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(app.label, style = MaterialTheme.typography.bodyMedium)
                                 Text(
                                     app.packageName,
@@ -297,6 +306,33 @@ private data class AppItem(
     val label: String,
     val packageName: String,
 )
+
+/** Lazily loads and displays an app icon. Triggered only when the item enters the composition (i.e. scrolls into view). */
+@Composable
+private fun AppIcon(packageName: String, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val icon by produceState<ImageBitmap?>(initialValue = null, packageName) {
+        value =
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val drawable: Drawable = context.packageManager.getApplicationIcon(packageName)
+                    drawable.toBitmap().asImageBitmap()
+                }.getOrNull()
+            }
+    }
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        if (icon != null) {
+            Image(bitmap = icon!!, contentDescription = null, modifier = Modifier.size(36.dp))
+        } else {
+            Icon(
+                imageVector = Icons.Default.Android,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(28.dp),
+            )
+        }
+    }
+}
 
 private fun loadApps(context: Context, includeSystem: Boolean): List<AppItem> {
     val pm = context.packageManager
