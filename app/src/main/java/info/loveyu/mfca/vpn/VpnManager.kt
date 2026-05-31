@@ -63,31 +63,6 @@ object VpnManager {
         rebuildState()
     }
 
-    fun downloadCore(context: Context, candidateName: String, forceRefresh: Boolean = false): Result<VpnCoreState> {
-        val config = configs.firstOrNull { it.name == candidateName }
-            ?: return Result.failure(IllegalArgumentException("Unknown VPN candidate: $candidateName"))
-        LogManager.logInfo(
-            "VPN",
-            "${if (forceRefresh) "Refreshing" else "Downloading"} mihomo core for ${config.name}: ${config.coreUrl}",
-        )
-        return MihomoCoreManager.ensureCore(context, config.coreUrl, forceRefresh).map {
-            rebuildState()
-            currentCoreState(candidateName)
-                ?: throw IllegalStateException("Failed to rebuild VPN core state for $candidateName")
-        }
-    }
-
-    fun deleteCore(context: Context, candidateName: String): Result<VpnCoreState> {
-        val config = configs.firstOrNull { it.name == candidateName }
-            ?: return Result.failure(IllegalArgumentException("Unknown VPN candidate: $candidateName"))
-        LogManager.logInfo("VPN", "Deleting cached mihomo core for ${config.name}: ${config.coreUrl}")
-        return MihomoCoreManager.deleteCore(context, config.coreUrl).map {
-            rebuildState()
-            currentCoreState(candidateName)
-                ?: throw IllegalStateException("Failed to rebuild VPN core state for $candidateName")
-        }
-    }
-
     fun getSelectedCandidate(): VpnCandidateState? {
         return stateFlow.value.candidates.firstOrNull { it.isSelected && it.isAvailable }
     }
@@ -97,7 +72,7 @@ object VpnManager {
             ?: return Result.failure(IllegalStateException("No available VPN candidate selected"))
         LogManager.logInfo("VPN", "Preparing VPN candidate ${selected.config.name}")
         updateRuntimeStatus(VpnRuntimeStatus.preparing, "Preparing ${selected.config.name}")
-        return MihomoCoreManager.ensureCore(context, selected.config.coreUrl).fold(
+        return MihomoCoreManager.ensureCore(context).fold(
             onSuccess = { coreFile ->
                 LogManager.logInfo("VPN", "Prepared mihomo core for ${selected.config.name}: ${coreFile.absolutePath}")
                 VpnProfileManager.ensureProfile(context, selected.config, LOCAL_PROXY_PORT).map { profileFile ->
@@ -164,7 +139,7 @@ object VpnManager {
             } else {
                 NetworkChecker.getEnableReason(context, config.whenCondition, config.deny)
             }
-            val coreState = MihomoCoreManager.inspectCore(context, config.coreUrl)
+            val coreState = MihomoCoreManager.inspectCore(context)
             VpnCandidateState(
                 config = config,
                 effectiveAccessControlMode = effectiveMode,
@@ -203,10 +178,6 @@ object VpnManager {
 
     private fun updateState(next: VpnUiState) {
         stateFlow.value = next
-    }
-
-    private fun currentCoreState(candidateName: String): VpnCoreState? {
-        return stateFlow.value.candidates.firstOrNull { it.config.name == candidateName }?.coreState
     }
 
     private fun resolveActiveCandidateName(

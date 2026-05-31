@@ -157,7 +157,7 @@ object AppConfigSchema {
 
             objectList(
                 "vpn",
-                block = { description = "VPN inputs backed by a remote mihomo config and downloadable core" },
+                block = { description = "VPN inputs backed by a remote mihomo config and bundled core" },
             ) {
                 string("name") {
                     required()
@@ -166,10 +166,6 @@ object AppConfigSchema {
                 string("configUrl") {
                     required()
                     description = "Remote mihomo config URL"
-                }
-                string("coreUrl") {
-                    required()
-                    description = "Full mihomo core source, supports http(s):// plus data://, cache://, sdcard:// and file://"
                 }
                 boolean("enabled") {
                     description = "Whether this VPN candidate is enabled by default"

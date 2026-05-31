@@ -84,7 +84,7 @@ Input source configurations
 |------|------|:----:|--------|------|
 | `http` | list[object] |  |  | HTTP server input sources |
 | `link` | list[object] |  |  | Link-based input sources (MQTT subscriber, WebSocket, TCP) |
-| `vpn` | list[object] |  |  | VPN inputs backed by a remote mihomo config and downloadable core |
+| `vpn` | list[object] |  |  | VPN inputs backed by a remote mihomo config and bundled core |
 
 ### `http`
 
@@ -144,7 +144,7 @@ Message replay configuration
 
 ### `vpn`
 
-VPN inputs backed by a remote mihomo config and downloadable core
+VPN inputs backed by a remote mihomo config and bundled core
 
 - **Type**: list[object]
 
@@ -153,7 +153,6 @@ VPN inputs backed by a remote mihomo config and downloadable core
 |------|------|:----:|--------|------|
 | `name` | string | ✓ |  | Unique VPN candidate name |
 | `configUrl` | string | ✓ |  | Remote mihomo config URL |
-| `coreUrl` | string | ✓ |  | Full mihomo core source, supports http(s):// plus data://, cache://, sdcard:// and file:// |
 | `enabled` | boolean |  | `true` | Whether this VPN candidate is enabled by default |
 | `accessControlMode` | enum |  | `acceptAll` | App access control mode for this VPN profile `acceptAll` / `include` / `exclude` |
 | `packages` | list[string] |  |  | Package names for include/exclude access control |

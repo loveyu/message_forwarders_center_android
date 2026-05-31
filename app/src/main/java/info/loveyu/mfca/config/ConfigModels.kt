@@ -169,7 +169,6 @@ enum class LinkRole {
 data class VpnInputConfig(
     val name: String,
     val configUrl: String,
-    val coreUrl: String,
     val whenCondition: String? = null,
     val deny: String? = null,
     val enabled: Boolean = true,

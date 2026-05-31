@@ -22,7 +22,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
@@ -39,7 +38,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -50,12 +48,8 @@ import info.loveyu.mfca.R
 import info.loveyu.mfca.config.VpnAccessControlMode
 import info.loveyu.mfca.vpn.MfcaVpnService
 import info.loveyu.mfca.vpn.VpnCandidateState
-import info.loveyu.mfca.vpn.VpnCoreSourceType
 import info.loveyu.mfca.vpn.VpnManager
 import info.loveyu.mfca.vpn.VpnRuntimeStatus
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,11 +61,7 @@ fun VpnTopBar() {
 fun VpnScreen(contentPadding: PaddingValues) {
     val context = LocalContext.current
     val uiState by VpnManager.state.collectAsState()
-    val scope = rememberCoroutineScope()
     var editingCandidate by remember { mutableStateOf<VpnCandidateState?>(null) }
-    var workingCoreCandidateName by remember { mutableStateOf<String?>(null) }
-    var coreActionError by remember { mutableStateOf<String?>(null) }
-    var coreActionErrorCandidateName by remember { mutableStateOf<String?>(null) }
     val vpnPermissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
@@ -189,7 +179,6 @@ fun VpnScreen(contentPadding: PaddingValues) {
         }
 
         items(uiState.candidates, key = { it.config.name }) { candidate ->
-            val isWorking = workingCoreCandidateName == candidate.config.name
             ElevatedCard {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -232,20 +221,7 @@ fun VpnScreen(contentPadding: PaddingValues) {
                         }
                         VpnStatusChip(
                             label = stringResource(
-                                if (candidate.coreState.sourceType == VpnCoreSourceType.local) {
-                                    R.string.vpn_core_source_local
-                                } else {
-                                    R.string.vpn_core_source_remote
-                                },
-                            ),
-                        )
-                        VpnStatusChip(
-                            label = stringResource(
-                                when {
-                                    candidate.coreState.isReady -> R.string.vpn_core_ready
-                                    !candidate.coreState.sourceExists -> R.string.vpn_core_source_missing
-                                    else -> R.string.vpn_core_missing
-                                },
+                                if (candidate.coreState.isReady) R.string.vpn_core_ready else R.string.vpn_core_missing,
                             ),
                         )
                         VpnStatusChip(
@@ -264,115 +240,6 @@ fun VpnScreen(contentPadding: PaddingValues) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    candidate.coreState.errorMessage?.takeIf { it.isNotBlank() }?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        shape = MaterialTheme.shapes.large,
-                    ) {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(14.dp),
-                        ) {
-                            Text(
-                                text = stringResource(R.string.vpn_core_management_title),
-                                style = MaterialTheme.typography.titleSmall,
-                            )
-                            VpnInfoLine(
-                                label = stringResource(R.string.vpn_core_url_label),
-                                value = candidate.config.coreUrl,
-                            )
-                            candidate.coreState.resolvedSourcePath?.let {
-                                VpnInfoLine(
-                                    label = stringResource(R.string.vpn_core_source_path_label),
-                                    value = it,
-                                )
-                            }
-                            VpnInfoLine(
-                                label = stringResource(R.string.vpn_core_cache_path_label),
-                                value = candidate.coreState.cachePath
-                                    ?: candidate.coreState.archivePath
-                                    ?: stringResource(R.string.vpn_core_not_downloaded),
-                            )
-                            if (isWorking) {
-                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                            }
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                FilledTonalButton(
-                                    enabled = !isWorking,
-                                    onClick = {
-                                        workingCoreCandidateName = candidate.config.name
-                                        coreActionError = null
-                                        coreActionErrorCandidateName = null
-                                        scope.launch {
-                                            val result = withContext(Dispatchers.IO) {
-                                                VpnManager.downloadCore(
-                                                    context,
-                                                    candidate.config.name,
-                                                    forceRefresh = candidate.coreState.isReady,
-                                                )
-                                            }
-                                            result.onFailure { error ->
-                                                coreActionError = error.message
-                                                coreActionErrorCandidateName = candidate.config.name
-                                            }
-                                            workingCoreCandidateName = null
-                                        }
-                                    },
-                                ) {
-                                    Text(
-                                        stringResource(
-                                            if (candidate.coreState.isReady) {
-                                                R.string.vpn_core_replace
-                                            } else {
-                                                R.string.vpn_core_download
-                                            },
-                                        ),
-                                    )
-                                }
-                                OutlinedButton(
-                                    enabled = !isWorking && (candidate.coreState.isReady || candidate.coreState.archivePath != null),
-                                    onClick = {
-                                        workingCoreCandidateName = candidate.config.name
-                                        coreActionError = null
-                                        coreActionErrorCandidateName = null
-                                        scope.launch {
-                                            val result = withContext(Dispatchers.IO) {
-                                                VpnManager.deleteCore(context, candidate.config.name)
-                                            }
-                                            result.onFailure { error ->
-                                                coreActionError = error.message
-                                                coreActionErrorCandidateName = candidate.config.name
-                                            }
-                                            workingCoreCandidateName = null
-                                        }
-                                    },
-                                ) {
-                                    Text(stringResource(R.string.vpn_core_delete))
-                                }
-                            }
-                        }
-                    }
-
-                    if (coreActionErrorCandidateName == candidate.config.name) {
-                        Text(
-                            text = coreActionError.orEmpty(),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-
                     HorizontalDivider()
 
                     FlowRow(

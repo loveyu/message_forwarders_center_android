@@ -151,6 +151,47 @@ val buildVpnBridgeBinaries =
         commandLine("bash", "-lc", buildScript)
     }
 
+val mihomoVersion = "1.19.25"
+val mihomoJniLibDir = layout.buildDirectory.dir("generated/jniLibs/mihomo")
+
+data class MihomoTarget(val abi: String, val archiveName: String)
+
+val mihomoTargets =
+    listOf(
+        MihomoTarget(
+            abi = "arm64-v8a",
+            archiveName = "mihomo-android-arm64-v8-v$mihomoVersion.gz",
+        ),
+    )
+
+val prepareMihomoLibraries =
+    tasks.register<Exec>("prepareMihomoLibraries") {
+        val outDir = mihomoJniLibDir.get().asFile
+        outputs.dir(outDir)
+        onlyIf {
+            mihomoTargets.any { target ->
+                !outDir.resolve("${target.abi}/libmihomo.so").exists()
+            }
+        }
+        val buildScript =
+            buildString {
+                appendLine("set -euo pipefail")
+                appendLine("tmpdir=\$(mktemp -d)")
+                appendLine("trap 'rm -rf \"\$tmpdir\"' EXIT")
+                mihomoTargets.forEach { target ->
+                    val abiDir = outDir.resolve(target.abi)
+                    appendLine("mkdir -p '${abiDir.absolutePath}'")
+                    appendLine(
+                        "curl -fsSL 'https://github.com/MetaCubeX/mihomo/releases/download/v$mihomoVersion/${target.archiveName}' -o \"\$tmpdir/${target.archiveName}\"",
+                    )
+                    appendLine(
+                        "gunzip -c \"\$tmpdir/${target.archiveName}\" > '${abiDir.resolve("libmihomo.so").absolutePath}'",
+                    )
+                }
+            }
+        commandLine("bash", "-lc", buildScript)
+    }
+
 android {
     namespace = "info.loveyu.mfca"
     compileSdk = 36
@@ -230,6 +271,7 @@ android {
         buildConfig = true
     }
     sourceSets.getByName("main").assets.srcDir(vpnBridgeAssetDir.get().asFile)
+    sourceSets.getByName("main").jniLibs.srcDir(mihomoJniLibDir.get().asFile)
 }
 
 spotless {
@@ -283,5 +325,9 @@ afterEvaluate {
 
     tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
         dependsOn(buildVpnBridgeBinaries)
+    }
+
+    tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach {
+        dependsOn(prepareMihomoLibraries)
     }
 }
