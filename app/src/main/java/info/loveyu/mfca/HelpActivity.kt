@@ -330,7 +330,7 @@ private fun loadSampleFiles(context: Context): List<SampleFile> {
         ),
         SampleFileInfo(
             fileName = "20_vpn_input.yaml",
-            description = "VPN 输入 - 远程 mihomo 配置、核心版本、候选切换、应用过滤"
+            description = "VPN 输入 - 远程 mihomo 配置、核心地址、候选切换、应用过滤"
         ),
         SampleFileInfo(
             fileName = "99_full_demo.yaml",

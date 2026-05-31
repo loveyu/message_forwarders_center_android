@@ -139,7 +139,7 @@ object VpnBridgeProcessManager {
 
     private fun ensureBridgeBinary(context: Context): File {
         val abi = currentAbiDirectory()
-        val targetDir = File(context.filesDir, "vpn/bridge/$abi").apply { mkdirs() }
+        val targetDir = File(context.getDir("vpn_bridge_exec", Context.MODE_PRIVATE), abi).apply { mkdirs() }
         val targetFile = File(targetDir, "vpnbridge")
         if (targetFile.exists() && targetFile.canExecute()) {
             return targetFile

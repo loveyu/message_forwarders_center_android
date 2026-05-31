@@ -13,7 +13,8 @@ import java.util.zip.ZipInputStream
 
 object MihomoCoreManager {
     private data class CorePaths(
-        val cacheDir: File,
+        val archiveDir: File,
+        val executableDir: File,
         val executableFile: File,
         val archiveFile: File,
     )
@@ -61,7 +62,8 @@ object MihomoCoreManager {
                 return@runCatching targetFile
             }
 
-            paths.cacheDir.mkdirs()
+            paths.archiveDir.mkdirs()
+            paths.executableDir.mkdirs()
             val source = resolveSource(context, normalizedUrl)
             when {
                 !forceRefresh && paths.archiveFile.exists() -> {
@@ -101,9 +103,18 @@ object MihomoCoreManager {
             val normalizedUrl = coreUrl.trim()
             require(normalizedUrl.isNotEmpty()) { "VPN coreUrl cannot be blank" }
             val paths = buildPaths(context, normalizedUrl)
-            if (paths.cacheDir.exists()) {
-                LogManager.logInfo("VPN", "Deleting cached mihomo core: ${paths.cacheDir.absolutePath}")
-                paths.cacheDir.deleteRecursively()
+            if (paths.archiveDir.exists()) {
+                LogManager.logInfo("VPN", "Deleting cached mihomo package: ${paths.archiveDir.absolutePath}")
+                paths.archiveDir.deleteRecursively()
+            }
+            if (paths.executableDir.exists()) {
+                LogManager.logInfo("VPN", "Deleting cached mihomo executable: ${paths.executableDir.absolutePath}")
+                paths.executableDir.deleteRecursively()
+            }
+            val legacyDir = legacyCacheDir(context, normalizedUrl)
+            if (legacyDir.exists()) {
+                LogManager.logInfo("VPN", "Deleting legacy mihomo cache: ${legacyDir.absolutePath}")
+                legacyDir.deleteRecursively()
             }
         }
     }
@@ -181,12 +192,19 @@ object MihomoCoreManager {
     }
 
     private fun buildPaths(context: Context, coreUrl: String): CorePaths {
-        val cacheDir = File(context.filesDir, "vpn/mihomo/${sha256(coreUrl)}")
+        val cacheKey = sha256(coreUrl)
+        val archiveDir = File(context.filesDir, "vpn/mihomo/$cacheKey")
+        val executableDir = File(context.getDir("vpn_exec", Context.MODE_PRIVATE), cacheKey)
         return CorePaths(
-            cacheDir = cacheDir,
-            executableFile = File(cacheDir, "mihomo"),
-            archiveFile = File(cacheDir, archiveFileName(coreUrl)),
+            archiveDir = archiveDir,
+            executableDir = executableDir,
+            executableFile = File(executableDir, "mihomo"),
+            archiveFile = File(archiveDir, archiveFileName(coreUrl)),
         )
+    }
+
+    private fun legacyCacheDir(context: Context, coreUrl: String): File {
+        return File(context.filesDir, "vpn/mihomo/${sha256(coreUrl)}")
     }
 
     private fun resolveSource(context: Context, coreUrl: String): CoreSource {
