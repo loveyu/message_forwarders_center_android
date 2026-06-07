@@ -300,7 +300,8 @@ android {
         buildConfig = true
     }
     sourceSets.getByName("main").jniLibs.srcDir(mihomoJniLibDir.get().asFile)
-    sourceSets.getByName("main").jniLibs.srcDir(udp2rawJniLibDir.get().asFile)
+    // libudp2raw_plugin.so is NOT bundled in the APK — it is distributed as a plugin
+    // and installed at runtime via PluginManager into the app's private files directory.
     sourceSets.getByName("main").jniLibs.srcDir(vpnBridgeJniLibDir.get().asFile)
     packaging {
         jniLibs {
@@ -360,7 +361,8 @@ afterEvaluate {
 
     tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach {
         dependsOn(prepareMihomoLibraries)
-        dependsOn(prepareUdp2RawLibraries)
+        // prepareUdp2RawLibraries is no longer part of the build — libudp2raw_plugin.so
+        // is installed at runtime as a plugin, not bundled in the APK.
         dependsOn(buildVpnBridgeBinaries)
     }
 }

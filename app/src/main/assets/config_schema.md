@@ -85,7 +85,7 @@ Input source configurations
 | `http` | list[object] |  |  | HTTP server input sources |
 | `link` | list[object] |  |  | Link-based input sources (MQTT subscriber, WebSocket, TCP) |
 | `vpn` | list[object] |  |  | VPN inputs backed by a remote mihomo config and bundled core |
-| `udp2raw` | list[object] |  |  | Local udp2raw process inputs for raw UDP forwarding |
+| `udp2raw` | list[object] |  |  | udp2raw inputs – plugin loaded dynamically from internal storage |
 
 ### `http`
 
@@ -163,7 +163,7 @@ VPN inputs backed by a remote mihomo config and bundled core
 
 ### `udp2raw`
 
-Local udp2raw process inputs for raw UDP forwarding
+udp2raw inputs – plugin loaded dynamically from internal storage
 
 - **Type**: list[object]
 
@@ -174,6 +174,7 @@ Local udp2raw process inputs for raw UDP forwarding
 | `dsn` | string |  |  | Connection DSN shorthand: udp2raw://[key@]remoteHost:remotePort?listen=localHost:localPort[&mode=faketcp][&role=client\|server]. Domain names in remoteHost are resolved to IP at every start. If both dsn and args are set, args take precedence. |
 | `args` | list[string] |  |  | Raw udp2raw command arguments. Overrides dsn when both are set. Example: ['-c', '-l0.0.0.0:4096', '-r127.0.0.1:53', '--raw-mode', 'faketcp'] |
 | `enabled` | boolean |  | `true` | Whether this udp2raw input is enabled |
+| `pluginUrl` | string |  |  | Optional HTTPS URL to download libudp2raw_plugin.so if it is not already installed. The correct ABI variant must be hosted at this URL. Leave blank if you install the plugin manually via PluginManager. |
 | `when` | string |  |  | Enable condition |
 | `deny` | string |  |  | Disable condition |
 

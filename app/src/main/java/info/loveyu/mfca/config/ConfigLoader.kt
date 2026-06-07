@@ -200,7 +200,8 @@ object ConfigLoader {
                     args = (map["args"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
                     enabled = map["enabled"] as? Boolean ?: true,
                     whenCondition = map["when"] as? String,
-                    deny = map["deny"] as? String
+                    deny = map["deny"] as? String,
+                    pluginUrl = map["pluginUrl"] as? String,
                 )
             }
         }

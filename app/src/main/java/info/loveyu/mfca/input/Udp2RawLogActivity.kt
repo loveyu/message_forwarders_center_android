@@ -79,29 +79,19 @@ private fun Udp2RawLogScreen(name: String, onBack: () -> Unit) {
 
     LaunchedEffect(name) {
         while (isActive) {
-            val logFiles = withContext(Dispatchers.IO) { Udp2RawInput.getLogFiles(name) }
-            hasEverStarted = logFiles != null
-            val input = withContext(Dispatchers.IO) {
-                // Probe running state: file exists and was recently modified
-                logFiles != null
-            }
-            isRunning = input && run {
-                val (stdout, stderr) = logFiles!!
-                // If either file was written to within the last 5s, consider running
+            val logFile = withContext(Dispatchers.IO) { Udp2RawInput.getLogFile(name) }
+            hasEverStarted = logFile != null
+            isRunning = logFile != null && run {
                 val now = System.currentTimeMillis()
-                stdout.lastModified() > now - 5_000 || stderr.lastModified() > now - 5_000
+                logFile.lastModified() > now - 5_000
             }
 
-            if (logFiles != null) {
-                val (stdoutFile, stderrFile) = logFiles
+            if (logFile != null) {
                 val combined = mutableListOf<LogLine>()
                 withContext(Dispatchers.IO) {
-                    runCatching { stdoutFile.readLines() }.getOrDefault(emptyList())
+                    runCatching { logFile.readLines() }.getOrDefault(emptyList())
                         .filter { it.isNotBlank() }
                         .mapTo(combined) { LogLine(it, isStderr = false) }
-                    runCatching { stderrFile.readLines() }.getOrDefault(emptyList())
-                        .filter { it.isNotBlank() }
-                        .mapTo(combined) { LogLine(it, isStderr = true) }
                 }
                 lines = combined
             }

@@ -188,7 +188,7 @@ object AppConfigSchema {
 
             objectList(
                 "udp2raw",
-                block = { description = "Local udp2raw process inputs for raw UDP forwarding" },
+                block = { description = "udp2raw inputs – plugin loaded dynamically from internal storage" },
             ) {
                 string("name") {
                     required()
@@ -208,6 +208,12 @@ object AppConfigSchema {
                 boolean("enabled") {
                     description = "Whether this udp2raw input is enabled"
                     default = true
+                }
+                string("pluginUrl") {
+                    description =
+                        "Optional HTTPS URL to download libudp2raw_plugin.so if it is not already installed. " +
+                            "The correct ABI variant must be hosted at this URL. " +
+                            "Leave blank if you install the plugin manually via PluginManager."
                 }
                 string("when") { description = "Enable condition" }
                 string("deny") { description = "Disable condition" }

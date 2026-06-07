@@ -184,7 +184,9 @@ data class Udp2RawInputConfig(
     val args: List<String> = emptyList(),
     val enabled: Boolean = true,
     val whenCondition: String? = null,
-    val deny: String? = null
+    val deny: String? = null,
+    /** Optional URL to download libudp2raw_plugin.so when not already installed. */
+    val pluginUrl: String? = null,
 )
 
 enum class VpnAccessControlMode {

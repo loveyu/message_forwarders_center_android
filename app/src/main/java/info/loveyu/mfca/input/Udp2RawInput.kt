@@ -1,8 +1,10 @@
 package info.loveyu.mfca.input
 
 import android.content.Context
-import android.system.Os
 import info.loveyu.mfca.config.Udp2RawInputConfig
+import info.loveyu.mfca.plugin.PluginCore
+import info.loveyu.mfca.plugin.PluginManager
+import info.loveyu.mfca.plugin.Udp2RawPluginCore
 import info.loveyu.mfca.util.LogManager
 import java.io.File
 import java.net.InetAddress
@@ -17,13 +19,14 @@ class Udp2RawInput(
     override val inputName: String = config.name
     override val inputType: InputType = InputType.udp2raw
 
-    @Volatile private var process: Process? = null
     @Volatile private var running = false
     @Volatile private var stopping = false
     @Volatile private var fatalError: String? = null
     @Volatile private var lastError: String? = null
     @Volatile private var resolvedRemote: String? = null
     private val lock = Any()
+
+    private val plugin: PluginCore = Udp2RawPluginCore()
 
     override fun start() {
         synchronized(lock) {
@@ -37,57 +40,61 @@ class Udp2RawInput(
 
             val resolvedArgs = resolveDomainsInArgs(effectiveArgs)
 
-            val executable = try {
-                ensureExecutableBinary()
+            // Ensure plugin .so is installed
+            val soFile = try {
+                ensurePlugin()
             } catch (e: Exception) {
-                fatalError = "prepare udp2raw binary failed: ${e.message}"
+                fatalError = "udp2raw plugin not available: ${e.message}"
                 throw IllegalStateException(fatalError, e)
             }
 
+            // Load the .so (idempotent — System.load tracks already-loaded libs)
+            if (!plugin.isLoaded()) {
+                try {
+                    plugin.load(soFile.absolutePath)
+                } catch (e: Exception) {
+                    fatalError = "udp2raw plugin load failed: ${e.message}"
+                    throw IllegalStateException(fatalError, e)
+                }
+            }
+
             val workDir = File(context.filesDir, "udp2raw/runtime/${sanitize(config.name)}").apply { mkdirs() }
-            val stdoutLog = File(workDir, "udp2raw.stdout.log").apply { writeText("") }
-            val stderrLog = File(workDir, "udp2raw.stderr.log").apply { writeText("") }
-            val command = listOf(executable.absolutePath) + resolvedArgs
+            val logFile = File(workDir, "udp2raw.log").apply { if (!exists()) createNewFile() }
 
-            registry[config.name] = Pair(stdoutLog, stderrLog)
+            registry[config.name] = logFile
 
-            LogManager.logInfo("UDP2RAW", "Starting udp2raw '${config.name}': ${command.joinToString(" ")}")
-            val startedProcess =
-                ProcessBuilder(command)
-                    .directory(workDir)
-                    .redirectOutput(ProcessBuilder.Redirect.appendTo(stdoutLog))
-                    .redirectError(ProcessBuilder.Redirect.appendTo(stderrLog))
-                    .apply {
-                        environment()["HOME"] = workDir.absolutePath
-                    }.start()
+            LogManager.logInfo("UDP2RAW", "Starting udp2raw '${config.name}': ${resolvedArgs.joinToString(" ")}")
 
-            if (startedProcess.waitFor(1200, TimeUnit.MILLISECONDS)) {
-                val exitCode = startedProcess.exitValue()
-                val tail = readFailureOutput(stdoutLog, stderrLog)
-                lastError = "udp2raw exited immediately ($exitCode): $tail"
+            val ret = plugin.start(resolvedArgs, logFile.absolutePath)
+            if (ret != 0) {
+                lastError = "udp2raw plugin start failed (code $ret)"
                 throw IllegalStateException(lastError)
             }
 
-            process = startedProcess
+            // Give the event loop a moment to initialise; if it exits immediately it's a fatal arg error
+            Thread.sleep(1200)
+            if (!plugin.isRunning()) {
+                val tail = logFile.readTailOrEmpty()
+                lastError = "udp2raw exited immediately: $tail"
+                throw IllegalStateException(lastError)
+            }
+
             running = true
             stopping = false
             lastError = null
 
+            // Watch for unexpected exit
             Thread {
-                val exitCode = startedProcess.waitFor()
+                while (plugin.isRunning()) Thread.sleep(500)
                 synchronized(lock) {
-                    if (process != startedProcess) {
-                        return@Thread
-                    }
-                    process = null
-                    running = false
                     if (!stopping) {
-                        val tail = readFailureOutput(stdoutLog, stderrLog)
-                        lastError = "udp2raw exited unexpectedly ($exitCode): $tail"
+                        val tail = logFile.readTailOrEmpty()
+                        lastError = "udp2raw exited unexpectedly: $tail"
                         LogManager.logError("UDP2RAW", "udp2raw '${config.name}' exited unexpectedly: $lastError")
                     } else {
                         LogManager.logDebug("UDP2RAW", "udp2raw '${config.name}' stopped")
                     }
+                    running = false
                     stopping = false
                 }
             }.apply {
@@ -101,22 +108,18 @@ class Udp2RawInput(
     override fun stop() {
         synchronized(lock) {
             stopping = true
-            val currentProcess = process
             running = false
-            process = null
-            if (currentProcess == null) {
-                stopping = false
-                return
+            plugin.stop()
+            // Give it up to 1.5 s to stop gracefully
+            val deadline = System.currentTimeMillis() + 1500
+            while (plugin.isRunning() && System.currentTimeMillis() < deadline) {
+                Thread.sleep(100)
             }
-            currentProcess.destroy()
-            if (!currentProcess.waitFor(1500, TimeUnit.MILLISECONDS)) {
-                currentProcess.destroyForcibly()
-                currentProcess.waitFor(1500, TimeUnit.MILLISECONDS)
-            }
+            stopping = false
         }
     }
 
-    override fun isRunning(): Boolean = running && (process?.isAlive == true)
+    override fun isRunning(): Boolean = running && plugin.isRunning()
 
     override fun setOnMessageListener(listener: (InputMessage) -> Unit) = Unit
 
@@ -125,6 +128,22 @@ class Udp2RawInput(
     override fun hasFatalError(): Boolean = fatalError != null
 
     fun getResolvedRemote(): String? = resolvedRemote
+
+    /** Ensure the plugin .so exists in internal storage and return its path. */
+    private fun ensurePlugin(): File {
+        if (PluginManager.isInstalled(context, "udp2raw")) {
+            return PluginManager.getInstalledPath(context, "udp2raw")
+        }
+        // Not installed — check if config provides a download URL
+        val url = config.pluginUrl
+        if (!url.isNullOrBlank()) {
+            return PluginManager.installFromUrl(context, "udp2raw", url)
+        }
+        throw IllegalStateException(
+            "libudp2raw_plugin.so is not installed. " +
+                "Install it via PluginManager or set pluginUrl in the udp2raw input config."
+        )
+    }
 
     /**
      * Returns effective args: explicit args take precedence over DSN.
@@ -173,7 +192,6 @@ class Udp2RawInput(
 
     /**
      * Scans args for -r host:port entries and resolves any domain names to IPs.
-     * Also resolves domains embedded directly like -r<host>:<port>.
      */
     private fun resolveDomainsInArgs(args: List<String>): List<String> {
         val result = args.toMutableList()
@@ -202,10 +220,6 @@ class Udp2RawInput(
         return result
     }
 
-    /**
-     * Given "host:port", resolves the host if it's a domain name.
-     * Returns the original string on failure.
-     */
     private fun resolveHostPort(hostPort: String): String {
         val lastColon = hostPort.lastIndexOf(':')
         if (lastColon < 0) return hostPort
@@ -222,7 +236,6 @@ class Udp2RawInput(
     }
 
     private fun isIpAddress(host: String): Boolean {
-        // IPv4: all numeric with dots; IPv6: contains colons or is bracketed
         if (host.startsWith('[') && host.endsWith(']')) return true
         if (host.contains(':')) return true
         return host.split('.').all { part -> part.all { it.isDigit() } }
@@ -236,28 +249,6 @@ class Udp2RawInput(
         }.toMap()
     }
 
-    private fun ensureExecutableBinary(): File {
-        val lib = File(context.applicationInfo.nativeLibraryDir, "libudp2raw.so")
-        require(lib.exists()) { "built-in udp2raw library not found: ${lib.absolutePath}" }
-        val runtimeDir = File(context.filesDir, "udp2raw/core").apply { mkdirs() }
-        val executable = File(runtimeDir, "udp2raw")
-        executable.delete()
-        Os.symlink(lib.absolutePath, executable.absolutePath)
-        return executable
-    }
-
-    private fun readFailureOutput(stdoutLog: File, stderrLog: File): String {
-        val merged =
-            buildString {
-                append(stdoutLog.readTailOrEmpty())
-                if (isNotBlank() && stderrLog.length() > 0) {
-                    append('\n')
-                }
-                append(stderrLog.readTailOrEmpty())
-            }.trim()
-        return merged.ifBlank { "no output" }
-    }
-
     private fun File.readTailOrEmpty(maxChars: Int = 1200): String {
         if (!exists()) return ""
         val content = runCatching { readText() }.getOrDefault("")
@@ -267,9 +258,9 @@ class Udp2RawInput(
     private fun sanitize(value: String): String = value.replace(Regex("[^a-zA-Z0-9._-]"), "_")
 
     companion object {
-        /** Maps instance name to (stdout, stderr) log files for the log viewer. */
-        private val registry = ConcurrentHashMap<String, Pair<File, File>>()
+        /** Maps instance name → log file for the log viewer. */
+        private val registry = ConcurrentHashMap<String, File>()
 
-        fun getLogFiles(name: String): Pair<File, File>? = registry[name]
+        fun getLogFile(name: String): File? = registry[name]
     }
 }
