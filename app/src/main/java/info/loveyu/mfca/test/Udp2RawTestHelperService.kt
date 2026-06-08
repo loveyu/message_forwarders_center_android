@@ -158,8 +158,11 @@ class Udp2RawTestHelperService : Service() {
 
                         // 5. Notify activity it may start client
                         sendReady()
-                    } catch (e: Exception) {
-                        sendError("服务端初始化失败: ${e.message}")
+                    } catch (e: Throwable) {
+                        sendError(
+                            "服务端初始化失败: ${e.javaClass.simpleName}: ${e.message}" +
+                                e.stackTraceToString().lines().take(5).joinToString("\n")
+                        )
                     }
                 },
                 "udp2raw-test-server-init",

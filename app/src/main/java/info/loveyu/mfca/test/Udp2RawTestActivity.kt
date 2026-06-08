@@ -448,9 +448,10 @@ private suspend fun runTest(
     var clientLogTailer: Thread? = null
     var cleanedUp = false
 
-    // Prepare log directory
-    val testLogDir = File(context.cacheDir, "udp2raw_test_logs")
-    testLogDir.mkdirs()
+    // Prepare log directory (use external storage for easy access)
+    val testLogDir =
+        File(context.getExternalFilesDir(null), "udp2raw_test_logs").also { it.mkdirs() }
+            ?: File(context.cacheDir, "udp2raw_test_logs").also { it.mkdirs() }
     testLogDir.listFiles()?.forEach { it.delete() }
     val serverLogFile = File(testLogDir, "server.log")
     val clientLogFile = File(testLogDir, "client.log")
@@ -516,7 +517,13 @@ private suspend fun runTest(
                     bindDeferred.complete(Messenger(binder))
                 }
 
-                override fun onServiceDisconnected(name: ComponentName) {}
+                override fun onServiceDisconnected(name: ComponentName) {
+                    if (!serverReadyDeferred.isCompleted) {
+                        serverReadyDeferred.completeExceptionally(
+                            Exception("测试服务进程异常退出（可能因 native crash）")
+                        )
+                    }
+                }
             }
         serviceConn = conn
 
@@ -565,6 +572,7 @@ private suspend fun runTest(
         } catch (e: TimeoutCancellationException) {
             addLog("❌ 服务端启动超时（可能缺少 CAP_NET_RAW / root 权限）")
             dumpLogFile(serverLogFile, "服务端", addLog)
+            captureNativeCrashLogs(addLog)
             setStep(2, StepStatus.FAILED)
             return
         } catch (e: CancellationException) {
@@ -572,6 +580,7 @@ private suspend fun runTest(
         } catch (e: Exception) {
             addLog("❌ 服务端错误: ${e.message}")
             dumpLogFile(serverLogFile, "服务端", addLog)
+            captureNativeCrashLogs(addLog)
             setStep(2, StepStatus.FAILED)
             return
         }
@@ -611,8 +620,10 @@ private suspend fun runTest(
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
-            addLog("❌ 客户端启动失败: ${e.message}")
+        } catch (e: Throwable) {
+            addLog("❌ 客户端启动失败: ${e.javaClass.simpleName}: ${e.message}")
+            dumpLogFile(clientLogFile, "客户端", addLog)
+            captureNativeCrashLogs(addLog)
             setStep(3, StepStatus.FAILED)
             return
         }
@@ -726,4 +737,25 @@ private fun doCleanup(
     try {
         serviceConn?.let { context.unbindService(it) }
     } catch (_: Exception) {}
+}
+
+private fun captureNativeCrashLogs(addLog: (String) -> Unit) {
+    try {
+        val process =
+            Runtime.getRuntime().exec(
+                "logcat -d -t 200 -s AndroidRuntime:E DEBUG:V"
+            )
+        val output = process.inputStream.bufferedReader().readText().trim()
+        if (output.isNotBlank()) {
+            addLog("--- 原生日志 (logcat) ---")
+            output.lines().take(50).forEach { line ->
+                if (line.isNotBlank()) addLog(line)
+            }
+            addLog("--- 原生日志结束 ---")
+        } else {
+            addLog("原生日志 (logcat) 为空，无崩溃信息")
+        }
+    } catch (e: Exception) {
+        addLog("捕获原生日志失败: ${e.message}")
+    }
 }
