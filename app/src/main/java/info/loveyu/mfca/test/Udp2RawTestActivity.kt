@@ -35,6 +35,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -65,8 +66,10 @@ import info.loveyu.mfca.R
 import info.loveyu.mfca.plugin.PluginManager
 import info.loveyu.mfca.plugin.Udp2RawPluginCore
 import info.loveyu.mfca.ui.theme.MfcaTheme
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -82,8 +85,9 @@ class Udp2RawTestActivity : ComponentActivity() {
         const val PORT_SERVER_RAW = 14182
         const val PORT_CLIENT_UDP = 14183
         const val TUNNEL_KEY = "flowgate-test-2024"
-        private const val PREFS_NAME = "udp2raw_test_prefs"
-        private const val PREF_PLUGIN_URL = "plugin_url"
+        const val PREFS_NAME = "udp2raw_test_prefs"
+        const val PREF_PLUGIN_URL = "plugin_url"
+        const val PREF_PROXY_URL = "proxy_url"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -105,14 +109,18 @@ private data class TestStep(val label: String, var status: StepStatus = StepStat
 private fun Udp2RawTestScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember {
-        context.getSharedPreferences("udp2raw_test_prefs", Context.MODE_PRIVATE)
+        context.getSharedPreferences(Udp2RawTestActivity.PREFS_NAME, Context.MODE_PRIVATE)
     }
     val scope = rememberCoroutineScope()
 
     var pluginUrl by remember {
-        mutableStateOf(prefs.getString("plugin_url", "") ?: "")
+        mutableStateOf(prefs.getString(Udp2RawTestActivity.PREF_PLUGIN_URL, "") ?: "")
+    }
+    var proxyUrl by remember {
+        mutableStateOf(prefs.getString(Udp2RawTestActivity.PREF_PROXY_URL, "") ?: "")
     }
     var isRunning by remember { mutableStateOf(false) }
+    var testJob by remember { mutableStateOf<Job?>(null) }
     var overallProgress by remember { mutableFloatStateOf(0f) }
 
     val logs = remember { mutableStateListOf<String>() }
@@ -171,32 +179,70 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
             OutlinedTextField(
                 value = pluginUrl,
                 onValueChange = { pluginUrl = it },
-                label = { Text("udp2raw 插件 .so 下载地址") },
+                label = { Text("插件地址（支持 .so/.zip/.gz 及 data://sdcard:// 等）") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 enabled = !isRunning,
             )
 
-            // Start button
-            Button(
-                onClick = {
-                    prefs.edit().putString("plugin_url", pluginUrl).apply()
-                    resetAll()
-                    isRunning = true
-                    scope.launch {
-                        runTest(
-                            context = context,
-                            pluginUrl = pluginUrl,
-                            addLog = { addLog(it) },
-                            setStep = { i, s -> setStep(i, s) },
-                        )
-                        isRunning = false
-                    }
-                },
-                enabled = !isRunning && pluginUrl.isNotBlank(),
+            // Proxy input
+            OutlinedTextField(
+                value = proxyUrl,
+                onValueChange = { proxyUrl = it },
+                label = { Text("下载代理（可选，如 socks5://127.0.0.1:1080）") },
                 modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                enabled = !isRunning,
+            )
+
+            // Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("开始测试")
+                Button(
+                    onClick = {
+                        prefs.edit()
+                            .putString(Udp2RawTestActivity.PREF_PLUGIN_URL, pluginUrl)
+                            .putString(Udp2RawTestActivity.PREF_PROXY_URL, proxyUrl)
+                            .apply()
+                        resetAll()
+                        isRunning = true
+                        testJob = scope.launch {
+                            try {
+                                runTest(
+                                    context = context,
+                                    pluginUrl = pluginUrl,
+                                    proxyUrl = proxyUrl.ifBlank { null },
+                                    addLog = { addLog(it) },
+                                    setStep = { i, s -> setStep(i, s) },
+                                )
+                            } catch (_: CancellationException) {
+                                addLog("⚠️ 测试已取消")
+                            } finally {
+                                isRunning = false
+                                testJob = null
+                            }
+                        }
+                    },
+                    enabled = !isRunning && pluginUrl.isNotBlank(),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("开始测试")
+                }
+
+                if (isRunning) {
+                    Button(
+                        onClick = { testJob?.cancel() },
+                        modifier = Modifier.weight(1f),
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                            ),
+                    ) {
+                        Text("取消测试")
+                    }
+                }
             }
 
             // Overall progress
@@ -245,11 +291,15 @@ private fun StepRow(step: TestStep) {
                     Modifier.size(12.dp)
                         .background(Color.Gray.copy(alpha = 0.4f), CircleShape)
                 )
-            StepStatus.RUNNING -> CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
+            StepStatus.RUNNING ->
+                CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
             StepStatus.SUCCESS ->
                 Box(Modifier.size(12.dp).background(Color(0xFF4CAF50), CircleShape))
             StepStatus.FAILED ->
-                Box(Modifier.size(12.dp).background(MaterialTheme.colorScheme.error, CircleShape))
+                Box(
+                    Modifier.size(12.dp)
+                        .background(MaterialTheme.colorScheme.error, CircleShape)
+                )
         }
         Spacer(Modifier.width(8.dp))
         Text(
@@ -269,225 +319,237 @@ private fun StepRow(step: TestStep) {
 private suspend fun runTest(
     context: Context,
     pluginUrl: String,
+    proxyUrl: String?,
     addLog: (String) -> Unit,
     setStep: (Int, StepStatus) -> Unit,
 ) {
     val clientPlugin = Udp2RawPluginCore()
     var serviceConn: ServiceConnection? = null
     var serviceMessenger: Messenger? = null
+    var cleanedUp = false
 
-    // ── Step 0: Download / verify plugin ──────────────────────────────────
-
-    setStep(0, StepStatus.RUNNING)
-    val soPath: String =
-        try {
-            withContext(Dispatchers.IO) {
-                addLog("正在检查插件…")
-                val installed = PluginManager.isInstalled(context, "udp2raw")
-                if (installed) {
-                    addLog("插件已缓存，跳过下载")
-                } else {
-                    addLog("正在下载插件: $pluginUrl")
-                    PluginManager.installFromUrl(context, "udp2raw", pluginUrl)
-                    addLog("插件下载完成")
+    try {
+        // ── Step 0: Download / verify plugin ──────────────────────────────────
+        setStep(0, StepStatus.RUNNING)
+        val soPath: String =
+            try {
+                withContext(Dispatchers.IO) {
+                    addLog("正在检查插件…")
+                    val installed = PluginManager.isInstalled(context, "udp2raw")
+                    if (installed) {
+                        addLog("插件已缓存，跳过下载")
+                    } else {
+                        addLog("正在下载插件: $pluginUrl")
+                        PluginManager.installPlugin(context, "udp2raw", pluginUrl, proxyUrl)
+                        addLog("插件下载完成")
+                    }
+                    PluginManager.getInstalledPath(context, "udp2raw").absolutePath
                 }
-                PluginManager.getInstalledPath(context, "udp2raw").absolutePath
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                addLog("❌ 插件获取失败: ${e.message}")
+                setStep(0, StepStatus.FAILED)
+                return
             }
-        } catch (e: Exception) {
-            addLog("❌ 插件获取失败: ${e.message}")
-            setStep(0, StepStatus.FAILED)
-            return
-        }
-    addLog("插件路径: $soPath")
-    setStep(0, StepStatus.SUCCESS)
+        addLog("插件路径: $soPath")
+        setStep(0, StepStatus.SUCCESS)
 
-    // ── Step 1: Bind helper service ────────────────────────────────────────
+        // ── Step 1: Bind helper service ────────────────────────────────────────
+        setStep(1, StepStatus.RUNNING)
+        val serverReadyDeferred = CompletableDeferred<Unit>()
+        val serverErrorDeferred = CompletableDeferred<String>()
 
-    setStep(1, StepStatus.RUNNING)
-    val serverReadyDeferred = CompletableDeferred<Unit>()
-    val serverErrorDeferred = CompletableDeferred<String>()
-
-    val incomingHandler =
-        object : Handler(Looper.getMainLooper()) {
-            override fun handleMessage(msg: Message) {
-                when (msg.what) {
-                    Udp2RawTestHelperService.MSG_LOG -> addLog(msg.data.getString("text", ""))
-                    Udp2RawTestHelperService.MSG_SERVER_READY ->
-                        serverReadyDeferred.complete(Unit)
-                    Udp2RawTestHelperService.MSG_ERROR -> {
-                        val err = msg.data.getString("error", "未知错误")
-                        serverErrorDeferred.complete(err)
-                        if (!serverReadyDeferred.isCompleted) {
-                            serverReadyDeferred.completeExceptionally(Exception(err))
+        val incomingHandler =
+            object : Handler(Looper.getMainLooper()) {
+                override fun handleMessage(msg: Message) {
+                    when (msg.what) {
+                        Udp2RawTestHelperService.MSG_LOG -> addLog(msg.data.getString("text", ""))
+                        Udp2RawTestHelperService.MSG_SERVER_READY ->
+                            serverReadyDeferred.complete(Unit)
+                        Udp2RawTestHelperService.MSG_ERROR -> {
+                            val err = msg.data.getString("error", "未知错误")
+                            serverErrorDeferred.complete(err)
+                            if (!serverReadyDeferred.isCompleted) {
+                                serverReadyDeferred.completeExceptionally(Exception(err))
+                            }
                         }
                     }
                 }
             }
-        }
-    val activityMessenger = Messenger(incomingHandler)
+        val activityMessenger = Messenger(incomingHandler)
 
-    val bindDeferred = CompletableDeferred<Messenger>()
-    val conn =
-        object : ServiceConnection {
-            override fun onServiceConnected(name: ComponentName, binder: IBinder) {
-                bindDeferred.complete(Messenger(binder))
+        val bindDeferred = CompletableDeferred<Messenger>()
+        val conn =
+            object : ServiceConnection {
+                override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+                    bindDeferred.complete(Messenger(binder))
+                }
+
+                override fun onServiceDisconnected(name: ComponentName) {}
             }
+        serviceConn = conn
 
-            override fun onServiceDisconnected(name: ComponentName) {}
+        withContext(Dispatchers.Main) {
+            val intent = Intent(context, Udp2RawTestHelperService::class.java)
+            context.bindService(intent, conn, Context.BIND_AUTO_CREATE)
         }
-    serviceConn = conn
 
-    withContext(Dispatchers.Main) {
-        val intent = Intent(context, Udp2RawTestHelperService::class.java)
-        context.bindService(intent, conn, Context.BIND_AUTO_CREATE)
-    }
+        serviceMessenger =
+            try {
+                withTimeout(8_000) { bindDeferred.await() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                addLog("❌ 绑定测试服务超时")
+                setStep(1, StepStatus.FAILED)
+                return
+            }
+        setStep(1, StepStatus.SUCCESS)
 
-    serviceMessenger =
+        // ── Step 2: Start server-side (via service in :udp2rawtest process) ───
+        setStep(2, StepStatus.RUNNING)
+        val startMsg =
+            Message.obtain(null, Udp2RawTestHelperService.MSG_START).apply {
+                replyTo = activityMessenger
+                data =
+                    Bundle().apply {
+                        putString("plugin_path", soPath)
+                        putInt("echo_port", Udp2RawTestActivity.PORT_ECHO)
+                        putInt("raw_port", Udp2RawTestActivity.PORT_SERVER_RAW)
+                        putString("tunnel_key", Udp2RawTestActivity.TUNNEL_KEY)
+                    }
+            }
+        serviceMessenger.send(startMsg)
+
         try {
-            withTimeout(8_000) { bindDeferred.await() }
+            withTimeout(30_000) { serverReadyDeferred.await() }
+        } catch (e: TimeoutCancellationException) {
+            addLog("❌ 服务端启动超时（可能缺少 CAP_NET_RAW / root 权限）")
+            setStep(2, StepStatus.FAILED)
+            return
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            addLog("❌ 绑定测试服务超时")
-            setStep(1, StepStatus.FAILED)
-            context.unbindService(conn)
+            addLog("❌ 服务端错误: ${e.message}")
+            setStep(2, StepStatus.FAILED)
             return
         }
-    setStep(1, StepStatus.SUCCESS)
+        setStep(2, StepStatus.SUCCESS)
 
-    // ── Step 2: Start server-side (via service in :udp2rawtest process) ───
-
-    setStep(2, StepStatus.RUNNING)
-    val startMsg =
-        Message.obtain(null, Udp2RawTestHelperService.MSG_START).apply {
-            replyTo = activityMessenger
-            data =
-                Bundle().apply {
-                    putString("plugin_path", soPath)
-                    putInt("echo_port", Udp2RawTestActivity.PORT_ECHO)
-                    putInt("raw_port", Udp2RawTestActivity.PORT_SERVER_RAW)
-                    putString("tunnel_key", Udp2RawTestActivity.TUNNEL_KEY)
-                }
-        }
-    serviceMessenger.send(startMsg)
-
-    try {
-        withTimeout(30_000) { serverReadyDeferred.await() }
-    } catch (e: TimeoutCancellationException) {
-        addLog("❌ 服务端启动超时（可能缺少 CAP_NET_RAW / root 权限）")
-        setStep(2, StepStatus.FAILED)
-        cleanup(serviceMessenger, serviceConn, context, clientPlugin, addLog)
-        return
-    } catch (e: Exception) {
-        addLog("❌ 服务端错误: ${e.message}")
-        setStep(2, StepStatus.FAILED)
-        cleanup(serviceMessenger, serviceConn, context, clientPlugin, addLog)
-        return
-    }
-    setStep(2, StepStatus.SUCCESS)
-
-    // ── Step 3: Start udp2raw client in main process ───────────────────────
-
-    setStep(3, StepStatus.RUNNING)
-    try {
-        withContext(Dispatchers.IO) {
-            clientPlugin.load(soPath)
-            addLog("【客户端】插件加载成功")
-            val ret =
-                clientPlugin.start(
-                    listOf(
-                        "-c",
-                        "-l127.0.0.1:${Udp2RawTestActivity.PORT_CLIENT_UDP}",
-                        "-r127.0.0.1:${Udp2RawTestActivity.PORT_SERVER_RAW}",
-                        "--raw-mode",
-                        "faketcp",
-                        "-k",
-                        Udp2RawTestActivity.TUNNEL_KEY,
-                    ),
-                    logFile = null,
-                )
-            if (ret != 0) error("start() 返回 $ret")
-            Thread.sleep(2500)
-            if (!clientPlugin.isRunning()) error("客户端启动后立即退出")
-            addLog("【客户端】udp2raw 客户端运行中")
-        }
-    } catch (e: Exception) {
-        addLog("❌ 客户端启动失败: ${e.message}")
-        setStep(3, StepStatus.FAILED)
-        cleanup(serviceMessenger, serviceConn, context, clientPlugin, addLog)
-        return
-    }
-    setStep(3, StepStatus.SUCCESS)
-
-    // ── Step 4: Send UDP echo packets ─────────────────────────────────────
-
-    setStep(4, StepStatus.RUNNING)
-    val echoResults = mutableListOf<Boolean>()
-    try {
-        withContext(Dispatchers.IO) {
-            val socket = DatagramSocket()
-            socket.soTimeout = 5_000
-            val serverAddr = InetAddress.getByName("127.0.0.1")
-            repeat(5) { i ->
-                val msg = "hello-flowgate-$i"
-                val sendBuf = msg.toByteArray()
-                val sendPkt =
-                    DatagramPacket(sendBuf, sendBuf.size, serverAddr, Udp2RawTestActivity.PORT_CLIENT_UDP)
-                socket.send(sendPkt)
-                addLog("→ 发送: $msg")
-                val recvBuf = ByteArray(256)
-                val recvPkt = DatagramPacket(recvBuf, recvBuf.size)
-                try {
-                    socket.receive(recvPkt)
-                    val reply = String(recvPkt.data, 0, recvPkt.length)
-                    val ok = reply == msg
-                    echoResults.add(ok)
-                    addLog("← 收到: $reply ${if (ok) "✓" else "✗ (不匹配)"}")
-                } catch (e: Exception) {
-                    echoResults.add(false)
-                    addLog("← 超时或错误: ${e.message}")
-                }
-                Thread.sleep(500)
+        // ── Step 3: Start udp2raw client in main process ───────────────────────
+        setStep(3, StepStatus.RUNNING)
+        try {
+            withContext(Dispatchers.IO) {
+                clientPlugin.load(soPath)
+                addLog("【客户端】插件加载成功")
+                val ret =
+                    clientPlugin.start(
+                        listOf(
+                            "-c",
+                            "-l127.0.0.1:${Udp2RawTestActivity.PORT_CLIENT_UDP}",
+                            "-r127.0.0.1:${Udp2RawTestActivity.PORT_SERVER_RAW}",
+                            "--raw-mode",
+                            "faketcp",
+                            "-k",
+                            Udp2RawTestActivity.TUNNEL_KEY,
+                        ),
+                        logFile = null,
+                    )
+                if (ret != 0) error("start() 返回 $ret")
+                Thread.sleep(2500)
+                if (!clientPlugin.isRunning()) error("客户端启动后立即退出")
+                addLog("【客户端】udp2raw 客户端运行中")
             }
-            socket.close()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            addLog("❌ 客户端启动失败: ${e.message}")
+            setStep(3, StepStatus.FAILED)
+            return
         }
-    } catch (e: Exception) {
-        addLog("❌ Echo 测试异常: ${e.message}")
-        setStep(4, StepStatus.FAILED)
-        cleanup(serviceMessenger, serviceConn, context, clientPlugin, addLog)
-        return
+        setStep(3, StepStatus.SUCCESS)
+
+        // ── Step 4: Send UDP echo packets ─────────────────────────────────────
+        setStep(4, StepStatus.RUNNING)
+        val echoResults = mutableListOf<Boolean>()
+        try {
+            withContext(Dispatchers.IO) {
+                val socket = DatagramSocket()
+                socket.soTimeout = 5_000
+                val serverAddr = InetAddress.getByName("127.0.0.1")
+                repeat(5) { i ->
+                    val msg = "hello-flowgate-$i"
+                    val sendBuf = msg.toByteArray()
+                    val sendPkt =
+                        DatagramPacket(
+                            sendBuf,
+                            sendBuf.size,
+                            serverAddr,
+                            Udp2RawTestActivity.PORT_CLIENT_UDP,
+                        )
+                    socket.send(sendPkt)
+                    addLog("→ 发送: $msg")
+                    val recvBuf = ByteArray(256)
+                    val recvPkt = DatagramPacket(recvBuf, recvBuf.size)
+                    try {
+                        socket.receive(recvPkt)
+                        val reply = String(recvPkt.data, 0, recvPkt.length)
+                        val ok = reply == msg
+                        echoResults.add(ok)
+                        addLog("← 收到: $reply ${if (ok) "✓" else "✗ (不匹配)"}")
+                    } catch (e: Exception) {
+                        echoResults.add(false)
+                        addLog("← 超时或错误: ${e.message}")
+                    }
+                    Thread.sleep(500)
+                }
+                socket.close()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            addLog("❌ Echo 测试异常: ${e.message}")
+            setStep(4, StepStatus.FAILED)
+            return
+        }
+        setStep(4, StepStatus.SUCCESS)
+
+        // ── Step 5: Validate results ───────────────────────────────────────────
+        setStep(5, StepStatus.RUNNING)
+        val passed = echoResults.count { it }
+        val total = echoResults.size
+        addLog("结果: $passed/$total 成功")
+        if (passed == total) {
+            addLog("✅ 所有 Echo 测试通过")
+            setStep(5, StepStatus.SUCCESS)
+        } else {
+            addLog("❌ 部分 Echo 测试失败")
+            setStep(5, StepStatus.FAILED)
+        }
+
+        // ── Step 6: Cleanup ────────────────────────────────────────────────────
+        setStep(6, StepStatus.RUNNING)
+        doCleanup(serviceMessenger, serviceConn, context, clientPlugin, addLog)
+        cleanedUp = true
+        setStep(6, StepStatus.SUCCESS)
+    } finally {
+        if (!cleanedUp) {
+            doCleanup(serviceMessenger, serviceConn, context, clientPlugin)
+        }
     }
-    setStep(4, StepStatus.SUCCESS)
-
-    // ── Step 5: Validate results ───────────────────────────────────────────
-
-    setStep(5, StepStatus.RUNNING)
-    val passed = echoResults.count { it }
-    val total = echoResults.size
-    addLog("结果: $passed/$total 成功")
-    if (passed == total) {
-        addLog("✅ 所有 Echo 测试通过")
-        setStep(5, StepStatus.SUCCESS)
-    } else {
-        addLog("❌ 部分 Echo 测试失败")
-        setStep(5, StepStatus.FAILED)
-    }
-
-    // ── Step 6: Cleanup ────────────────────────────────────────────────────
-
-    setStep(6, StepStatus.RUNNING)
-    cleanup(serviceMessenger, serviceConn, context, clientPlugin, addLog)
-    setStep(6, StepStatus.SUCCESS)
 }
 
-private fun cleanup(
+private fun doCleanup(
     serviceMessenger: Messenger?,
     serviceConn: ServiceConnection?,
     context: Context,
     clientPlugin: Udp2RawPluginCore,
-    addLog: (String) -> Unit,
+    addLog: ((String) -> Unit)? = null,
 ) {
     try {
         clientPlugin.stop()
-        addLog("【客户端】udp2raw 已停止")
+        addLog?.invoke("【客户端】udp2raw 已停止")
     } catch (_: Exception) {}
     try {
         serviceMessenger?.send(Message.obtain(null, Udp2RawTestHelperService.MSG_STOP))
