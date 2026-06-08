@@ -157,7 +157,15 @@ class Udp2RawInput(
     /**
      * Parses a udp2raw DSN into command-line args.
      *
-     * Format: udp2raw://[key@]remoteHost:remotePort?listen=localHost:localPort[&mode=faketcp][&role=client|server]
+     * Format:
+     *   udp2raw://[key@]remoteHost:remotePort?listen=localHost:localPort[&rawMode=faketcp][&role=client|server]
+     *
+     * Parameters:
+     *   role     = client|server  (program role; default: client)
+     *   rawMode  = faketcp|udp|icmp  (raw packet mode; default: faketcp)
+     *
+     * Backward compatibility:
+     *   - Old `mode=faketcp|udp|icmp` is still accepted (superseded by `rawMode`).
      */
     private fun parseDsnToArgs(dsn: String): List<String> {
         return try {
@@ -170,15 +178,23 @@ class Udp2RawInput(
 
             val queryParams = parseQueryParams(uri.rawQuery)
             val listen = queryParams["listen"] ?: error("missing 'listen' query param in DSN")
-            val mode = queryParams["mode"] ?: "faketcp"
-            val role = queryParams["role"] ?: "client"
+
+            val rawModeValues = setOf("faketcp", "udp", "icmp")
+            val modeParam = queryParams["mode"]
+            val rawMode: String =
+                when {
+                    // Backward compat: old mode=faketcp|udp|icmp
+                    modeParam != null && modeParam in rawModeValues -> modeParam
+                    else -> queryParams["rawMode"] ?: "faketcp"
+                }
+            val programRole: String = queryParams["role"] ?: "client"
 
             buildList {
-                add(if (role == "server") "-s" else "-c")
+                add(if (programRole == "server") "-s" else "-c")
                 add("-l$listen")
                 add("-r$remoteHost:$remotePort")
                 add("--raw-mode")
-                add(mode)
+                add(rawMode)
                 if (!key.isNullOrBlank()) {
                     add("-k")
                     add(key)

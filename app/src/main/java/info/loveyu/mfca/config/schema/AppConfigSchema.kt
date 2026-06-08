@@ -196,8 +196,11 @@ object AppConfigSchema {
                 }
                 string("dsn") {
                     description =
-                        "Connection DSN shorthand: udp2raw://[key@]remoteHost:remotePort?listen=localHost:localPort[&mode=faketcp][&role=client|server]. " +
+                        "Connection DSN: udp2raw://[key@]remoteHost:remotePort?listen=localHost:localPort" +
+                            "[&role=client|server][&rawMode=faketcp|udp|icmp]. " +
+                            "role: client (default) or server. rawMode: faketcp (default), udp, icmp. " +
                             "Domain names in remoteHost are resolved to IP at every start. " +
+                            "Backward compat: old mode=faketcp|udp|icmp still accepted (maps to rawMode). " +
                             "If both dsn and args are set, args take precedence."
                 }
                 stringList("args") {

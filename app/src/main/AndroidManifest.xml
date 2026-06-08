@@ -119,6 +119,21 @@
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
+        <activity
+            android:name=".test.TestHubActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FlowGate" />
+
+        <activity
+            android:name=".test.Udp2RawTestActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FlowGate" />
+
+        <service
+            android:name=".test.Udp2RawTestHelperService"
+            android:exported="false"
+            android:process=":udp2rawtest" />
+
         <service
             android:name=".service.ForwardService"
             android:exported="false"

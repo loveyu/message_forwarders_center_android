@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -63,6 +64,7 @@ import info.loveyu.mfca.ConfigActivity
 import info.loveyu.mfca.HelpActivity
 import info.loveyu.mfca.R
 import info.loveyu.mfca.SettingsActivity
+import info.loveyu.mfca.test.TestHubActivity
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.ui.theme.BadgeDisabledDark
@@ -155,6 +157,14 @@ fun MainTopBar() {
                         onClick = {
                             showOverflowMenu = false
                             context.startActivity(Intent(context, HelpActivity::class.java))
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.test_hub_menu)) },
+                        leadingIcon = { Icon(Icons.Default.Science, contentDescription = null) },
+                        onClick = {
+                            showOverflowMenu = false
+                            context.startActivity(Intent(context, TestHubActivity::class.java))
                         }
                     )
                     DropdownMenuItem(
