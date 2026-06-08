@@ -118,7 +118,7 @@
     <string name="vpn_candidate_unavailable">不可用</string>
     <string name="vpn_candidate_running_chip">当前运行中</string>
     <string name="vpn_core_ready">核心已就绪</string>
-    <string name="vpn_core_missing">核心不可用</string>
+    <string name="vpn_core_missing">核心插件未安装</string>
     <string name="vpn_config_cache_title">配置缓存</string>
     <string name="vpn_config_cached">配置已缓存</string>
     <string name="vpn_config_not_cached">配置未缓存</string>

@@ -31,6 +31,7 @@ enum class VpnRuntimeStatus {
 data class VpnCoreState(
     val isReady: Boolean = false,
     val path: String? = null,
+    val pluginVersion: String? = null,
 )
 
 data class VpnConfigCacheState(

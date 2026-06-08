@@ -157,7 +157,7 @@ object AppConfigSchema {
 
             objectList(
                 "vpn",
-                block = { description = "VPN inputs backed by a remote mihomo config and bundled core" },
+                block = { description = "VPN inputs backed by a remote mihomo config and the info.loveyu.m2m core plugin" },
             ) {
                 string("name") {
                     required()

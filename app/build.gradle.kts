@@ -151,49 +151,9 @@ val buildVpnBridgeBinaries =
         commandLine("bash", "-lc", buildScript)
     }
 
-val mihomoVersion = "1.19.25"
-val mihomoJniLibDir = layout.buildDirectory.dir("generated/jniLibs/mihomo")
 val udp2rawVersion = (project.findProperty("udp2rawVersion") as String?) ?: "v2026.05.31-android.1"
 val udp2rawJniLibDir = layout.buildDirectory.dir("generated/jniLibs/udp2raw")
 val udp2rawAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
-
-data class MihomoTarget(val abi: String, val archiveName: String)
-
-val mihomoTargets =
-    listOf(
-        MihomoTarget(
-            abi = "arm64-v8a",
-            archiveName = "mihomo-android-arm64-v8-v$mihomoVersion.gz",
-        ),
-    )
-
-val prepareMihomoLibraries =
-    tasks.register<Exec>("prepareMihomoLibraries") {
-        val outDir = mihomoJniLibDir.get().asFile
-        outputs.dir(outDir)
-        onlyIf {
-            mihomoTargets.any { target ->
-                !outDir.resolve("${target.abi}/libmihomo.so").exists()
-            }
-        }
-        val buildScript =
-            buildString {
-                appendLine("set -euo pipefail")
-                appendLine("tmpdir=\$(mktemp -d)")
-                appendLine("trap 'rm -rf \"\$tmpdir\"' EXIT")
-                mihomoTargets.forEach { target ->
-                    val abiDir = outDir.resolve(target.abi)
-                    appendLine("mkdir -p '${abiDir.absolutePath}'")
-                    appendLine(
-                        "curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors 'https://github.com/MetaCubeX/mihomo/releases/download/v$mihomoVersion/${target.archiveName}' -o \"\$tmpdir/${target.archiveName}\"",
-                    )
-                    appendLine(
-                        "gunzip -c \"\$tmpdir/${target.archiveName}\" > '${abiDir.resolve("libmihomo.so").absolutePath}'",
-                    )
-                }
-            }
-        commandLine("bash", "-lc", buildScript)
-    }
 
 val prepareUdp2RawLibraries =
     tasks.register<Exec>("prepareUdp2RawLibraries") {
@@ -299,7 +259,6 @@ android {
         compose = true
         buildConfig = true
     }
-    sourceSets.getByName("main").jniLibs.srcDir(mihomoJniLibDir.get().asFile)
     // libudp2raw_plugin.so is NOT bundled in the APK — it is distributed as a plugin
     // and installed at runtime via PluginManager into the app's private files directory.
     sourceSets.getByName("main").jniLibs.srcDir(vpnBridgeJniLibDir.get().asFile)
@@ -360,7 +319,6 @@ afterEvaluate {
     }
 
     tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach {
-        dependsOn(prepareMihomoLibraries)
         // prepareUdp2RawLibraries is no longer part of the build — libudp2raw_plugin.so
         // is installed at runtime as a plugin, not bundled in the APK.
         dependsOn(buildVpnBridgeBinaries)
