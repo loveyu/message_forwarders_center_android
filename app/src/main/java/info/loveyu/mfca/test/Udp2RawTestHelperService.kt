@@ -82,6 +82,7 @@ class Udp2RawTestHelperService : Service() {
                 if (!f.exists()) f.createNewFile()
                 f
             }
+        val rawMode = data.getString("raw_mode", "faketcp")
 
         Thread(
                 {
@@ -127,14 +128,14 @@ class Udp2RawTestHelperService : Service() {
                         sendLog("【服务端】UDP Echo 服务已启动")
 
                         // 3. Start udp2raw server mode
-                        sendLog("【服务端】启动 udp2raw 服务端 (原始端口 $rawPort → Echo $echoPort)…")
+                        sendLog("【服务端】启动 udp2raw 服务端 (原始端口 $rawPort → Echo $echoPort, mode=$rawMode)…")
                         val args =
                             listOf(
                                 "-s",
                                 "-l0.0.0.0:$rawPort",
                                 "-r127.0.0.1:$echoPort",
                                 "--raw-mode",
-                                "faketcp",
+                                rawMode,
                                 "-k",
                                 tunnelKey,
                             )

@@ -44,6 +44,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -95,6 +98,8 @@ class Udp2RawTestActivity : ComponentActivity() {
         const val PREFS_NAME = "udp2raw_test_prefs"
         const val PREF_PLUGIN_URL = "plugin_url"
         const val PREF_PROXY_URL = "proxy_url"
+        const val PREF_RAW_MODE = "raw_mode"
+        val RAW_MODES = listOf("faketcp", "udp", "icmp")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -126,6 +131,11 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
     }
     var proxyUrl by remember {
         mutableStateOf(prefs.getString(Udp2RawTestActivity.PREF_PROXY_URL, "") ?: "")
+    }
+    var rawMode by remember {
+        mutableStateOf(
+            prefs.getString(Udp2RawTestActivity.PREF_RAW_MODE, "faketcp") ?: "faketcp"
+        )
     }
     var isRunning by remember { mutableStateOf(false) }
     var testJob by remember { mutableStateOf<Job?>(null) }
@@ -203,6 +213,46 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
                 enabled = !isRunning,
             )
 
+            // Raw mode selector
+            var modeExpanded by remember { mutableStateOf(false) }
+            ExposedDropdownMenuBox(
+                expanded = modeExpanded,
+                onExpandedChange = { modeExpanded = !modeExpanded && !isRunning },
+            ) {
+                OutlinedTextField(
+                    value = rawMode,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Raw Mode") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = modeExpanded) },
+                    modifier = Modifier.fillMaxWidth().menuAnchor(),
+                    enabled = !isRunning,
+                )
+                ExposedDropdownMenu(
+                    expanded = modeExpanded,
+                    onDismissRequest = { modeExpanded = false },
+                ) {
+                    Udp2RawTestActivity.RAW_MODES.forEach { mode ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    mode + when (mode) {
+                                        "faketcp" -> "  (需 root)"
+                                        "icmp" -> "  (需 root)"
+                                        "udp" -> "  (免 root)"
+                                        else -> ""
+                                    }
+                                )
+                            },
+                            onClick = {
+                                rawMode = mode
+                                modeExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
+
             // Buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -213,6 +263,7 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
                         prefs.edit()
                             .putString(Udp2RawTestActivity.PREF_PLUGIN_URL, pluginUrl)
                             .putString(Udp2RawTestActivity.PREF_PROXY_URL, proxyUrl)
+                            .putString(Udp2RawTestActivity.PREF_RAW_MODE, rawMode)
                             .apply()
                         resetAll()
                         isRunning = true
@@ -222,6 +273,7 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
                                     context = context,
                                     pluginUrl = pluginUrl,
                                     proxyUrl = proxyUrl.ifBlank { null },
+                                    rawMode = rawMode,
                                     addLog = { addLog(it) },
                                     setStep = { i, s -> setStep(i, s) },
                                 )
@@ -386,6 +438,7 @@ private suspend fun runTest(
     context: Context,
     pluginUrl: String,
     proxyUrl: String?,
+    rawMode: String,
     addLog: (String) -> Unit,
     setStep: (Int, StepStatus) -> Unit,
 ) {
@@ -488,7 +541,7 @@ private suspend fun runTest(
         setStep(2, StepStatus.RUNNING)
         addLog(
             "【服务端】参数: -s -l0.0.0.0:${Udp2RawTestActivity.PORT_SERVER_RAW} " +
-                "-r127.0.0.1:${Udp2RawTestActivity.PORT_ECHO} --raw-mode faketcp " +
+                "-r127.0.0.1:${Udp2RawTestActivity.PORT_ECHO} --raw-mode $rawMode " +
                 "-k ${Udp2RawTestActivity.TUNNEL_KEY}"
         )
         addLog("【服务端】日志文件: ${serverLogFile.absolutePath}")
@@ -502,6 +555,7 @@ private suspend fun runTest(
                         putInt("raw_port", Udp2RawTestActivity.PORT_SERVER_RAW)
                         putString("tunnel_key", Udp2RawTestActivity.TUNNEL_KEY)
                         putString("log_file", serverLogFile.absolutePath)
+                        putString("raw_mode", rawMode)
                     }
             }
         serviceMessenger.send(startMsg)
@@ -539,7 +593,7 @@ private suspend fun runTest(
                         "-l127.0.0.1:${Udp2RawTestActivity.PORT_CLIENT_UDP}",
                         "-r127.0.0.1:${Udp2RawTestActivity.PORT_SERVER_RAW}",
                         "--raw-mode",
-                        "faketcp",
+                        rawMode,
                         "-k",
                         Udp2RawTestActivity.TUNNEL_KEY,
                     )
