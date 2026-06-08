@@ -131,13 +131,17 @@ class Udp2RawInput(
 
     /** Ensure the plugin .so exists in internal storage and return its path. */
     private fun ensurePlugin(): File {
-        if (PluginManager.isInstalled(context, "udp2raw")) {
+        val url = config.pluginUrl
+        if (!url.isNullOrBlank() && PluginManager.isInstalledFrom(context, "udp2raw", url)) {
             return PluginManager.getInstalledPath(context, "udp2raw")
         }
-        // Not installed — check if config provides a download URL
-        val url = config.pluginUrl
+        // Not installed or URL changed — download if URL is provided
         if (!url.isNullOrBlank()) {
             return PluginManager.installFromUrl(context, "udp2raw", url)
+        }
+        // No URL — check if manually installed
+        if (PluginManager.isInstalled(context, "udp2raw")) {
+            return PluginManager.getInstalledPath(context, "udp2raw")
         }
         throw IllegalStateException(
             "libudp2raw_plugin.so is not installed. " +

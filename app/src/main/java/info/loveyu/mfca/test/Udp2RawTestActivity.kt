@@ -463,7 +463,7 @@ private suspend fun runTest(
             try {
                 withContext(Dispatchers.IO) {
                     addLog("正在检查插件…")
-                    val installed = PluginManager.isInstalled(context, "udp2raw")
+                    val installed = PluginManager.isInstalledFrom(context, "udp2raw", pluginUrl)
                     if (installed) {
                         addLog("插件已缓存，跳过下载")
                     } else {

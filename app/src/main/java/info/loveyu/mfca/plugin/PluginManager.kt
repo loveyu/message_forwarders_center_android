@@ -57,12 +57,19 @@ object PluginManager {
      * @param context     Android context.
      * @param pluginName  Plugin identifier (e.g. "udp2raw").
      * @param source      Source .so file.
+     * @param sourceUrl   Optional URL to record as the source (used for cache invalidation).
      * @return The installed [File] path.
      */
-    fun installFromFile(context: Context, pluginName: String, source: File): File {
+    fun installFromFile(
+        context: Context,
+        pluginName: String,
+        source: File,
+        sourceUrl: String? = null,
+    ): File {
         val dest = getInstalledPath(context, pluginName)
         dest.parentFile?.mkdirs()
         source.copyTo(dest, overwrite = true)
+        sourceUrl?.let { sourceMarkerFile(context, pluginName).writeText(it) }
         LogManager.logInfo(TAG, "Installed plugin '$pluginName' from ${source.absolutePath}")
         return dest
     }
@@ -108,10 +115,25 @@ object PluginManager {
     }
 
     /**
+     * Returns true if the plugin is installed **and** the stored source URL
+     * matches [url]. Returns false when the URL differs or has never been recorded.
+     */
+    fun isInstalledFrom(context: Context, pluginName: String, url: String): Boolean {
+        if (!isInstalled(context, pluginName)) return false
+        val marker = sourceMarkerFile(context, pluginName)
+        return marker.exists() && marker.readText().trim() == url.trim()
+    }
+
+    private fun sourceMarkerFile(context: Context, pluginName: String): File {
+        return pluginDir(context, pluginName).resolve(".source_url")
+    }
+
+    /**
      * Delete the installed plugin .so (e.g. to force a fresh download).
      */
     fun uninstall(context: Context, pluginName: String) {
         getInstalledPath(context, pluginName).delete()
+        sourceMarkerFile(context, pluginName).delete()
         LogManager.logInfo(TAG, "Uninstalled plugin '$pluginName'")
     }
 
@@ -166,7 +188,7 @@ object PluginManager {
 
             ensureActive()
 
-            val result = installFromFile(context, pluginName, soFile)
+            val result = installFromFile(context, pluginName, soFile, sourceUrl = url)
 
             if (!isLocal) sourceFile.delete()
             if (soFile != sourceFile) soFile.delete()
