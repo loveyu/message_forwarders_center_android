@@ -145,7 +145,7 @@ object VpnManager {
             ?: return Result.failure(IllegalStateException("No available VPN candidate selected"))
         LogManager.logInfo("VPN", "Preparing VPN candidate ${selected.config.name}")
         updateRuntimeStatus(VpnRuntimeStatus.preparing, "Preparing ${selected.config.name}")
-        return MihomoCoreManager.ensureCore(context).fold(
+        return MihomoCoreManager.ensureCore(context, selected.config.pluginUrl).fold(
             onSuccess = { coreFile ->
                 LogManager.logInfo("VPN", "Prepared mihomo core for ${selected.config.name}: ${coreFile.absolutePath}")
                 val cachedSource =

@@ -183,7 +183,8 @@ object ConfigLoader {
                     deny = map["deny"] as? String,
                     enabled = map["enabled"] as? Boolean ?: true,
                     accessControlMode = parseVpnAccessControlMode(map["accessControlMode"] as? String),
-                    packages = (map["packages"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                    packages = (map["packages"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+                    pluginUrl = map["pluginUrl"] as? String,
                 )
             }
         }

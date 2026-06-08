@@ -1,51 +1,39 @@
 package info.loveyu.mfca.vpn
 
 import android.content.Context
-import android.content.pm.PackageManager
-import android.system.Os
+import info.loveyu.mfca.plugin.PluginManager
 import info.loveyu.mfca.util.LogManager
 import java.io.File
 
 object MihomoCoreManager {
-    private const val PLUGIN_PACKAGE = "info.loveyu.m2m"
+    private const val PLUGIN_NAME = "mihomo"
 
     fun inspectCore(context: Context): VpnCoreState {
-        val plugin = resolvePlugin(context) ?: return VpnCoreState(isReady = false)
+        val plugin = PluginManager.getInstalledPath(context, PLUGIN_NAME)
         return VpnCoreState(
-            isReady = plugin.lib.exists(),
-            path = coreSymlinkPath(context).absolutePath.takeIf { plugin.lib.exists() },
-            pluginVersion = plugin.version,
+            isReady = plugin.exists() && plugin.length() > 0,
+            path = plugin.absolutePath.takeIf { plugin.exists() && plugin.length() > 0 },
+            pluginVersion = null,
         )
     }
 
-    fun ensureCore(context: Context): Result<File> = runCatching {
+    fun ensureCore(context: Context, pluginUrl: String?): Result<File> = runCatching {
         val plugin =
-            resolvePlugin(context) ?: error("未找到 Mihomo 核心插件，请先安装 $PLUGIN_PACKAGE")
-        require(plugin.lib.exists()) { "插件核心文件不存在: ${plugin.lib.absolutePath}" }
-        val symlink = coreSymlinkPath(context)
-        symlink.parentFile?.mkdirs()
-        symlink.delete()
-        Os.symlink(plugin.lib.absolutePath, symlink.absolutePath)
+            if (PluginManager.isInstalled(context, PLUGIN_NAME)) {
+                PluginManager.getInstalledPath(context, PLUGIN_NAME)
+            } else if (!pluginUrl.isNullOrBlank()) {
+                PluginManager.installFromUrl(context, PLUGIN_NAME, pluginUrl)
+            } else {
+                error(
+                    "libmihomo_plugin.so is not installed. " +
+                        "Install it via PluginManager or set pluginUrl in the vpn input config.",
+                )
+            }
+        require(plugin.exists() && plugin.length() > 0) { "Mihomo plugin file is empty or missing: ${plugin.absolutePath}" }
         LogManager.logInfo(
             "VPN",
-            "Using plugin mihomo (${plugin.version}): ${symlink.absolutePath}",
+            "Using mihomo plugin: ${plugin.absolutePath}",
         )
-        symlink
+        plugin
     }
-
-    private data class PluginInfo(val lib: File, val version: String?)
-
-    private fun resolvePlugin(context: Context): PluginInfo? =
-        try {
-            val appInfo = context.packageManager.getApplicationInfo(PLUGIN_PACKAGE, 0)
-            val pkgInfo = context.packageManager.getPackageInfo(PLUGIN_PACKAGE, 0)
-            PluginInfo(
-                lib = File(appInfo.nativeLibraryDir, "libmihomo.so"),
-                version = pkgInfo.versionName,
-            )
-        } catch (_: PackageManager.NameNotFoundException) {
-            null
-        }
-
-    private fun coreSymlinkPath(context: Context) = File(context.filesDir, "vpn/core/mihomo")
 }

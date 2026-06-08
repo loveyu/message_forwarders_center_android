@@ -175,7 +175,9 @@ data class VpnInputConfig(
     val deny: String? = null,
     val enabled: Boolean = true,
     val accessControlMode: VpnAccessControlMode = VpnAccessControlMode.acceptAll,
-    val packages: List<String> = emptyList()
+    val packages: List<String> = emptyList(),
+    /** Optional URL to download libmihomo_plugin.so when not already installed. */
+    val pluginUrl: String? = null,
 )
 
 data class Udp2RawInputConfig(

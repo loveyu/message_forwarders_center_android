@@ -1,36 +1,36 @@
 package info.loveyu.mfca.vpn
 
 import android.content.Context
+import info.loveyu.mfca.plugin.MihomoPluginCore
 import info.loveyu.mfca.util.LogManager
+import java.io.File
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.io.File
-import java.util.concurrent.TimeUnit
 
 object MihomoProcessManager {
-    data class RunningProcess(
+    data class RunningCore(
         val candidateName: String,
-        val process: Process,
+        val core: MihomoPluginCore,
         val workingDirectory: File,
         val stdoutLogFile: File,
         val stderrLogFile: File,
         @Volatile var stopping: Boolean = false,
     )
 
-    @Volatile private var runningProcess: RunningProcess? = null
+    @Volatile private var runningCore: RunningCore? = null
     @Volatile private var lastLogFiles: Pair<File, File>? = null
 
     fun getLastLogFiles(): Pair<File, File>? = lastLogFiles
     fun isRunning(): Boolean = current() != null
 
     @Synchronized
-    fun current(): RunningProcess? {
-        val current = runningProcess ?: return null
-        if (current.process.isAlive) {
+    fun current(): RunningCore? {
+        val current = runningCore ?: return null
+        if (current.core.isRunning()) {
             return current
         }
-        runningProcess = null
+        runningCore = null
         return null
     }
 
@@ -39,7 +39,7 @@ object MihomoProcessManager {
         context: Context,
         artifacts: PreparedVpnArtifacts,
         onUnexpectedExit: (exitCode: Int, tail: String) -> Unit,
-    ): Result<RunningProcess> {
+    ): Result<RunningCore> {
         return runCatching {
             stop()
 
@@ -51,49 +51,41 @@ object MihomoProcessManager {
             lastLogFiles = Pair(stdoutLog, stderrLog)
             LogManager.logInfo(
                 "VPN",
-                "Starting mihomo for ${artifacts.candidate.name}: core=${artifacts.coreFilePath}, profile=${artifacts.profileFilePath}, workDir=${workDir.absolutePath}",
+                "Starting mihomo plugin for ${artifacts.candidate.name}: plugin=${artifacts.coreFilePath}, profile=${artifacts.profileFilePath}, workDir=${workDir.absolutePath}",
             )
 
-            val process = ProcessBuilder(
-                buildCommand(
-                    coreFile = File(artifacts.coreFilePath),
-                    workDir = workDir,
-                    profileFile = File(artifacts.profileFilePath),
-                ),
-            )
-                .directory(workDir)
-                .redirectOutput(ProcessBuilder.Redirect.appendTo(stdoutLog))
-                .redirectError(ProcessBuilder.Redirect.appendTo(stderrLog))
-                .apply {
-                    environment()["HOME"] = workDir.absolutePath
-                }
-                .start()
-
-            if (process.waitFor(1500, TimeUnit.MILLISECONDS)) {
-                throw IllegalStateException(
-                    "Mihomo exited immediately (${process.exitValue()}): ${readFailureOutput(stdoutLog, stderrLog)}",
-                )
+            val core = MihomoPluginCore()
+            core.load(artifacts.coreFilePath)
+            val ret = core.start(buildArgs(workDir = workDir, profileFile = File(artifacts.profileFilePath)), stdoutLog.absolutePath)
+            if (ret != 0) {
+                throw IllegalStateException("Mihomo plugin start failed (code $ret): ${readFailureOutput(stdoutLog, stderrLog)}")
             }
-            waitForProxyReady(process, artifacts.localProxyPort, stdoutLog, stderrLog)
+            Thread.sleep(1500)
+            if (!core.isRunning()) {
+                throw IllegalStateException("Mihomo exited immediately: ${readFailureOutput(stdoutLog, stderrLog)}")
+            }
+            waitForProxyReady(core, artifacts.localProxyPort, stdoutLog, stderrLog)
 
-            RunningProcess(
+            RunningCore(
                 candidateName = artifacts.candidate.name,
-                process = process,
+                core = core,
                 workingDirectory = workDir,
                 stdoutLogFile = stdoutLog,
                 stderrLogFile = stderrLog,
             ).also { running ->
-                runningProcess = running
+                runningCore = running
                 Thread {
-                    val exitCode = process.waitFor()
-                    val tail = readFailureOutput(stdoutLog, stderrLog)
-                    synchronized(this) {
-                        if (runningProcess?.process == process) {
-                            runningProcess = null
-                        }
+                    while (!running.stopping && core.isRunning()) {
+                        Thread.sleep(1000)
                     }
                     if (!running.stopping) {
-                        onUnexpectedExit(exitCode, tail)
+                        val tail = readFailureOutput(stdoutLog, stderrLog)
+                        synchronized(this) {
+                            if (runningCore?.core == core) {
+                                runningCore = null
+                            }
+                        }
+                        onUnexpectedExit(-1, tail)
                     }
                 }.apply {
                     isDaemon = true
@@ -106,21 +98,20 @@ object MihomoProcessManager {
 
     @Synchronized
     fun stop(): String? {
-        val current = runningProcess ?: return null
+        val current = runningCore ?: return null
         current.stopping = true
-        runningProcess = null
+        runningCore = null
         LogManager.logInfo("VPN", "Stopping mihomo for ${current.candidateName}")
-        current.process.destroy()
-        if (!current.process.waitFor(1500, TimeUnit.MILLISECONDS)) {
-            current.process.destroyForcibly()
-            current.process.waitFor(1500, TimeUnit.MILLISECONDS)
+        current.core.stop()
+        val deadline = System.currentTimeMillis() + 1500
+        while (System.currentTimeMillis() < deadline && current.core.isRunning()) {
+            Thread.sleep(100)
         }
         return current.candidateName
     }
 
-    internal fun buildCommand(coreFile: File, workDir: File, profileFile: File): List<String> {
+    internal fun buildArgs(workDir: File, profileFile: File): List<String> {
         return listOf(
-            coreFile.absolutePath,
             "-d",
             workDir.absolutePath,
             "-f",
@@ -147,12 +138,12 @@ object MihomoProcessManager {
 
     private fun sanitize(value: String): String = value.replace(Regex("[^a-zA-Z0-9._-]"), "_")
 
-    private fun waitForProxyReady(process: Process, port: Int, stdoutLog: File, stderrLog: File) {
+    private fun waitForProxyReady(core: MihomoPluginCore, port: Int, stdoutLog: File, stderrLog: File) {
         val deadline = System.currentTimeMillis() + 15_000
         while (System.currentTimeMillis() < deadline) {
-            if (!process.isAlive) {
+            if (!core.isRunning()) {
                 throw IllegalStateException(
-                    "Mihomo exited before proxy became ready (${process.exitValue()}): ${readFailureOutput(stdoutLog, stderrLog)}",
+                    "Mihomo exited before proxy became ready: ${readFailureOutput(stdoutLog, stderrLog)}",
                 )
             }
             if (canConnect(port)) {

@@ -157,7 +157,7 @@ object AppConfigSchema {
 
             objectList(
                 "vpn",
-                block = { description = "VPN inputs backed by a remote mihomo config and the info.loveyu.m2m core plugin" },
+                block = { description = "VPN inputs backed by a remote mihomo config and a mihomo JNI plugin" },
             ) {
                 string("name") {
                     required()
@@ -181,6 +181,11 @@ object AppConfigSchema {
                 }
                 stringList("packages") {
                     description = "Package names for include/exclude access control"
+                }
+                string("pluginUrl") {
+                    description =
+                        "Optional HTTPS URL to download libmihomo_plugin.so if it is not already installed. " +
+                            "The correct ABI variant must be hosted at this URL. Leave blank if you install the plugin manually via PluginManager."
                 }
                 string("when") { description = "Enable condition" }
                 string("deny") { description = "Disable condition" }

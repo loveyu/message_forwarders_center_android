@@ -126,6 +126,7 @@ class AppConfigSchemaTest {
               vpn:
                 - name: office_vpn
                   configUrl: https://example.com/mihomo.yaml
+                  pluginUrl: https://example.com/libmihomo_plugin.so
                   refreshInterval: "24h"
                   enabled: true
                   when: network=wifi
@@ -139,6 +140,7 @@ class AppConfigSchemaTest {
         assertEquals(1, config.inputs.vpn.size)
         assertEquals("office_vpn", config.inputs.vpn[0].name)
         assertEquals("https://example.com/mihomo.yaml", config.inputs.vpn[0].configUrl)
+        assertEquals("https://example.com/libmihomo_plugin.so", config.inputs.vpn[0].pluginUrl)
         assertEquals(2, config.inputs.vpn[0].packages.size)
         assertEquals(86_400_000L, config.inputs.vpn[0].refreshIntervalMs)
     }
