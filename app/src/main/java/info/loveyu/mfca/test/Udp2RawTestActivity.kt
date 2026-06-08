@@ -12,10 +12,12 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.Message
 import android.os.Messenger
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,14 +60,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import info.loveyu.mfca.R
 import info.loveyu.mfca.plugin.PluginManager
 import info.loveyu.mfca.plugin.Udp2RawPluginCore
 import info.loveyu.mfca.ui.theme.MfcaTheme
+import java.io.File
+import java.io.RandomAccessFile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -108,6 +115,7 @@ private data class TestStep(val label: String, var status: StepStatus = StepStat
 @Composable
 private fun Udp2RawTestScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val prefs = remember {
         context.getSharedPreferences(Udp2RawTestActivity.PREFS_NAME, Context.MODE_PRIVATE)
     }
@@ -257,7 +265,10 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
             }
 
             // Log output
-            Text("日志输出", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "日志输出（单击复制行 / 双击复制全部）",
+                style = MaterialTheme.typography.titleSmall,
+            )
             Box(
                 modifier =
                     Modifier.fillMaxWidth()
@@ -274,6 +285,29 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
                             text = line,
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            modifier =
+                                Modifier.pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onTap = {
+                                            clipboardManager.setText(AnnotatedString(line))
+                                            Toast
+                                                .makeText(context, "已复制", Toast.LENGTH_SHORT)
+                                                .show()
+                                        },
+                                        onDoubleTap = {
+                                            clipboardManager.setText(
+                                                AnnotatedString(logs.joinToString("\n"))
+                                            )
+                                            Toast
+                                                .makeText(
+                                                    context,
+                                                    "已复制全部日志 (${logs.size} 行)",
+                                                    Toast.LENGTH_SHORT,
+                                                )
+                                                .show()
+                                        },
+                                    )
+                                },
                         )
                     }
                 }
@@ -316,6 +350,38 @@ private fun StepRow(step: TestStep) {
 
 // ── Test logic (suspend) ──────────────────────────────────────────────────────
 
+private fun startLogTailer(logFile: File, prefix: String, addLog: (String) -> Unit): Thread {
+    return Thread({
+        try {
+            var position = 0L
+            while (!Thread.currentThread().isInterrupted()) {
+                if (logFile.exists()) {
+                    val len = logFile.length()
+                    if (len > position) {
+                        try {
+                            RandomAccessFile(logFile, "r").use { raf ->
+                                raf.seek(position)
+                                val bytes = ByteArray((len - position).toInt())
+                                raf.readFully(bytes)
+                                position = len
+                                String(bytes)
+                                    .lines()
+                                    .forEach { line ->
+                                        if (line.isNotBlank()) addLog("$prefix$line")
+                                    }
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+                Thread.sleep(300)
+            }
+        } catch (_: InterruptedException) {}
+    }, "udp2raw-${prefix.trim('【', '】')}-log-tailer").apply {
+        isDaemon = true
+        start()
+    }
+}
+
 private suspend fun runTest(
     context: Context,
     pluginUrl: String,
@@ -326,7 +392,15 @@ private suspend fun runTest(
     val clientPlugin = Udp2RawPluginCore()
     var serviceConn: ServiceConnection? = null
     var serviceMessenger: Messenger? = null
+    var clientLogTailer: Thread? = null
     var cleanedUp = false
+
+    // Prepare log directory
+    val testLogDir = File(context.cacheDir, "udp2raw_test_logs")
+    testLogDir.mkdirs()
+    testLogDir.listFiles()?.forEach { it.delete() }
+    val serverLogFile = File(testLogDir, "server.log")
+    val clientLogFile = File(testLogDir, "client.log")
 
     try {
         // ── Step 0: Download / verify plugin ──────────────────────────────────
@@ -340,10 +414,13 @@ private suspend fun runTest(
                         addLog("插件已缓存，跳过下载")
                     } else {
                         addLog("正在下载插件: $pluginUrl")
+                        if (!proxyUrl.isNullOrBlank()) addLog("使用代理: $proxyUrl")
                         PluginManager.installPlugin(context, "udp2raw", pluginUrl, proxyUrl)
                         addLog("插件下载完成")
                     }
-                    PluginManager.getInstalledPath(context, "udp2raw").absolutePath
+                    val path = PluginManager.getInstalledPath(context, "udp2raw")
+                    addLog("插件文件大小: ${path.length()} bytes, ABI: ${PluginManager.deviceAbi}")
+                    path.absolutePath
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -409,6 +486,12 @@ private suspend fun runTest(
 
         // ── Step 2: Start server-side (via service in :udp2rawtest process) ───
         setStep(2, StepStatus.RUNNING)
+        addLog(
+            "【服务端】参数: -s -l0.0.0.0:${Udp2RawTestActivity.PORT_SERVER_RAW} " +
+                "-r127.0.0.1:${Udp2RawTestActivity.PORT_ECHO} --raw-mode faketcp " +
+                "-k ${Udp2RawTestActivity.TUNNEL_KEY}"
+        )
+        addLog("【服务端】日志文件: ${serverLogFile.absolutePath}")
         val startMsg =
             Message.obtain(null, Udp2RawTestHelperService.MSG_START).apply {
                 replyTo = activityMessenger
@@ -418,6 +501,7 @@ private suspend fun runTest(
                         putInt("echo_port", Udp2RawTestActivity.PORT_ECHO)
                         putInt("raw_port", Udp2RawTestActivity.PORT_SERVER_RAW)
                         putString("tunnel_key", Udp2RawTestActivity.TUNNEL_KEY)
+                        putString("log_file", serverLogFile.absolutePath)
                     }
             }
         serviceMessenger.send(startMsg)
@@ -426,12 +510,14 @@ private suspend fun runTest(
             withTimeout(30_000) { serverReadyDeferred.await() }
         } catch (e: TimeoutCancellationException) {
             addLog("❌ 服务端启动超时（可能缺少 CAP_NET_RAW / root 权限）")
+            dumpLogFile(serverLogFile, "服务端", addLog)
             setStep(2, StepStatus.FAILED)
             return
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             addLog("❌ 服务端错误: ${e.message}")
+            dumpLogFile(serverLogFile, "服务端", addLog)
             setStep(2, StepStatus.FAILED)
             return
         }
@@ -442,23 +528,31 @@ private suspend fun runTest(
         try {
             withContext(Dispatchers.IO) {
                 clientPlugin.load(soPath)
-                addLog("【客户端】插件加载成功")
-                val ret =
-                    clientPlugin.start(
-                        listOf(
-                            "-c",
-                            "-l127.0.0.1:${Udp2RawTestActivity.PORT_CLIENT_UDP}",
-                            "-r127.0.0.1:${Udp2RawTestActivity.PORT_SERVER_RAW}",
-                            "--raw-mode",
-                            "faketcp",
-                            "-k",
-                            Udp2RawTestActivity.TUNNEL_KEY,
-                        ),
-                        logFile = null,
+                val ver = clientPlugin.version()
+                addLog("【客户端】插件加载成功, 版本: ${ver ?: "unknown"}")
+                addLog("【客户端】日志文件: ${clientLogFile.absolutePath}")
+                clientLogFile.parentFile?.mkdirs()
+                if (!clientLogFile.exists()) clientLogFile.createNewFile()
+                val clientArgs =
+                    listOf(
+                        "-c",
+                        "-l127.0.0.1:${Udp2RawTestActivity.PORT_CLIENT_UDP}",
+                        "-r127.0.0.1:${Udp2RawTestActivity.PORT_SERVER_RAW}",
+                        "--raw-mode",
+                        "faketcp",
+                        "-k",
+                        Udp2RawTestActivity.TUNNEL_KEY,
                     )
+                addLog("【客户端】参数: ${clientArgs.joinToString(" ")}")
+                val ret = clientPlugin.start(clientArgs, logFile = clientLogFile.absolutePath)
                 if (ret != 0) error("start() 返回 $ret")
+                // Start tailing client log
+                clientLogTailer = startLogTailer(clientLogFile, "【客户端】", addLog)
                 Thread.sleep(2500)
-                if (!clientPlugin.isRunning()) error("客户端启动后立即退出")
+                if (!clientPlugin.isRunning()) {
+                    dumpLogFile(clientLogFile, "客户端", addLog)
+                    error("客户端启动后立即退出")
+                }
                 addLog("【客户端】udp2raw 客户端运行中")
             }
         } catch (e: CancellationException) {
@@ -477,6 +571,7 @@ private suspend fun runTest(
             withContext(Dispatchers.IO) {
                 val socket = DatagramSocket()
                 socket.soTimeout = 5_000
+                addLog("【Echo】本地端口: ${socket.localPort}, 目标: 127.0.0.1:${Udp2RawTestActivity.PORT_CLIENT_UDP}")
                 val serverAddr = InetAddress.getByName("127.0.0.1")
                 repeat(5) { i ->
                     val msg = "hello-flowgate-$i"
@@ -530,13 +625,31 @@ private suspend fun runTest(
 
         // ── Step 6: Cleanup ────────────────────────────────────────────────────
         setStep(6, StepStatus.RUNNING)
-        doCleanup(serviceMessenger, serviceConn, context, clientPlugin, addLog)
+        doCleanup(serviceMessenger, serviceConn, context, clientPlugin, clientLogTailer, addLog)
         cleanedUp = true
         setStep(6, StepStatus.SUCCESS)
     } finally {
         if (!cleanedUp) {
-            doCleanup(serviceMessenger, serviceConn, context, clientPlugin)
+            doCleanup(serviceMessenger, serviceConn, context, clientPlugin, clientLogTailer)
         }
+    }
+}
+
+private fun dumpLogFile(logFile: File, tag: String, addLog: (String) -> Unit) {
+    if (!logFile.exists()) return
+    try {
+        val content = logFile.readText()
+        if (content.isBlank()) {
+            addLog("【$tag】日志文件为空")
+        } else {
+            addLog("【$tag】--- 日志转储 ---")
+            content.lines().forEach { line ->
+                if (line.isNotBlank()) addLog("【$tag】$line")
+            }
+            addLog("【$tag】--- 日志结束 ---")
+        }
+    } catch (e: Exception) {
+        addLog("【$tag】读取日志失败: ${e.message}")
     }
 }
 
@@ -545,8 +658,10 @@ private fun doCleanup(
     serviceConn: ServiceConnection?,
     context: Context,
     clientPlugin: Udp2RawPluginCore,
+    clientLogTailer: Thread?,
     addLog: ((String) -> Unit)? = null,
 ) {
+    clientLogTailer?.interrupt()
     try {
         clientPlugin.stop()
         addLog?.invoke("【客户端】udp2raw 已停止")

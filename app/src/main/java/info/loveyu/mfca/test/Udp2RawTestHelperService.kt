@@ -9,6 +9,8 @@ import android.os.Looper
 import android.os.Message
 import android.os.Messenger
 import info.loveyu.mfca.plugin.Udp2RawPluginCore
+import java.io.File
+import java.io.RandomAccessFile
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -45,6 +47,7 @@ class Udp2RawTestHelperService : Service() {
     private val plugin = Udp2RawPluginCore()
     private var echoSocket: DatagramSocket? = null
     private var echoThread: Thread? = null
+    private var logTailer: Thread? = null
     private var replyTo: Messenger? = null
 
     private val incomingHandler =
@@ -71,6 +74,14 @@ class Udp2RawTestHelperService : Service() {
         val echoPort = data.getInt("echo_port", Udp2RawTestActivity.PORT_ECHO)
         val rawPort = data.getInt("raw_port", Udp2RawTestActivity.PORT_SERVER_RAW)
         val tunnelKey = data.getString("tunnel_key", Udp2RawTestActivity.TUNNEL_KEY)
+        val logFilePath = data.getString("log_file")
+        val logFile =
+            logFilePath?.let { path ->
+                val f = File(path)
+                f.parentFile?.mkdirs()
+                if (!f.exists()) f.createNewFile()
+                f
+            }
 
         Thread(
                 {
@@ -127,7 +138,7 @@ class Udp2RawTestHelperService : Service() {
                                 "-k",
                                 tunnelKey,
                             )
-                        val ret = plugin.start(args, logFile = null)
+                        val ret = plugin.start(args, logFile = logFile?.absolutePath)
                         if (ret != 0) {
                             sendError("udp2raw 服务端启动失败 (code $ret)")
                             return@Thread
@@ -140,6 +151,9 @@ class Udp2RawTestHelperService : Service() {
                             return@Thread
                         }
                         sendLog("【服务端】udp2raw 服务端运行中")
+
+                        // 4.5 Start log tailer
+                        logFile?.let { startLogTailer(it) }
 
                         // 5. Notify activity it may start client
                         sendReady()
@@ -159,6 +173,8 @@ class Udp2RawTestHelperService : Service() {
 
     private fun handleStop() {
         sendLog("【服务端】停止中…")
+        logTailer?.interrupt()
+        logTailer = null
         try {
             plugin.stop()
         } catch (_: Exception) {}
@@ -171,12 +187,53 @@ class Udp2RawTestHelperService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        logTailer?.interrupt()
+        logTailer = null
         try {
             plugin.stop()
         } catch (_: Exception) {}
         try {
             echoSocket?.close()
         } catch (_: Exception) {}
+    }
+
+    // ── Log tailer ──────────────────────────────────────────────────────────
+
+    private fun startLogTailer(logFile: File) {
+        logTailer =
+            Thread(
+                    {
+                        try {
+                            var position = 0L
+                            while (!Thread.currentThread().isInterrupted()) {
+                                if (logFile.exists()) {
+                                    val len = logFile.length()
+                                    if (len > position) {
+                                        try {
+                                            RandomAccessFile(logFile, "r").use { raf ->
+                                                raf.seek(position)
+                                                val bytes = ByteArray((len - position).toInt())
+                                                raf.readFully(bytes)
+                                                position = len
+                                                String(bytes)
+                                                    .lines()
+                                                    .forEach { line ->
+                                                        if (line.isNotBlank()) sendLog(line)
+                                                    }
+                                            }
+                                        } catch (_: Exception) {}
+                                    }
+                                }
+                                Thread.sleep(300)
+                            }
+                        } catch (_: InterruptedException) {}
+                    },
+                    "udp2raw-server-log-tailer",
+                )
+                .apply {
+                    isDaemon = true
+                    start()
+                }
     }
 
     // ── IPC helpers ───────────────────────────────────────────────────────────
