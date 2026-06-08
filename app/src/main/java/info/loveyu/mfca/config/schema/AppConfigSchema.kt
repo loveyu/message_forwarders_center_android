@@ -200,7 +200,6 @@ object AppConfigSchema {
                             "[&role=client|server][&rawMode=faketcp|udp|icmp]. " +
                             "role: client (default) or server. rawMode: faketcp (default), udp, icmp. " +
                             "Domain names in remoteHost are resolved to IP at every start. " +
-                            "Backward compat: old mode=faketcp|udp|icmp still accepted (maps to rawMode). " +
                             "If both dsn and args are set, args take precedence."
                 }
                 stringList("args") {
