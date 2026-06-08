@@ -185,7 +185,7 @@ val prepareMihomoLibraries =
                     val abiDir = outDir.resolve(target.abi)
                     appendLine("mkdir -p '${abiDir.absolutePath}'")
                     appendLine(
-                        "curl -fsSL 'https://github.com/MetaCubeX/mihomo/releases/download/v$mihomoVersion/${target.archiveName}' -o \"\$tmpdir/${target.archiveName}\"",
+                        "curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors 'https://github.com/MetaCubeX/mihomo/releases/download/v$mihomoVersion/${target.archiveName}' -o \"\$tmpdir/${target.archiveName}\"",
                     )
                     appendLine(
                         "gunzip -c \"\$tmpdir/${target.archiveName}\" > '${abiDir.resolve("libmihomo.so").absolutePath}'",
@@ -212,7 +212,7 @@ val prepareUdp2RawLibraries =
                 appendLine("set -euo pipefail")
                 appendLine("tmpdir=\$(mktemp -d)")
                 appendLine("trap 'rm -rf \"\$tmpdir\"' EXIT")
-                appendLine("curl -fsSL '$releaseZipUrl' -o \"\$tmpdir/udp2raw-android-jniLibs.zip\"")
+                appendLine("curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors '$releaseZipUrl' -o \"\$tmpdir/udp2raw-android-jniLibs.zip\"")
                 appendLine("rm -rf '${outDir.absolutePath}'")
                 appendLine("mkdir -p '${outDir.absolutePath}'")
                 appendLine("unzip -q \"\$tmpdir/udp2raw-android-jniLibs.zip\" -d \"\$tmpdir/unpack\"")
