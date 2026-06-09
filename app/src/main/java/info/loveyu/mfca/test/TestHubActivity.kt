@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material3.Card
@@ -69,6 +70,12 @@ private fun TestHubScreen(onBack: () -> Unit) {
                 description = stringResource(R.string.test_udp2raw_description),
                 icon = Icons.Default.NetworkCheck,
                 action = { ctx -> ctx.startActivity(Intent(ctx, Udp2RawTestActivity::class.java)) },
+            ),
+            TestModule(
+                title = stringResource(R.string.test_m2m_title),
+                description = stringResource(R.string.test_m2m_description),
+                icon = Icons.Default.Language,
+                action = { ctx -> ctx.startActivity(Intent(ctx, M2mTestActivity::class.java)) },
             ),
         )
 

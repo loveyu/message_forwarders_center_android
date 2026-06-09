@@ -129,6 +129,11 @@
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
+        <activity
+            android:name=".test.M2mTestActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FlowGate" />
+
         <service
             android:name=".test.Udp2RawTestHelperService"
             android:exported="false"
