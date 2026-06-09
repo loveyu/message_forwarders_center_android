@@ -239,7 +239,7 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
                                     mode + when (mode) {
                                         "faketcp" -> "  (需 root)"
                                         "icmp" -> "  (需 root)"
-                                        "udp" -> "  (免 root)"
+                                        "udp" -> "  (需 iptables/CAP_NET_RAW)"
                                         else -> ""
                                     }
                                 )
@@ -628,6 +628,47 @@ private suspend fun runTest(
             return
         }
         setStep(3, StepStatus.SUCCESS)
+
+        // ── Step 3.5: Wait for tunnel handshake ──────────────────────────────
+        addLog("等待隧道握手建立…")
+        withContext(Dispatchers.IO) {
+            val probeSocket = DatagramSocket()
+            probeSocket.soTimeout = 500
+            val probeAddr = InetAddress.getByName("127.0.0.1")
+            var handshakeOk = false
+            repeat(6) { attempt ->
+                try {
+                    val probeBuf = "handshake-probe-$attempt".toByteArray()
+                    probeSocket.send(
+                        DatagramPacket(
+                            probeBuf,
+                            probeBuf.size,
+                            probeAddr,
+                            Udp2RawTestActivity.PORT_CLIENT_UDP,
+                        )
+                    )
+                    val recvBuf = ByteArray(256)
+                    val recvPkt = DatagramPacket(recvBuf, recvBuf.size)
+                    probeSocket.receive(recvPkt)
+                    handshakeOk = true
+                    addLog("隧道握手成功 (第 ${attempt + 1} 次尝试)")
+                    return@repeat
+                } catch (_: Exception) {
+                    if (attempt < 5) {
+                        addLog("握手未完成，等待重试… (${attempt + 1}/6)")
+                        Thread.sleep(2000)
+                    }
+                }
+            }
+            probeSocket.close()
+            if (!handshakeOk) {
+                addLog("⚠️ 隧道握手超时，udp2raw 隧道未建立")
+                addLog("提示: $rawMode 模式在无 root 环境下可能无法建立隧道")
+                addLog("      需要 iptables 规则或 CAP_NET_RAW 权限")
+                dumpLogFile(serverLogFile, "服务端", addLog)
+                dumpLogFile(clientLogFile, "客户端", addLog)
+            }
+        }
 
         // ── Step 4: Send UDP echo packets ─────────────────────────────────────
         setStep(4, StepStatus.RUNNING)
