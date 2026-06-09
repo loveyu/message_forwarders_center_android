@@ -145,6 +145,7 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
     val steps = remember {
         mutableStateListOf(
             TestStep("下载 / 验证插件"),
+            TestStep("Java 直连 UDP 测试"),
             TestStep("绑定测试服务"),
             TestStep("启动服务端 (另一进程)"),
             TestStep("启动 udp2raw 客户端"),
@@ -486,10 +487,86 @@ private suspend fun runTest(
         addLog("插件路径: $soPath")
         setStep(0, StepStatus.SUCCESS)
 
-        // ── Step 1: Bind helper service ────────────────────────────────────────
+        // ── Step 1: Java direct UDP test ──────────────────────────────────────
         setStep(1, StepStatus.RUNNING)
+        try {
+            withContext(Dispatchers.IO) {
+                addLog("【直连】启动 UDP Echo 服务，端口 ${Udp2RawTestActivity.PORT_ECHO}…")
+                val echoSocket =
+                    DatagramSocket(
+                        Udp2RawTestActivity.PORT_ECHO,
+                        InetAddress.getByName("127.0.0.1"),
+                    )
+                val echoThread =
+                    Thread(
+                            {
+                                val buf = ByteArray(4096)
+                                repeat(3) {
+                                    try {
+                                        val pkt = DatagramPacket(buf, buf.size)
+                                        echoSocket.receive(pkt)
+                                        echoSocket.send(
+                                            DatagramPacket(
+                                                pkt.data,
+                                                pkt.length,
+                                                pkt.address,
+                                                pkt.port,
+                                            )
+                                        )
+                                    } catch (_: Exception) {}
+                                }
+                            },
+                            "direct-echo",
+                        )
+                        .apply {
+                            isDaemon = true
+                            start()
+                        }
+                addLog("【直连】Echo 服务已启动")
+
+                val socket = DatagramSocket()
+                socket.soTimeout = 3_000
+                val addr = InetAddress.getByName("127.0.0.1")
+                var directOk = true
+                repeat(3) { i ->
+                    val msg = "direct-udp-$i"
+                    val msgBytes = msg.toByteArray()
+                    socket.send(
+                        DatagramPacket(msgBytes, msgBytes.size, addr, Udp2RawTestActivity.PORT_ECHO)
+                    )
+                    addLog("【直连】→ 发送: $msg")
+                    try {
+                        val recvBuf = ByteArray(256)
+                        val recvPkt = DatagramPacket(recvBuf, recvBuf.size)
+                        socket.receive(recvPkt)
+                        val reply = String(recvPkt.data, 0, recvPkt.length)
+                        val ok = reply == msg
+                        addLog("【直连】← 收到: $reply ${if (ok) "✓" else "✗"}")
+                        if (!ok) directOk = false
+                    } catch (e: Exception) {
+                        addLog("【直连】← 超时: ${e.message}")
+                        directOk = false
+                    }
+                }
+                socket.close()
+                echoThread.join(1000)
+                echoSocket.close()
+
+                if (!directOk) error("Java 直连 UDP 测试失败")
+                addLog("【直连】测试通过")
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            addLog("❌ ${e.message}")
+            setStep(1, StepStatus.FAILED)
+            return
+        }
+        setStep(1, StepStatus.SUCCESS)
+
+        // ── Step 2: Bind helper service ────────────────────────────────────────
+        setStep(2, StepStatus.RUNNING)
         val serverReadyDeferred = CompletableDeferred<Unit>()
-        val serverErrorDeferred = CompletableDeferred<String>()
 
         val incomingHandler =
             object : Handler(Looper.getMainLooper()) {
@@ -500,7 +577,6 @@ private suspend fun runTest(
                             serverReadyDeferred.complete(Unit)
                         Udp2RawTestHelperService.MSG_ERROR -> {
                             val err = msg.data.getString("error", "未知错误")
-                            serverErrorDeferred.complete(err)
                             if (!serverReadyDeferred.isCompleted) {
                                 serverReadyDeferred.completeExceptionally(Exception(err))
                             }
@@ -539,13 +615,13 @@ private suspend fun runTest(
                 throw e
             } catch (e: Exception) {
                 addLog("❌ 绑定测试服务超时")
-                setStep(1, StepStatus.FAILED)
+                setStep(2, StepStatus.FAILED)
                 return
             }
-        setStep(1, StepStatus.SUCCESS)
+        setStep(2, StepStatus.SUCCESS)
 
-        // ── Step 2: Start server-side (via service in :udp2rawtest process) ───
-        setStep(2, StepStatus.RUNNING)
+        // ── Step 3: Start server-side (via service in :udp2rawtest process) ───
+        setStep(3, StepStatus.RUNNING)
         addLog(
             "【服务端】参数: -s -l0.0.0.0:${Udp2RawTestActivity.PORT_SERVER_RAW} " +
                 "-r127.0.0.1:${Udp2RawTestActivity.PORT_ECHO} --raw-mode $rawMode " +
@@ -573,7 +649,7 @@ private suspend fun runTest(
             addLog("❌ 服务端启动超时（可能缺少 CAP_NET_RAW / root 权限）")
             dumpLogFile(serverLogFile, "服务端", addLog)
             captureNativeCrashLogs(addLog)
-            setStep(2, StepStatus.FAILED)
+            setStep(3, StepStatus.FAILED)
             return
         } catch (e: CancellationException) {
             throw e
@@ -581,13 +657,13 @@ private suspend fun runTest(
             addLog("❌ 服务端错误: ${e.message}")
             dumpLogFile(serverLogFile, "服务端", addLog)
             captureNativeCrashLogs(addLog)
-            setStep(2, StepStatus.FAILED)
+            setStep(3, StepStatus.FAILED)
             return
         }
-        setStep(2, StepStatus.SUCCESS)
+        setStep(3, StepStatus.SUCCESS)
 
-        // ── Step 3: Start udp2raw client in main process ───────────────────────
-        setStep(3, StepStatus.RUNNING)
+        // ── Step 4: Start udp2raw client in main process ───────────────────────
+        setStep(4, StepStatus.RUNNING)
         try {
             withContext(Dispatchers.IO) {
                 clientPlugin.load(soPath)
@@ -609,7 +685,6 @@ private suspend fun runTest(
                 addLog("【客户端】参数: ${clientArgs.joinToString(" ")}")
                 val ret = clientPlugin.start(clientArgs, logFile = clientLogFile.absolutePath)
                 if (ret != 0) error("start() 返回 $ret")
-                // Start tailing client log
                 clientLogTailer = startLogTailer(clientLogFile, "【客户端】", addLog)
                 Thread.sleep(2500)
                 if (!clientPlugin.isRunning()) {
@@ -624,60 +699,21 @@ private suspend fun runTest(
             addLog("❌ 客户端启动失败: ${e.javaClass.simpleName}: ${e.message}")
             dumpLogFile(clientLogFile, "客户端", addLog)
             captureNativeCrashLogs(addLog)
-            setStep(3, StepStatus.FAILED)
+            setStep(4, StepStatus.FAILED)
             return
         }
-        setStep(3, StepStatus.SUCCESS)
+        setStep(4, StepStatus.SUCCESS)
 
-        // ── Step 3.5: Wait for tunnel handshake ──────────────────────────────
-        addLog("等待隧道握手建立…")
-        withContext(Dispatchers.IO) {
-            val probeSocket = DatagramSocket()
-            probeSocket.soTimeout = 500
-            val probeAddr = InetAddress.getByName("127.0.0.1")
-            var handshakeOk = false
-            repeat(6) { attempt ->
-                try {
-                    val probeBuf = "handshake-probe-$attempt".toByteArray()
-                    probeSocket.send(
-                        DatagramPacket(
-                            probeBuf,
-                            probeBuf.size,
-                            probeAddr,
-                            Udp2RawTestActivity.PORT_CLIENT_UDP,
-                        )
-                    )
-                    val recvBuf = ByteArray(256)
-                    val recvPkt = DatagramPacket(recvBuf, recvBuf.size)
-                    probeSocket.receive(recvPkt)
-                    handshakeOk = true
-                    addLog("隧道握手成功 (第 ${attempt + 1} 次尝试)")
-                    return@repeat
-                } catch (_: Exception) {
-                    if (attempt < 5) {
-                        addLog("握手未完成，等待重试… (${attempt + 1}/6)")
-                        Thread.sleep(2000)
-                    }
-                }
-            }
-            probeSocket.close()
-            if (!handshakeOk) {
-                addLog("⚠️ 隧道握手超时，udp2raw 隧道未建立")
-                addLog("提示: $rawMode 模式在无 root 环境下可能无法建立隧道")
-                addLog("      需要 iptables 规则或 CAP_NET_RAW 权限")
-                dumpLogFile(serverLogFile, "服务端", addLog)
-                dumpLogFile(clientLogFile, "客户端", addLog)
-            }
-        }
-
-        // ── Step 4: Send UDP echo packets ─────────────────────────────────────
-        setStep(4, StepStatus.RUNNING)
+        // ── Step 5: Send UDP echo packets through tunnel ────────────────────────
+        setStep(5, StepStatus.RUNNING)
         val echoResults = mutableListOf<Boolean>()
         try {
             withContext(Dispatchers.IO) {
                 val socket = DatagramSocket()
                 socket.soTimeout = 5_000
-                addLog("【Echo】本地端口: ${socket.localPort}, 目标: 127.0.0.1:${Udp2RawTestActivity.PORT_CLIENT_UDP}")
+                addLog(
+                    "【隧道】本地端口: ${socket.localPort}, 目标: 127.0.0.1:${Udp2RawTestActivity.PORT_CLIENT_UDP}"
+                )
                 val serverAddr = InetAddress.getByName("127.0.0.1")
                 repeat(5) { i ->
                     val msg = "hello-flowgate-$i"
@@ -711,29 +747,31 @@ private suspend fun runTest(
             throw e
         } catch (e: Exception) {
             addLog("❌ Echo 测试异常: ${e.message}")
-            setStep(4, StepStatus.FAILED)
+            setStep(5, StepStatus.FAILED)
             return
         }
-        setStep(4, StepStatus.SUCCESS)
+        setStep(5, StepStatus.SUCCESS)
 
-        // ── Step 5: Validate results ───────────────────────────────────────────
-        setStep(5, StepStatus.RUNNING)
+        // ── Step 6: Validate results ───────────────────────────────────────────
+        setStep(6, StepStatus.RUNNING)
         val passed = echoResults.count { it }
         val total = echoResults.size
         addLog("结果: $passed/$total 成功")
         if (passed == total) {
             addLog("✅ 所有 Echo 测试通过")
-            setStep(5, StepStatus.SUCCESS)
+            setStep(6, StepStatus.SUCCESS)
         } else {
             addLog("❌ 部分 Echo 测试失败")
-            setStep(5, StepStatus.FAILED)
+            dumpLogFile(serverLogFile, "服务端", addLog)
+            dumpLogFile(clientLogFile, "客户端", addLog)
+            setStep(6, StepStatus.FAILED)
         }
 
-        // ── Step 6: Cleanup ────────────────────────────────────────────────────
-        setStep(6, StepStatus.RUNNING)
+        // ── Step 7: Cleanup ────────────────────────────────────────────────────
+        setStep(7, StepStatus.RUNNING)
         doCleanup(serviceMessenger, serviceConn, context, clientPlugin, clientLogTailer, addLog)
         cleanedUp = true
-        setStep(6, StepStatus.SUCCESS)
+        setStep(7, StepStatus.SUCCESS)
     } finally {
         if (!cleanedUp) {
             doCleanup(serviceMessenger, serviceConn, context, clientPlugin, clientLogTailer)
