@@ -103,7 +103,9 @@ object PluginManager {
     fun installFromUrl(context: Context, pluginName: String, url: String): File {
         LogManager.logInfo(TAG, "Downloading plugin '$pluginName' from $url")
         val stream = URL(url).openStream()
-        return installFromStream(context, pluginName, stream)
+        val result = installFromStream(context, pluginName, stream)
+        sourceMarkerFile(context, pluginName).writeText(url)
+        return result
     }
 
     /**

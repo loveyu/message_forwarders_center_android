@@ -156,6 +156,10 @@
     <string name="vpn_override_default">跟随配置</string>
     <string name="vpn_candidate_settings_title">%1$s 高级设置</string>
     <string name="vpn_settings_note">以下设置会覆盖配置文件中的对应字段，重启 VPN 后生效。</string>
+    <string name="vpn_core_plugin_title">核心插件</string>
+    <string name="vpn_core_download">下载核心</string>
+    <string name="vpn_core_redownload">重新下载</string>
+    <string name="vpn_core_delete">删除缓存</string>
 
     <!-- 测试中心 -->
     <string name="test_hub_title">测试中心</string>

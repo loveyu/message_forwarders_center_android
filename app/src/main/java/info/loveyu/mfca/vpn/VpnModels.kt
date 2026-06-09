@@ -67,5 +67,7 @@ data class VpnUiState(
     val activeCandidateName: String? = null,
     val runningCandidateName: String? = null,
     val isRuntimeOutOfSync: Boolean = false,
+    val coreState: VpnCoreState = VpnCoreState(),
+    val m2mCoreUrl: String = "",
     val candidates: List<VpnCandidateState> = emptyList(),
 )

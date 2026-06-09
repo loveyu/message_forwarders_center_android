@@ -99,6 +99,17 @@ object VpnManager {
         }
     }
 
+    fun deleteCorePlugin(context: Context): Result<Unit> = runCatching {
+        MihomoCoreManager.deleteCore(context)
+        rebuildState()
+    }
+
+    fun downloadCorePlugin(context: Context): Result<Unit> = runCatching {
+        val url = m2mCoreUrl ?: throw IllegalStateException("未配置 plugin.m2mCore 下载地址")
+        MihomoCoreManager.downloadCore(context, url).getOrThrow()
+        rebuildState()
+    }
+
     fun deleteConfigCache(context: Context, candidateName: String): Result<VpnConfigCacheState> {
         val config =
             configs.firstOrNull { it.name == candidateName }
@@ -247,6 +258,7 @@ object VpnManager {
             )
         }
         val activeName = resolveActiveCandidateName(candidates, selectionHistory)
+        val globalCoreState = MihomoCoreManager.inspectCore(context)
         val normalizedRuntimeStatus = when {
             !enabled -> VpnRuntimeStatus.disabled
             runtimeStatus == VpnRuntimeStatus.disabled -> VpnRuntimeStatus.idle
@@ -268,6 +280,8 @@ object VpnManager {
                 isRuntimeOutOfSync = enabled &&
                     runningCandidateName != null &&
                     runningCandidateName != activeName,
+                coreState = globalCoreState,
+                m2mCoreUrl = m2mCoreUrl ?: "",
                 candidates = candidates.map { it.copy(isSelected = it.config.name == activeName) },
             ),
         )

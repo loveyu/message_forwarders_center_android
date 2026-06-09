@@ -18,22 +18,41 @@ object MihomoCoreManager {
     }
 
     fun ensureCore(context: Context, pluginUrl: String? = null): Result<File> = runCatching {
-        val plugin =
-            if (PluginManager.isInstalled(context, PLUGIN_NAME)) {
-                PluginManager.getInstalledPath(context, PLUGIN_NAME)
-            } else if (!pluginUrl.isNullOrBlank()) {
-                PluginManager.installFromUrl(context, PLUGIN_NAME, pluginUrl)
-            } else {
-                error(
-                    "libmihomo_plugin.so is not installed. " +
-                        "Install it via PluginManager or set plugin.m2mCore in the config.",
-                )
-            }
+        val plugin = resolveCore(context, pluginUrl)
         require(plugin.exists() && plugin.length() > 0) { "Mihomo plugin file is empty or missing: ${plugin.absolutePath}" }
-        LogManager.logInfo(
-            "VPN",
-            "Using mihomo plugin: ${plugin.absolutePath}",
-        )
+        LogManager.logInfo("VPN", "Using mihomo plugin: ${plugin.absolutePath}")
         plugin
+    }
+
+    fun deleteCore(context: Context) {
+        PluginManager.uninstall(context, PLUGIN_NAME)
+        LogManager.logInfo("VPN", "Deleted mihomo core plugin cache")
+    }
+
+    fun downloadCore(context: Context, pluginUrl: String): Result<File> = runCatching {
+        PluginManager.uninstall(context, PLUGIN_NAME)
+        LogManager.logInfo("VPN", "Re-downloading mihomo core from $pluginUrl")
+        val plugin = PluginManager.installFromUrl(context, PLUGIN_NAME, pluginUrl)
+        require(plugin.exists() && plugin.length() > 0) { "Downloaded plugin file is empty or missing" }
+        LogManager.logInfo("VPN", "Downloaded mihomo plugin: ${plugin.absolutePath}")
+        plugin
+    }
+
+    private fun resolveCore(context: Context, pluginUrl: String?): File {
+        if (!pluginUrl.isNullOrBlank()) {
+            if (PluginManager.isInstalledFrom(context, PLUGIN_NAME, pluginUrl)) {
+                return PluginManager.getInstalledPath(context, PLUGIN_NAME)
+            }
+            // URL changed or not yet installed from this URL — re-download
+            return PluginManager.installFromUrl(context, PLUGIN_NAME, pluginUrl)
+        }
+        // No URL configured — use whatever is installed
+        if (PluginManager.isInstalled(context, PLUGIN_NAME)) {
+            return PluginManager.getInstalledPath(context, PLUGIN_NAME)
+        }
+        error(
+            "libmihomo_plugin.so is not installed. " +
+                "Install it via PluginManager or set plugin.m2mCore in the config.",
+        )
     }
 }
