@@ -17,8 +17,8 @@ object MihomoCoreManager {
         )
     }
 
-    fun ensureCore(context: Context, pluginUrl: String? = null): Result<File> = runCatching {
-        val plugin = resolveCore(context, pluginUrl)
+    fun ensureCore(context: Context, pluginUrl: String? = null, proxyAddress: String? = null): Result<File> = runCatching {
+        val plugin = resolveCore(context, pluginUrl, proxyAddress)
         require(plugin.exists() && plugin.length() > 0) { "Mihomo plugin file is empty or missing: ${plugin.absolutePath}" }
         LogManager.logInfo("VPN", "Using mihomo plugin: ${plugin.absolutePath}")
         plugin
@@ -29,22 +29,22 @@ object MihomoCoreManager {
         LogManager.logInfo("VPN", "Deleted mihomo core plugin cache")
     }
 
-    fun downloadCore(context: Context, pluginUrl: String): Result<File> = runCatching {
+    fun downloadCore(context: Context, pluginUrl: String, proxyAddress: String? = null): Result<File> = runCatching {
         PluginManager.uninstall(context, PLUGIN_NAME)
         LogManager.logInfo("VPN", "Re-downloading mihomo core from $pluginUrl")
-        val plugin = PluginManager.installFromUrl(context, PLUGIN_NAME, pluginUrl)
+        val plugin = PluginManager.installFromUrl(context, PLUGIN_NAME, pluginUrl, proxyAddress)
         require(plugin.exists() && plugin.length() > 0) { "Downloaded plugin file is empty or missing" }
         LogManager.logInfo("VPN", "Downloaded mihomo plugin: ${plugin.absolutePath}")
         plugin
     }
 
-    private fun resolveCore(context: Context, pluginUrl: String?): File {
+    private fun resolveCore(context: Context, pluginUrl: String?, proxyAddress: String? = null): File {
         if (!pluginUrl.isNullOrBlank()) {
             if (PluginManager.isInstalledFrom(context, PLUGIN_NAME, pluginUrl)) {
                 return PluginManager.getInstalledPath(context, PLUGIN_NAME)
             }
             // URL changed or not yet installed from this URL — re-download
-            return PluginManager.installFromUrl(context, PLUGIN_NAME, pluginUrl)
+            return PluginManager.installFromUrl(context, PLUGIN_NAME, pluginUrl, proxyAddress)
         }
         // No URL configured — use whatever is installed
         if (PluginManager.isInstalled(context, PLUGIN_NAME)) {

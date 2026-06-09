@@ -105,9 +105,18 @@ class VpnStateStore(context: Context) {
         editor.apply()
     }
 
+    fun getDownloadProxy(): String? = preferences.getString(KEY_DOWNLOAD_PROXY, null)
+
+    fun setDownloadProxy(proxy: String?) {
+        val editor = preferences.edit()
+        if (proxy == null) editor.remove(KEY_DOWNLOAD_PROXY) else editor.putString(KEY_DOWNLOAD_PROXY, proxy)
+        editor.apply()
+    }
+
     companion object {
         private const val KEY_GLOBAL_ENABLED = "global_enabled"
         private const val KEY_SELECTION_HISTORY = "selection_history"
+        private const val KEY_DOWNLOAD_PROXY = "download_proxy"
 
         private fun modeKey(candidateName: String): String = "mode_${sanitize(candidateName)}"
 

@@ -112,7 +112,7 @@ object PluginManager {
      * @param url         Direct download URL of the .so file (or .so.gz).
      * @return The installed [File] path.
      */
-    fun installFromUrl(context: Context, pluginName: String, url: String): File {
+    fun installFromUrl(context: Context, pluginName: String, url: String, proxyAddress: String? = null): File {
         val lock = downloadLocks.computeIfAbsent(pluginName) { ReentrantLock() }
         lock.lock()
         try {
@@ -123,7 +123,8 @@ object PluginManager {
             }
 
             LogManager.logInfo(TAG, "Downloading plugin '$pluginName' from $url")
-            val conn = URL(url).openConnection() as HttpURLConnection
+            val proxy = proxyAddress?.trim()?.takeIf { it.isNotBlank() }?.let { parseProxy(it) }
+            val conn = (if (proxy != null) URL(url).openConnection(proxy) else URL(url).openConnection()) as HttpURLConnection
             conn.connectTimeout = 30_000
             conn.readTimeout = 30_000
             conn.instanceFollowRedirects = true

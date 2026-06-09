@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package info.loveyu.mfca.ui
 
 import android.app.Activity
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,12 +23,18 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -33,6 +42,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -59,6 +71,8 @@ fun VpnScreen(contentPadding: PaddingValues) {
     var coreActionError by remember { mutableStateOf<String?>(null) }
     var configActionError by remember { mutableStateOf<String?>(null) }
     var configActionErrorCandidateName by remember { mutableStateOf<String?>(null) }
+    var showDownloadProxySheet by remember { mutableStateOf(false) }
+    var downloadProxyText by remember { mutableStateOf(uiState.downloadProxy) }
     val vpnPermissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
@@ -172,6 +186,17 @@ fun VpnScreen(contentPadding: PaddingValues) {
                         }
                         OutlinedButton(onClick = { context.startActivity(VpnLogActivity.intent(context)) }) {
                             Text(stringResource(R.string.vpn_view_log))
+                        }
+                        IconButton(
+                            onClick = {
+                                downloadProxyText = uiState.downloadProxy
+                                showDownloadProxySheet = true
+                            },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = stringResource(R.string.vpn_download_proxy),
+                            )
                         }
                     }
 
@@ -455,6 +480,50 @@ fun VpnScreen(contentPadding: PaddingValues) {
                         OutlinedButton(onClick = { context.startActivity(VpnCandidateSettingsActivity.intent(context, candidate.config.name)) }) {
                             Text(stringResource(R.string.vpn_settings))
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showDownloadProxySheet) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { showDownloadProxySheet = false },
+            sheetState = sheetState,
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 24.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.vpn_download_proxy),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                OutlinedTextField(
+                    value = downloadProxyText,
+                    onValueChange = { downloadProxyText = it },
+                    label = { Text(stringResource(R.string.vpn_download_proxy_hint)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(
+                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    TextButton(onClick = { showDownloadProxySheet = false }) {
+                        Text(stringResource(R.string.vpn_cancel))
+                    }
+                    Button(
+                        onClick = {
+                            VpnManager.setDownloadProxyOverride(downloadProxyText.trim().takeIf { it.isNotBlank() })
+                            showDownloadProxySheet = false
+                        },
+                    ) {
+                        Text(stringResource(R.string.vpn_save))
                     }
                 }
             }

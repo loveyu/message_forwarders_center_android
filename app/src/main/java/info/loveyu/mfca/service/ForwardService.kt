@@ -647,7 +647,7 @@ class ForwardService : Service() {
 
         currentConfig = config
         legacyMode = false
-        VpnManager.initialize(this, config.inputs.m2m, config.plugin.m2mCore)
+        VpnManager.initialize(this, config.inputs.m2m, config.plugin.m2mCore, config.plugin.downloadProxy)
 
         // Initialize components in order
         try {

@@ -69,5 +69,6 @@ data class VpnUiState(
     val isRuntimeOutOfSync: Boolean = false,
     val coreState: VpnCoreState = VpnCoreState(),
     val m2mCoreUrl: String = "",
+    val downloadProxy: String = "",
     val candidates: List<VpnCandidateState> = emptyList(),
 )

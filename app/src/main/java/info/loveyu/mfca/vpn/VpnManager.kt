@@ -19,12 +19,19 @@ object VpnManager {
     @Volatile private var store: VpnStateStore? = null
     @Volatile private var configs: List<VpnInputConfig> = emptyList()
     @Volatile private var m2mCoreUrl: String? = null
+    @Volatile private var configDownloadProxy: String? = null
 
-    fun initialize(context: Context, vpnConfigs: List<VpnInputConfig>, pluginUrl: String? = null) {
+    private fun effectiveDownloadProxy(): String? {
+        val override = store?.getDownloadProxy()?.trim()?.takeIf { it.isNotBlank() }
+        return override ?: configDownloadProxy
+    }
+
+    fun initialize(context: Context, vpnConfigs: List<VpnInputConfig>, pluginUrl: String? = null, downloadProxy: String? = null) {
         appContext = context.applicationContext
         store = VpnStateStore(context.applicationContext)
         configs = vpnConfigs
         m2mCoreUrl = pluginUrl
+        configDownloadProxy = downloadProxy
         rebuildState()
     }
 
@@ -84,6 +91,13 @@ object VpnManager {
         store?.setLogLevel(candidateName, level)
     }
 
+    fun getDownloadProxyOverride(): String? = store?.getDownloadProxy()
+
+    fun setDownloadProxyOverride(proxy: String?) {
+        store?.setDownloadProxy(proxy)
+        rebuildState()
+    }
+
     fun getSelectedCandidate(): VpnCandidateState? {
         return stateFlow.value.candidates.firstOrNull { it.isSelected && it.isAvailable }
     }
@@ -106,7 +120,7 @@ object VpnManager {
 
     fun downloadCorePlugin(context: Context): Result<Unit> = runCatching {
         val url = m2mCoreUrl ?: throw IllegalStateException("未配置 plugin.m2mCore 下载地址")
-        MihomoCoreManager.downloadCore(context, url).getOrThrow()
+        MihomoCoreManager.downloadCore(context, url, effectiveDownloadProxy()).getOrThrow()
         rebuildState()
     }
 
@@ -159,7 +173,7 @@ object VpnManager {
             ?: return Result.failure(IllegalStateException("No available VPN candidate selected"))
         LogManager.logInfo("VPN", "Preparing VPN candidate ${selected.config.name}")
         updateRuntimeStatus(VpnRuntimeStatus.preparing, "Preparing ${selected.config.name}")
-        return MihomoCoreManager.ensureCore(context, m2mCoreUrl).fold(
+        return MihomoCoreManager.ensureCore(context, m2mCoreUrl, effectiveDownloadProxy()).fold(
             onSuccess = { coreFile ->
                 LogManager.logInfo("VPN", "Prepared mihomo core for ${selected.config.name}: ${coreFile.absolutePath}")
                 val cachedSource =
@@ -282,6 +296,7 @@ object VpnManager {
                     runningCandidateName != activeName,
                 coreState = globalCoreState,
                 m2mCoreUrl = m2mCoreUrl ?: "",
+                downloadProxy = effectiveDownloadProxy() ?: "",
                 candidates = candidates.map { it.copy(isSelected = it.config.name == activeName) },
             ),
         )
