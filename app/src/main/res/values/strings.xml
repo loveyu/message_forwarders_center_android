@@ -158,6 +158,12 @@
     <string name="vpn_override_default">跟随配置</string>
     <string name="vpn_candidate_settings_title">%1$s 高级设置</string>
     <string name="vpn_settings_note">以下设置会覆盖配置文件中的对应字段，重启 VPN 后生效。</string>
+    <string name="vpn_udp_relay">UDP 中继</string>
+    <string name="vpn_udp_relay_desc">开启后非 DNS 的 UDP 流量将通过代理转发（需代理支持 UDP）</string>
+    <string name="vpn_ipv6_leak_protection">IPv6 泄漏防护</string>
+    <string name="vpn_ipv6_leak_protection_desc">开启后捕获 IPv6 流量到 VPN 隧道并丢弃，防止绕过代理</string>
+    <string name="vpn_dns_hijack">DNS 劫持</string>
+    <string name="vpn_dns_hijack_desc">拦截 DNS 查询到本地代理核心，启用 fake-ip 模式使域名规则生效</string>
     <string name="vpn_core_plugin_title">核心插件</string>
     <string name="vpn_core_download">下载核心</string>
     <string name="vpn_core_redownload">重新下载</string>

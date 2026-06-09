@@ -91,6 +91,24 @@ object VpnManager {
         store?.setLogLevel(candidateName, level)
     }
 
+    fun getUdpRelay(candidateName: String): Boolean = store?.getUdpRelay(candidateName) ?: false
+
+    fun setUdpRelay(candidateName: String, enabled: Boolean?) {
+        store?.setUdpRelay(candidateName, enabled)
+    }
+
+    fun getIpv6(candidateName: String): Boolean = store?.getIpv6(candidateName) ?: false
+
+    fun setIpv6(candidateName: String, enabled: Boolean?) {
+        store?.setIpv6(candidateName, enabled)
+    }
+
+    fun getDnsHijack(candidateName: String): Boolean = store?.getDnsHijack(candidateName) ?: true
+
+    fun setDnsHijack(candidateName: String, enabled: Boolean?) {
+        store?.setDnsHijack(candidateName, enabled)
+    }
+
     fun getDownloadProxyOverride(): String? = store?.getDownloadProxy()
 
     fun setDownloadProxyOverride(proxy: String?) {
@@ -184,6 +202,8 @@ object VpnManager {
                 val effectivePort = store?.getLocalPort(selected.config.name) ?: LOCAL_PROXY_PORT
                 val effectiveRuleMode = store?.getRuleMode(selected.config.name)
                 val effectiveLogLevel = store?.getLogLevel(selected.config.name)
+                val effectiveUdpRelay = store?.getUdpRelay(selected.config.name) ?: true
+                val effectiveDnsHijack = store?.getDnsHijack(selected.config.name) ?: true
                 VpnProfileManager.buildRuntimeProfile(
                     context,
                     selected.config.name,
@@ -198,6 +218,8 @@ object VpnManager {
                         coreFilePath = coreFile.absolutePath,
                         profileFilePath = profileFile.absolutePath,
                         localProxyPort = effectivePort,
+                        udpRelay = effectiveUdpRelay,
+                        dnsHijack = effectiveDnsHijack,
                     )
                 }
             },

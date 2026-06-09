@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -23,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -31,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -59,10 +62,16 @@ class VpnCandidateSettingsActivity : ComponentActivity() {
                     initialPort = store.getLocalPort(candidateName),
                     initialRuleMode = store.getRuleMode(candidateName),
                     initialLogLevel = store.getLogLevel(candidateName),
-                    onSave = { port, ruleMode, logLevel ->
+                    initialUdpRelay = store.getUdpRelay(candidateName),
+                    initialIpv6 = store.getIpv6(candidateName),
+                    initialDnsHijack = store.getDnsHijack(candidateName),
+                    onSave = { port, ruleMode, logLevel, udpRelay, ipv6, dnsHijack ->
                         VpnManager.setOverridePort(candidateName, port)
                         VpnManager.setOverrideRuleMode(candidateName, ruleMode)
                         VpnManager.setOverrideLogLevel(candidateName, logLevel)
+                        VpnManager.setUdpRelay(candidateName, udpRelay)
+                        VpnManager.setIpv6(candidateName, ipv6)
+                        VpnManager.setDnsHijack(candidateName, dnsHijack)
                         finish()
                     },
                     onBack = { finish() },
@@ -79,12 +88,18 @@ private fun VpnCandidateSettingsScreen(
     initialPort: Int?,
     initialRuleMode: VpnRuleMode?,
     initialLogLevel: VpnLogLevel?,
-    onSave: (Int?, VpnRuleMode?, VpnLogLevel?) -> Unit,
+    initialUdpRelay: Boolean,
+    initialIpv6: Boolean,
+    initialDnsHijack: Boolean,
+    onSave: (Int?, VpnRuleMode?, VpnLogLevel?, Boolean, Boolean, Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     var portText by remember { mutableStateOf(initialPort?.toString() ?: "") }
     var ruleMode by remember { mutableStateOf(initialRuleMode) }
     var logLevel by remember { mutableStateOf(initialLogLevel) }
+    var udpRelay by remember { mutableStateOf(initialUdpRelay) }
+    var ipv6 by remember { mutableStateOf(initialIpv6) }
+    var dnsHijack by remember { mutableStateOf(initialDnsHijack) }
     var portError by remember { mutableStateOf(false) }
 
     fun saveAndFinish() {
@@ -100,7 +115,7 @@ private fun VpnCandidateSettingsScreen(
                 parsed
             }
         portError = false
-        onSave(port, ruleMode, logLevel)
+        onSave(port, ruleMode, logLevel, udpRelay, ipv6, dnsHijack)
     }
 
     Scaffold(
@@ -167,7 +182,55 @@ private fun VpnCandidateSettingsScreen(
                 options = VpnLogLevel.entries.map { it.name },
                 onSelect = { selected -> logLevel = VpnLogLevel.entries.firstOrNull { it.name == selected } },
             )
+
+            // UDP relay toggle
+            SettingToggle(
+                label = stringResource(R.string.vpn_udp_relay),
+                description = stringResource(R.string.vpn_udp_relay_desc),
+                checked = udpRelay,
+                onCheckedChange = { udpRelay = it },
+            )
+
+            // IPv6 leak protection toggle
+            SettingToggle(
+                label = stringResource(R.string.vpn_ipv6_leak_protection),
+                description = stringResource(R.string.vpn_ipv6_leak_protection_desc),
+                checked = ipv6,
+                onCheckedChange = { ipv6 = it },
+            )
+
+            // DNS hijack toggle
+            SettingToggle(
+                label = stringResource(R.string.vpn_dns_hijack),
+                description = stringResource(R.string.vpn_dns_hijack_desc),
+                checked = dnsHijack,
+                onCheckedChange = { dnsHijack = it },
+            )
         }
+    }
+}
+
+@Composable
+private fun SettingToggle(
+    label: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = label)
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

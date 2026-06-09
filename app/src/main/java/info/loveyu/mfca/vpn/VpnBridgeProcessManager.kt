@@ -58,17 +58,24 @@ object VpnBridgeProcessManager {
             )
 
             val process = ProcessBuilder(
-                listOf(
-                    bridgeBinary.absolutePath,
-                    "--control-socket",
-                    controlName,
-                    "--socks",
-                    "127.0.0.1:${artifacts.localProxyPort}",
-                    "--gateway",
-                    MfcaVpnService.TUN_GATEWAY_CIDR,
-                    "--portal",
-                    MfcaVpnService.TUN_PORTAL,
-                ),
+                buildList {
+                    add(bridgeBinary.absolutePath)
+                    add("--control-socket")
+                    add(controlName)
+                    add("--socks")
+                    add("127.0.0.1:${artifacts.localProxyPort}")
+                    add("--gateway")
+                    add(MfcaVpnService.TUN_GATEWAY_CIDR)
+                    add("--portal")
+                    add(MfcaVpnService.TUN_PORTAL)
+                    if (artifacts.dnsHijack) {
+                        add("--dns")
+                        add("127.0.0.1:${MfcaVpnService.MIHOMO_DNS_PORT}")
+                    }
+                    if (!artifacts.udpRelay) {
+                        add("--udp-relay=false")
+                    }
+                },
             )
                 .directory(workDir)
                 .redirectOutput(ProcessBuilder.Redirect.appendTo(stdoutLog))

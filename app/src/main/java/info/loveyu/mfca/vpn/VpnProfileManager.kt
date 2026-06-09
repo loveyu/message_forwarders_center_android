@@ -62,6 +62,43 @@ object VpnProfileManager {
         tun["enable"] = false
         normalized["tun"] = tun
 
+        val dns =
+            (normalized["dns"] as? Map<*, *>)?.let { existing ->
+                LinkedHashMap<String, Any?>().apply {
+                    existing.forEach { (key, value) ->
+                        if (key != null) {
+                            put(key.toString(), normalizeYamlValue(value))
+                        }
+                    }
+                }
+            } ?: linkedMapOf<String, Any?>()
+        dns["enable"] = true
+        dns["listen"] = "127.0.0.1:${MfcaVpnService.MIHOMO_DNS_PORT}"
+        dns["enhanced-mode"] = "fake-ip"
+        if (!dns.containsKey("fake-ip-range")) {
+            dns["fake-ip-range"] = "28.0.0.1/8"
+        }
+        if (!dns.containsKey("fake-ip-filter")) {
+            @Suppress("ktlint:standard:argument-list-wrapping")
+            dns["fake-ip-filter"] = listOf(
+                "*.lan", "*.local", "*.localhost",
+                "*.mshome.net",
+                "dns.msftncsi.com", "www.msftncsi.com", "www.msftconnecttest.com",
+                "dl.google.com", "dl.l.google.com",
+            )
+        }
+        if (!dns.containsKey("default-nameserver")) {
+            dns["default-nameserver"] = listOf("223.5.5.5", "119.29.29.29")
+        }
+        if (!dns.containsKey("nameserver")) {
+            dns["nameserver"] = listOf(
+                "223.5.5.5", "119.29.29.29",
+                "https://doh.pub/dns-query",
+                "https://dns.alidns.com/dns-query",
+            )
+        }
+        normalized["dns"] = dns
+
         return yamlDump.dumpToString(normalized)
     }
 

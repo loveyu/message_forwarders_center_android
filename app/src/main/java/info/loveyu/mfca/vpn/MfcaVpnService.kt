@@ -319,6 +319,11 @@ class MfcaVpnService : VpnService() {
             .addDnsServer(TUN_DNS_PRIMARY)
             .addDnsServer(TUN_DNS_SECONDARY)
 
+        val vpnStateStore = VpnStateStore(this)
+        if (vpnStateStore.getIpv6(candidate.config.name)) {
+            builder.addRoute("::", 0)
+        }
+
         when (candidate.effectiveAccessControlMode) {
             info.loveyu.mfca.config.VpnAccessControlMode.acceptAll -> {
                 runCatching { builder.addDisallowedApplication(packageName) }
@@ -396,6 +401,7 @@ class MfcaVpnService : VpnService() {
         const val TUN_DNS_PRIMARY = "1.1.1.1"
         const val TUN_DNS_SECONDARY = "8.8.8.8"
         const val NET_ANY = "0.0.0.0"
+        const val MIHOMO_DNS_PORT = 1053
 
         const val ACTION_ENABLE = "info.loveyu.mfca.action.ENABLE_VPN"
         const val ACTION_REFRESH = "info.loveyu.mfca.action.REFRESH_VPN"

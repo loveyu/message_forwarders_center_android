@@ -35,6 +35,8 @@ type bridge struct {
 	tcp        *nat.TCP
 	udp        *nat.UDP
 	socksAddr  string
+	dnsAddr    string
+	udpRelay   bool
 	udpLock    sync.Mutex
 	udpSession map[string]*udpAssociation
 }
@@ -48,16 +50,26 @@ type udpAssociation struct {
 	closeOnce sync.Once
 }
 
+type dnsConnEntry struct {
+	conn   *net.UDPConn
+	source *net.UDPAddr
+	target *net.UDPAddr
+}
+
 func main() {
 	var controlSocket string
 	var socksAddr string
 	var gatewayCIDR string
 	var portalAddr string
+	var dnsAddr string
+	var udpRelay bool
 
 	flag.StringVar(&controlSocket, "control-socket", "", "abstract unix domain socket name")
 	flag.StringVar(&socksAddr, "socks", "127.0.0.1:17890", "local socks5 proxy address")
 	flag.StringVar(&gatewayCIDR, "gateway", "172.19.0.1/30", "tun gateway cidr")
 	flag.StringVar(&portalAddr, "portal", "172.19.0.2", "tun portal address")
+	flag.StringVar(&dnsAddr, "dns", "", "local DNS server for port 53 hijacking (e.g. 127.0.0.1:1053)")
+	flag.BoolVar(&udpRelay, "udp-relay", true, "relay non-DNS UDP through SOCKS5")
 	flag.Parse()
 
 	if controlSocket == "" {
@@ -95,6 +107,8 @@ func main() {
 		tcp:        tcp,
 		udp:        udp,
 		socksAddr:  socksAddr,
+		dnsAddr:    dnsAddr,
+		udpRelay:   udpRelay,
 		udpSession: make(map[string]*udpAssociation),
 	}
 
@@ -150,6 +164,9 @@ func (b *bridge) handleTCP(conn net.Conn) {
 }
 
 func (b *bridge) runUDP(ctx context.Context) {
+	dnsConns := make(map[string]*dnsConnEntry)
+	var dnsConnLock sync.Mutex
+
 	buf := make([]byte, 65535)
 	for {
 		n, source, destination, err := b.udp.ReadFrom(buf)
@@ -173,6 +190,46 @@ func (b *bridge) runUDP(ctx context.Context) {
 		}
 
 		payload := append([]byte(nil), buf[:n]...)
+
+		// DNS hijacking: intercept port 53 and forward to local DNS server
+		if targetAddr.Port == 53 && b.dnsAddr != "" {
+			dnsConnLock.Lock()
+			entry, exists := dnsConns[sourceAddr.String()]
+			if !exists {
+				resolvedAddr, resolveErr := net.ResolveUDPAddr("udp", b.dnsAddr)
+				if resolveErr != nil {
+					dnsConnLock.Unlock()
+					log.Printf("dns resolve failed: %v", resolveErr)
+					continue
+				}
+				conn, dialErr := net.DialUDP("udp", nil, resolvedAddr)
+				if dialErr != nil {
+					dnsConnLock.Unlock()
+					log.Printf("dns dial failed: %v", dialErr)
+					continue
+				}
+				entry = &dnsConnEntry{
+					conn:   conn,
+					source: sourceAddr,
+					target: targetAddr,
+				}
+				dnsConns[sourceAddr.String()] = entry
+				go dnsResponseReader(entry, &dnsConns, &dnsConnLock, b.udp)
+			}
+			conn := entry.conn
+			dnsConnLock.Unlock()
+
+			if _, writeErr := conn.Write(payload); writeErr != nil {
+				log.Printf("dns write failed: %v", writeErr)
+			}
+			continue
+		}
+
+		// Drop non-DNS UDP when relay is disabled
+		if !b.udpRelay {
+			continue
+		}
+
 		session, err := b.getOrCreateUDPAssociation(sourceAddr)
 		if err != nil {
 			log.Printf("udp association failed: %v", err)
@@ -182,6 +239,24 @@ func (b *bridge) runUDP(ctx context.Context) {
 			log.Printf("udp write failed: %v", err)
 			b.removeUDPAssociation(sourceAddr.String())
 		}
+	}
+}
+
+func dnsResponseReader(entry *dnsConnEntry, dnsConns *map[string]*dnsConnEntry, lock *sync.Mutex, udpWriter *nat.UDP) {
+	buf := make([]byte, 65535)
+	entry.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	n, err := entry.conn.Read(buf)
+
+	lock.Lock()
+	delete(*dnsConns, entry.source.String())
+	lock.Unlock()
+	entry.conn.Close()
+
+	if err != nil {
+		return
+	}
+	if _, writeErr := udpWriter.WriteTo(buf[:n], entry.target, entry.source); writeErr != nil {
+		log.Printf("dns response write failed: %v", writeErr)
 	}
 }
 

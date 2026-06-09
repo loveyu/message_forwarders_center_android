@@ -113,6 +113,36 @@ class VpnStateStore(context: Context) {
         editor.apply()
     }
 
+    fun getUdpRelay(candidateName: String, defaultValue: Boolean = false): Boolean {
+        return preferences.getBoolean(udpRelayKey(candidateName), defaultValue)
+    }
+
+    fun setUdpRelay(candidateName: String, enabled: Boolean?) {
+        val editor = preferences.edit()
+        if (enabled == null) editor.remove(udpRelayKey(candidateName)) else editor.putBoolean(udpRelayKey(candidateName), enabled)
+        editor.apply()
+    }
+
+    fun getIpv6(candidateName: String, defaultValue: Boolean = false): Boolean {
+        return preferences.getBoolean(ipv6Key(candidateName), defaultValue)
+    }
+
+    fun setIpv6(candidateName: String, enabled: Boolean?) {
+        val editor = preferences.edit()
+        if (enabled == null) editor.remove(ipv6Key(candidateName)) else editor.putBoolean(ipv6Key(candidateName), enabled)
+        editor.apply()
+    }
+
+    fun getDnsHijack(candidateName: String, defaultValue: Boolean = true): Boolean {
+        return preferences.getBoolean(dnsHijackKey(candidateName), defaultValue)
+    }
+
+    fun setDnsHijack(candidateName: String, enabled: Boolean?) {
+        val editor = preferences.edit()
+        if (enabled == null) editor.remove(dnsHijackKey(candidateName)) else editor.putBoolean(dnsHijackKey(candidateName), enabled)
+        editor.apply()
+    }
+
     companion object {
         private const val KEY_GLOBAL_ENABLED = "global_enabled"
         private const val KEY_SELECTION_HISTORY = "selection_history"
@@ -127,6 +157,12 @@ class VpnStateStore(context: Context) {
         private fun ruleModeKey(candidateName: String): String = "rule_mode_${sanitize(candidateName)}"
 
         private fun logLevelKey(candidateName: String): String = "log_level_${sanitize(candidateName)}"
+
+        private fun udpRelayKey(candidateName: String): String = "udp_relay_${sanitize(candidateName)}"
+
+        private fun ipv6Key(candidateName: String): String = "ipv6_${sanitize(candidateName)}"
+
+        private fun dnsHijackKey(candidateName: String): String = "dns_hijack_${sanitize(candidateName)}"
 
         private fun sanitize(value: String): String = value.replace(Regex("[^a-zA-Z0-9._-]"), "_")
     }
