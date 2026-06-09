@@ -6,11 +6,14 @@ import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.StoragePathResolver
 import java.io.File
 import java.io.FileNotFoundException
+import java.io.FilterInputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.locks.ReentrantLock
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +36,9 @@ import kotlinx.coroutines.withContext
  */
 object PluginManager {
     private const val TAG = "PluginManager"
+    private const val PROGRESS_LOG_INTERVAL_MS = 20_000L
+
+    private val downloadLocks = ConcurrentHashMap<String, ReentrantLock>()
 
     /**
      * The preferred ABI for this device, chosen from [Build.SUPPORTED_ABIS].
@@ -93,19 +99,93 @@ object PluginManager {
     /**
      * Download and install a plugin .so from a remote URL.
      *
+     * Thread-safe: concurrent calls for the same [pluginName] will block and
+     * return the same result without redundant downloads.
+     *
+     * Supports .gz / .gzip compressed files (auto-detected from URL extension).
+     * Logs download progress every ~20 seconds.
+     *
      * This is a **blocking** call; run it from a background coroutine/thread.
      *
      * @param context     Android context.
      * @param pluginName  Plugin identifier.
-     * @param url         Direct download URL of the .so file.
+     * @param url         Direct download URL of the .so file (or .so.gz).
      * @return The installed [File] path.
      */
     fun installFromUrl(context: Context, pluginName: String, url: String): File {
-        LogManager.logInfo(TAG, "Downloading plugin '$pluginName' from $url")
-        val stream = URL(url).openStream()
-        val result = installFromStream(context, pluginName, stream)
-        sourceMarkerFile(context, pluginName).writeText(url)
-        return result
+        val lock = downloadLocks.computeIfAbsent(pluginName) { ReentrantLock() }
+        lock.lock()
+        try {
+            // Double-check: another thread may have completed the download
+            if (isInstalledFrom(context, pluginName, url)) {
+                LogManager.logInfo(TAG, "Plugin '$pluginName' already installed by another thread")
+                return getInstalledPath(context, pluginName)
+            }
+
+            LogManager.logInfo(TAG, "Downloading plugin '$pluginName' from $url")
+            val conn = URL(url).openConnection() as HttpURLConnection
+            conn.connectTimeout = 30_000
+            conn.readTimeout = 30_000
+            conn.instanceFollowRedirects = true
+
+            try {
+                val totalSize = conn.contentLengthLong.let { if (it > 0) it else -1L }
+                var networkBytes = 0L
+                var lastLogTime = System.currentTimeMillis()
+
+                val rawStream = conn.inputStream.buffered()
+                val trackingStream = object : FilterInputStream(rawStream) {
+                    override fun read(b: ByteArray, off: Int, len: Int): Int {
+                        val n = super.read(b, off, len)
+                        if (n > 0) {
+                            networkBytes += n
+                            val now = System.currentTimeMillis()
+                            if (now - lastLogTime >= PROGRESS_LOG_INTERVAL_MS) {
+                                logProgress(pluginName, networkBytes, totalSize)
+                                lastLogTime = now
+                            }
+                        }
+                        return n
+                    }
+                }
+
+                val isGz = detectFormat(url) == "gz"
+                val installStream = if (isGz) GZIPInputStream(trackingStream) else trackingStream
+
+                val dest = getInstalledPath(context, pluginName)
+                dest.parentFile?.mkdirs()
+                installStream.use { input ->
+                    dest.outputStream().buffered().use { output ->
+                        val buf = ByteArray(8192)
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n == -1) break
+                            output.write(buf, 0, n)
+                        }
+                    }
+                }
+
+                val pct = if (totalSize > 0) " (${networkBytes * 100 / totalSize}%)" else ""
+                LogManager.logInfo(TAG, "Installed plugin '$pluginName' from $url (${networkBytes / 1024}KB$pct)")
+            } finally {
+                conn.disconnect()
+            }
+
+            sourceMarkerFile(context, pluginName).writeText(url)
+            return getInstalledPath(context, pluginName)
+        } finally {
+            lock.unlock()
+        }
+    }
+
+    private fun logProgress(pluginName: String, downloaded: Long, totalSize: Long) {
+        val sizeKB = downloaded / 1024
+        if (totalSize > 0) {
+            val pct = downloaded * 100 / totalSize
+            LogManager.logInfo(TAG, "Downloading '$pluginName': ${sizeKB}KB ($pct%)")
+        } else {
+            LogManager.logInfo(TAG, "Downloading '$pluginName': ${sizeKB}KB")
+        }
     }
 
     /**
