@@ -17,7 +17,7 @@ object MihomoCoreManager {
         )
     }
 
-    fun ensureCore(context: Context, pluginUrl: String?): Result<File> = runCatching {
+    fun ensureCore(context: Context, pluginUrl: String? = null): Result<File> = runCatching {
         val plugin =
             if (PluginManager.isInstalled(context, PLUGIN_NAME)) {
                 PluginManager.getInstalledPath(context, PLUGIN_NAME)
@@ -26,7 +26,7 @@ object MihomoCoreManager {
             } else {
                 error(
                     "libmihomo_plugin.so is not installed. " +
-                        "Install it via PluginManager or set pluginUrl in the vpn input config.",
+                        "Install it via PluginManager or set plugin.m2mCore in the config.",
                 )
             }
         require(plugin.exists() && plugin.length() > 0) { "Mihomo plugin file is empty or missing: ${plugin.absolutePath}" }

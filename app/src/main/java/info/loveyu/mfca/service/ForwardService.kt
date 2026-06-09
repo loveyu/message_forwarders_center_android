@@ -143,7 +143,7 @@ class ForwardService : Service() {
                     NetworkChecker.shouldEnable(ctx, input.whenCondition, input.deny)
                 } + config.inputs.udp2raw.count { input ->
                     input.enabled && NetworkChecker.shouldEnable(ctx, input.whenCondition, input.deny)
-                } + config.inputs.vpn.count { input ->
+                } + config.inputs.m2m.count { input ->
                     input.enabled && NetworkChecker.shouldEnable(ctx, input.whenCondition, input.deny)
                 }
                 // HTTP and Internal outputs don't have whenCondition/deny, so always enabled
@@ -647,7 +647,7 @@ class ForwardService : Service() {
 
         currentConfig = config
         legacyMode = false
-        VpnManager.initialize(this, config.inputs.vpn)
+        VpnManager.initialize(this, config.inputs.m2m, config.plugin.m2mCore)
 
         // Initialize components in order
         try {

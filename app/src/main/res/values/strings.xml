@@ -164,4 +164,6 @@
     <string name="test_udp2raw_description">验证 udp2raw JNI 插件完整链路功能（含服务端 + 客户端 + Echo 回环测试）</string>
     <string name="test_m2m_title">m2m 代理测试</string>
     <string name="test_m2m_description">验证 m2m 核心插件代理功能（启动代理服务 + HTTP 访问测试）</string>
+    <string name="test_m2m_vpn_title">m2m VPN 测试</string>
+    <string name="test_m2m_vpn_description">验证 m2m VPN 完整链路（代理 + TUN + 桥接 + 访问测试，含 include/exclude 双模式）</string>
 </resources>

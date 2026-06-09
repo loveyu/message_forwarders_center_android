@@ -18,16 +18,19 @@ object VpnManager {
     @Volatile private var appContext: Context? = null
     @Volatile private var store: VpnStateStore? = null
     @Volatile private var configs: List<VpnInputConfig> = emptyList()
+    @Volatile private var m2mCoreUrl: String? = null
 
-    fun initialize(context: Context, vpnConfigs: List<VpnInputConfig>) {
+    fun initialize(context: Context, vpnConfigs: List<VpnInputConfig>, pluginUrl: String? = null) {
         appContext = context.applicationContext
         store = VpnStateStore(context.applicationContext)
         configs = vpnConfigs
+        m2mCoreUrl = pluginUrl
         rebuildState()
     }
 
     fun clear() {
         configs = emptyList()
+        m2mCoreUrl = null
         updateState(
             VpnUiState(
                 hasVpnConfig = false,
@@ -145,7 +148,7 @@ object VpnManager {
             ?: return Result.failure(IllegalStateException("No available VPN candidate selected"))
         LogManager.logInfo("VPN", "Preparing VPN candidate ${selected.config.name}")
         updateRuntimeStatus(VpnRuntimeStatus.preparing, "Preparing ${selected.config.name}")
-        return MihomoCoreManager.ensureCore(context, selected.config.pluginUrl).fold(
+        return MihomoCoreManager.ensureCore(context, m2mCoreUrl).fold(
             onSuccess = { coreFile ->
                 LogManager.logInfo("VPN", "Prepared mihomo core for ${selected.config.name}: ${coreFile.absolutePath}")
                 val cachedSource =

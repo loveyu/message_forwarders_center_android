@@ -119,14 +119,29 @@ class AppConfigSchemaTest {
     }
 
     @Test
-    fun `vpn input config passes validation and parsing`() {
+    fun `plugin config passes validation and parsing`() {
+        val yaml =
+            """
+            plugin:
+              udp2rawCore: https://example.com/libudp2raw_plugin.so
+              m2mCore: https://example.com/libmihomo_plugin.so
+              downloadProxy: socks5://127.0.0.1:1080
+            """.trimIndent()
+
+        val config = ConfigLoader.loadConfig(yaml)
+        assertEquals("https://example.com/libudp2raw_plugin.so", config.plugin.udp2rawCore)
+        assertEquals("https://example.com/libmihomo_plugin.so", config.plugin.m2mCore)
+        assertEquals("socks5://127.0.0.1:1080", config.plugin.downloadProxy)
+    }
+
+    @Test
+    fun `m2m input config passes validation and parsing`() {
         val yaml =
             """
             inputs:
-              vpn:
+              m2m:
                 - name: office_vpn
                   configUrl: https://example.com/mihomo.yaml
-                  pluginUrl: https://example.com/libmihomo_plugin.so
                   refreshInterval: "24h"
                   enabled: true
                   when: network=wifi
@@ -137,12 +152,11 @@ class AppConfigSchemaTest {
             """.trimIndent()
 
         val config = ConfigLoader.loadConfig(yaml)
-        assertEquals(1, config.inputs.vpn.size)
-        assertEquals("office_vpn", config.inputs.vpn[0].name)
-        assertEquals("https://example.com/mihomo.yaml", config.inputs.vpn[0].configUrl)
-        assertEquals("https://example.com/libmihomo_plugin.so", config.inputs.vpn[0].pluginUrl)
-        assertEquals(2, config.inputs.vpn[0].packages.size)
-        assertEquals(86_400_000L, config.inputs.vpn[0].refreshIntervalMs)
+        assertEquals(1, config.inputs.m2m.size)
+        assertEquals("office_vpn", config.inputs.m2m[0].name)
+        assertEquals("https://example.com/mihomo.yaml", config.inputs.m2m[0].configUrl)
+        assertEquals(2, config.inputs.m2m[0].packages.size)
+        assertEquals(86_400_000L, config.inputs.m2m[0].refreshIntervalMs)
     }
 
     @Test

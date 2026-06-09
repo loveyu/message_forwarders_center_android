@@ -3,6 +3,7 @@
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|:----:|--------|------|
 | `version` | string |  | `` | Config version identifier |
+| `plugin` | object |  |  | 插件下载配置 |
 | `scheduler` | object |  |  | Unified scheduler configuration |
 | `links` | list[object] |  |  | Link (connection pool) configurations |
 | `inputs` | object |  |  | Input source configurations |
@@ -12,6 +13,19 @@
 | `rules` | list[object] |  |  | Message forwarding rules |
 | `deadLetter` | object |  |  | Dead-letter handling for messages that exhausted all retries |
 | `quickSettings` | object |  |  | Quick-settings tile configuration |
+
+## `plugin`
+
+插件下载配置
+
+- **Type**: object
+
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `udp2rawCore` | string |  |  | udp2raw 核心插件下载地址 |
+| `m2mCore` | string |  |  | m2m 核心插件下载地址 |
+| `downloadProxy` | string |  |  | 下载代理（如 socks5://127.0.0.1:1080） |
 
 ## `scheduler`
 
@@ -84,7 +98,7 @@ Input source configurations
 |------|------|:----:|--------|------|
 | `http` | list[object] |  |  | HTTP server input sources |
 | `link` | list[object] |  |  | Link-based input sources (MQTT subscriber, WebSocket, TCP) |
-| `vpn` | list[object] |  |  | VPN inputs backed by a remote mihomo config and a mihomo JNI plugin |
+| `m2m` | list[object] |  |  | m2m inputs backed by a remote mihomo config and a mihomo JNI plugin |
 | `udp2raw` | list[object] |  |  | udp2raw inputs – plugin loaded dynamically from internal storage |
 
 ### `http`
@@ -143,9 +157,9 @@ Message replay configuration
 | `token` | string |  |  | Provider authentication token |
 | `applicationId` | int |  |  | Provider application ID filter |
 
-### `vpn`
+### `m2m`
 
-VPN inputs backed by a remote mihomo config and a mihomo JNI plugin
+m2m inputs backed by a remote mihomo config and a mihomo JNI plugin
 
 - **Type**: list[object]
 
@@ -158,7 +172,6 @@ VPN inputs backed by a remote mihomo config and a mihomo JNI plugin
 | `enabled` | boolean |  | `true` | Whether this VPN candidate is enabled by default |
 | `accessControlMode` | enum |  | `acceptAll` | App access control mode for this VPN profile `acceptAll` / `include` / `exclude` |
 | `packages` | list[string] |  |  | Package names for include/exclude access control |
-| `pluginUrl` | string |  |  | Optional HTTPS URL to download libmihomo_plugin.so if it is not already installed. The correct ABI variant must be hosted at this URL. Leave blank if you install the plugin manually via PluginManager. |
 | `when` | string |  |  | Enable condition |
 | `deny` | string |  |  | Disable condition |
 
@@ -175,7 +188,6 @@ udp2raw inputs – plugin loaded dynamically from internal storage
 | `dsn` | string |  |  | Connection DSN: udp2raw://[key@]remoteHost:remotePort?listen=localHost:localPort[&role=client\|server][&rawMode=faketcp\|udp\|icmp]. role: client (default) or server. rawMode: faketcp (default), udp, icmp. Domain names in remoteHost are resolved to IP at every start. If both dsn and args are set, args take precedence. |
 | `args` | list[string] |  |  | Raw udp2raw command arguments. Overrides dsn when both are set. Example: ['-c', '-l0.0.0.0:4096', '-r127.0.0.1:53', '--raw-mode', 'faketcp'] |
 | `enabled` | boolean |  | `true` | Whether this udp2raw input is enabled |
-| `pluginUrl` | string |  |  | Optional HTTPS URL to download libudp2raw_plugin.so if it is not already installed. The correct ABI variant must be hosted at this URL. Leave blank if you install the plugin manually via PluginManager. |
 | `when` | string |  |  | Enable condition |
 | `deny` | string |  |  | Disable condition |
 

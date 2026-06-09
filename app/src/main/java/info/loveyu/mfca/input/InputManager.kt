@@ -164,7 +164,7 @@ object InputManager {
             }
         }
 
-        registerUdp2RawInputs(config.inputs.udp2raw)
+        registerUdp2RawInputs(config.inputs.udp2raw, config.plugin.udp2rawCore)
 
         LogManager.logDebug("INPUT", "InputManager initialized: ${entries.size} inputs registered")
     }
@@ -405,14 +405,14 @@ object InputManager {
         }
     }
 
-    private fun registerUdp2RawInputs(configs: List<Udp2RawInputConfig>) {
+    private fun registerUdp2RawInputs(configs: List<Udp2RawInputConfig>, pluginUrl: String?) {
         val ctx = applicationContext
         if (configs.isNotEmpty() && ctx == null) {
             LogManager.logError("INPUT", "Skipping udp2raw inputs: application context not set")
             return
         }
         configs.forEach { udp2rawConfig ->
-            val input = Udp2RawInput(requireNotNull(ctx), udp2rawConfig)
+            val input = Udp2RawInput(requireNotNull(ctx), udp2rawConfig, pluginUrl)
             entries.add(
                 InputEntry(
                     input = input,

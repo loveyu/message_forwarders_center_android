@@ -1,7 +1,7 @@
 version: "1.0"
 
 inputs:
-  vpn:
+  m2m:
     - name: home_vpn_primary
       configUrl: https://example.com/vpn/home-primary.yaml
       refreshInterval: "24h"

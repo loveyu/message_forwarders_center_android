@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Science
+import androidx.compose.material.icons.filled.VpnLock
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -76,6 +77,12 @@ private fun TestHubScreen(onBack: () -> Unit) {
                 description = stringResource(R.string.test_m2m_description),
                 icon = Icons.Default.Language,
                 action = { ctx -> ctx.startActivity(Intent(ctx, M2mTestActivity::class.java)) },
+            ),
+            TestModule(
+                title = stringResource(R.string.test_m2m_vpn_title),
+                description = stringResource(R.string.test_m2m_vpn_description),
+                icon = Icons.Default.VpnLock,
+                action = { ctx -> ctx.startActivity(Intent(ctx, M2mVpnTestActivity::class.java)) },
             ),
         )
 

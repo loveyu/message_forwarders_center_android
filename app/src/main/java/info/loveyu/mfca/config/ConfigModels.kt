@@ -14,6 +14,7 @@ data class QuickSettingsConfig(
  */
 data class AppConfig(
     val version: String = "",
+    val plugin: PluginConfig = PluginConfig(),
     val scheduler: SchedulerConfig = SchedulerConfig(),
     val links: List<LinkConfig> = emptyList(),
     val inputs: InputsConfig = InputsConfig(),
@@ -23,6 +24,12 @@ data class AppConfig(
     val rules: List<RuleConfig> = emptyList(),
     val deadLetter: DeadLetterConfig = DeadLetterConfig(),
     val quickSettings: QuickSettingsConfig = QuickSettingsConfig()
+)
+
+data class PluginConfig(
+    val udp2rawCore: String = "",
+    val m2mCore: String = "",
+    val downloadProxy: String = "",
 )
 
 /**
@@ -102,7 +109,7 @@ data class InputsConfig(
     val http: List<HttpInputConfig> = emptyList(),
     val link: List<LinkInputConfig> = emptyList(),
     val udp2raw: List<Udp2RawInputConfig> = emptyList(),
-    val vpn: List<VpnInputConfig> = emptyList()
+    val m2m: List<VpnInputConfig> = emptyList()
 )
 
 data class HttpInputConfig(
@@ -176,8 +183,6 @@ data class VpnInputConfig(
     val enabled: Boolean = true,
     val accessControlMode: VpnAccessControlMode = VpnAccessControlMode.acceptAll,
     val packages: List<String> = emptyList(),
-    /** Optional URL to download libmihomo_plugin.so when not already installed. */
-    val pluginUrl: String? = null,
 )
 
 data class Udp2RawInputConfig(
@@ -187,8 +192,6 @@ data class Udp2RawInputConfig(
     val enabled: Boolean = true,
     val whenCondition: String? = null,
     val deny: String? = null,
-    /** Optional URL to download libudp2raw_plugin.so when not already installed. */
-    val pluginUrl: String? = null,
 )
 
 enum class VpnAccessControlMode {

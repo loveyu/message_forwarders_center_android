@@ -134,6 +134,24 @@
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
+        <activity
+            android:name=".test.M2mVpnTestActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FlowGate" />
+
+        <service
+            android:name=".test.M2mVpnTestService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="vpn-test" />
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
+
         <service
             android:name=".test.Udp2RawTestHelperService"
             android:exported="false"

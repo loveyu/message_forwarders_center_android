@@ -8,6 +8,14 @@ object AppConfigSchema {
             default = ""
         }
 
+        objectNode("plugin") {
+            description = "插件下载配置"
+
+            string("udp2rawCore") { description = "udp2raw 核心插件下载地址" }
+            string("m2mCore") { description = "m2m 核心插件下载地址" }
+            string("downloadProxy") { description = "下载代理（如 socks5://127.0.0.1:1080）" }
+        }
+
         objectNode("scheduler") {
             description = "Unified scheduler configuration"
 
@@ -156,8 +164,8 @@ object AppConfigSchema {
             }
 
             objectList(
-                "vpn",
-                block = { description = "VPN inputs backed by a remote mihomo config and a mihomo JNI plugin" },
+                "m2m",
+                block = { description = "m2m inputs backed by a remote mihomo config and a mihomo JNI plugin" },
             ) {
                 string("name") {
                     required()
@@ -181,11 +189,6 @@ object AppConfigSchema {
                 }
                 stringList("packages") {
                     description = "Package names for include/exclude access control"
-                }
-                string("pluginUrl") {
-                    description =
-                        "Optional HTTPS URL to download libmihomo_plugin.so if it is not already installed. " +
-                            "The correct ABI variant must be hosted at this URL. Leave blank if you install the plugin manually via PluginManager."
                 }
                 string("when") { description = "Enable condition" }
                 string("deny") { description = "Disable condition" }
@@ -215,12 +218,6 @@ object AppConfigSchema {
                 boolean("enabled") {
                     description = "Whether this udp2raw input is enabled"
                     default = true
-                }
-                string("pluginUrl") {
-                    description =
-                        "Optional HTTPS URL to download libudp2raw_plugin.so if it is not already installed. " +
-                            "The correct ABI variant must be hosted at this URL. " +
-                            "Leave blank if you install the plugin manually via PluginManager."
                 }
                 string("when") { description = "Enable condition" }
                 string("deny") { description = "Disable condition" }

@@ -24,6 +24,7 @@ object ConfigLoader {
 
             AppConfig(
                 version = data["version"] as? String ?: "",
+                plugin = parsePlugin(data["plugin"]),
                 scheduler = parseScheduler(data["scheduler"]),
                 links = parseLinks(data["links"]),
                 inputs = parseInputs(data["inputs"]),
@@ -47,6 +48,18 @@ object ConfigLoader {
             throw ConfigLoadException("Config file not found: $path")
         }
         return loadConfig(file.readText())
+    }
+
+    // ==================== Plugin Parsing ====================
+
+    private fun parsePlugin(plugin: Any?): PluginConfig {
+        if (plugin == null) return PluginConfig()
+        val map = plugin as Map<String, Any>
+        return PluginConfig(
+            udp2rawCore = map["udp2rawCore"] as? String ?: "",
+            m2mCore = map["m2mCore"] as? String ?: "",
+            downloadProxy = map["downloadProxy"] as? String ?: "",
+        )
     }
 
     // ==================== Scheduler Parsing ====================
@@ -115,7 +128,7 @@ object ConfigLoader {
             http = parseHttpInputs(map["http"]),
             link = parseLinkInputs(map["link"]),
             udp2raw = parseUdp2RawInputs(map["udp2raw"]),
-            vpn = parseVpnInputs(map["vpn"])
+            m2m = parseM2mInputs(map["m2m"])
         )
     }
 
@@ -167,10 +180,10 @@ object ConfigLoader {
         }
     }
 
-    private fun parseVpnInputs(vpn: Any?): List<VpnInputConfig> {
-        if (vpn == null) return emptyList()
+    private fun parseM2mInputs(m2m: Any?): List<VpnInputConfig> {
+        if (m2m == null) return emptyList()
 
-        return (vpn as List<*>).mapNotNull { input ->
+        return (m2m as List<*>).mapNotNull { input ->
             (input as? Map<String, Any>)?.let { map ->
                 VpnInputConfig(
                     name = map["name"] as? String ?: return@mapNotNull null,
@@ -184,7 +197,6 @@ object ConfigLoader {
                     enabled = map["enabled"] as? Boolean ?: true,
                     accessControlMode = parseVpnAccessControlMode(map["accessControlMode"] as? String),
                     packages = (map["packages"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
-                    pluginUrl = map["pluginUrl"] as? String,
                 )
             }
         }
@@ -202,7 +214,6 @@ object ConfigLoader {
                     enabled = map["enabled"] as? Boolean ?: true,
                     whenCondition = map["when"] as? String,
                     deny = map["deny"] as? String,
-                    pluginUrl = map["pluginUrl"] as? String,
                 )
             }
         }

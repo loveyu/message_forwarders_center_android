@@ -15,6 +15,7 @@ import java.util.concurrent.TimeUnit
 class Udp2RawInput(
     private val context: Context,
     private val config: Udp2RawInputConfig,
+    private val pluginUrl: String? = null,
 ) : InputSource {
     override val inputName: String = config.name
     override val inputType: InputType = InputType.udp2raw
@@ -131,7 +132,7 @@ class Udp2RawInput(
 
     /** Ensure the plugin .so exists in internal storage and return its path. */
     private fun ensurePlugin(): File {
-        val url = config.pluginUrl
+        val url = pluginUrl
         if (!url.isNullOrBlank() && PluginManager.isInstalledFrom(context, "udp2raw", url)) {
             return PluginManager.getInstalledPath(context, "udp2raw")
         }
@@ -145,7 +146,7 @@ class Udp2RawInput(
         }
         throw IllegalStateException(
             "libudp2raw_plugin.so is not installed. " +
-                "Install it via PluginManager or set pluginUrl in the udp2raw input config."
+                "Install it via PluginManager or set plugin.udp2rawCore in the config."
         )
     }
 

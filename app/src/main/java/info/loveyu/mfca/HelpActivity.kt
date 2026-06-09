@@ -329,8 +329,8 @@ private fun loadSampleFiles(context: Context): List<SampleFile> {
             description = "Call 资源调用 - 在 pipeline 中调用外部 HTTP 服务并注入结果"
         ),
         SampleFileInfo(
-            fileName = "20_vpn_input.yaml",
-            description = "VPN 输入 - 远程 mihomo 配置、核心地址、候选切换、应用过滤"
+            fileName = "20_m2m_input.yaml",
+            description = "m2m 输入 - 远程 mihomo 配置、核心地址、候选切换、应用过滤"
         ),
         SampleFileInfo(
             fileName = "99_full_demo.yaml",
