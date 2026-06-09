@@ -52,6 +52,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -72,10 +73,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import info.loveyu.mfca.R
 import info.loveyu.mfca.plugin.PluginManager
-import info.loveyu.mfca.plugin.Udp2RawPluginCore
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import java.io.File
-import java.io.RandomAccessFile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -155,8 +154,28 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
         )
     }
     val logListState = rememberLazyListState()
+    val stepListState = rememberLazyListState()
 
-    // Auto-scroll on new log entry
+    // Track active step for auto-scroll
+    val activeStepIndex by remember {
+        derivedStateOf {
+            val running = steps.indexOfFirst { it.status == StepStatus.RUNNING }
+            if (running >= 0) return@derivedStateOf running
+            val failed = steps.indexOfFirst { it.status == StepStatus.FAILED }
+            if (failed >= 0) return@derivedStateOf failed
+            val lastSuccess = steps.indexOfLast { it.status == StepStatus.SUCCESS }
+            if (lastSuccess >= 0) lastSuccess + 1 else 0
+        }
+    }
+
+    // Auto-scroll step list to active step
+    LaunchedEffect(activeStepIndex) {
+        val target =
+            (activeStepIndex - 1).coerceAtLeast(0).coerceAtMost(maxOf(0, steps.size - 3))
+        stepListState.animateScrollToItem(target)
+    }
+
+    // Auto-scroll log on new entry
     LaunchedEffect(logs.size) {
         if (logs.isNotEmpty()) logListState.animateScrollToItem(logs.size - 1)
     }
@@ -214,82 +233,53 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
                 enabled = !isRunning,
             )
 
-            // Raw mode selector
-            var modeExpanded by remember { mutableStateOf(false) }
-            ExposedDropdownMenuBox(
-                expanded = modeExpanded,
-                onExpandedChange = { modeExpanded = !modeExpanded && !isRunning },
-            ) {
-                OutlinedTextField(
-                    value = rawMode,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Raw Mode") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = modeExpanded) },
-                    modifier = Modifier.fillMaxWidth().menuAnchor(),
-                    enabled = !isRunning,
-                )
-                ExposedDropdownMenu(
-                    expanded = modeExpanded,
-                    onDismissRequest = { modeExpanded = false },
-                ) {
-                    Udp2RawTestActivity.RAW_MODES.forEach { mode ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    mode + when (mode) {
-                                        "faketcp" -> "  (需 root)"
-                                        "icmp" -> "  (需 root)"
-                                        "udp" -> "  (需 iptables/CAP_NET_RAW)"
-                                        else -> ""
-                                    }
-                                )
-                            },
-                            onClick = {
-                                rawMode = mode
-                                modeExpanded = false
-                            },
-                        )
-                    }
-                }
-            }
-
-            // Buttons
+            // Raw mode selector + action button row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Button(
-                    onClick = {
-                        prefs.edit()
-                            .putString(Udp2RawTestActivity.PREF_PLUGIN_URL, pluginUrl)
-                            .putString(Udp2RawTestActivity.PREF_PROXY_URL, proxyUrl)
-                            .putString(Udp2RawTestActivity.PREF_RAW_MODE, rawMode)
-                            .apply()
-                        resetAll()
-                        isRunning = true
-                        testJob = scope.launch {
-                            try {
-                                runTest(
-                                    context = context,
-                                    pluginUrl = pluginUrl,
-                                    proxyUrl = proxyUrl.ifBlank { null },
-                                    rawMode = rawMode,
-                                    addLog = { addLog(it) },
-                                    setStep = { i, s -> setStep(i, s) },
-                                )
-                            } catch (_: CancellationException) {
-                                addLog("⚠️ 测试已取消")
-                            } finally {
-                                isRunning = false
-                                testJob = null
-                            }
-                        }
-                    },
-                    enabled = !isRunning && pluginUrl.isNotBlank(),
+                var modeExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = modeExpanded,
+                    onExpandedChange = { modeExpanded = !modeExpanded && !isRunning },
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("开始测试")
+                    OutlinedTextField(
+                        value = rawMode,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Raw Mode") },
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = modeExpanded)
+                        },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        enabled = !isRunning,
+                    )
+                    ExposedDropdownMenu(
+                        expanded = modeExpanded,
+                        onDismissRequest = { modeExpanded = false },
+                    ) {
+                        Udp2RawTestActivity.RAW_MODES.forEach { mode ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        mode +
+                                            when (mode) {
+                                                "faketcp" -> "  (需 root)"
+                                                "icmp" -> "  (需 root)"
+                                                "udp" -> "  (需 iptables/CAP_NET_RAW)"
+                                                else -> ""
+                                            }
+                                    )
+                                },
+                                onClick = {
+                                    rawMode = mode
+                                    modeExpanded = false
+                                },
+                            )
+                        }
+                    }
                 }
 
                 if (isRunning) {
@@ -303,6 +293,44 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
                     ) {
                         Text("取消测试")
                     }
+                } else {
+                    Button(
+                        onClick = {
+                            prefs.edit()
+                                .putString(Udp2RawTestActivity.PREF_PLUGIN_URL, pluginUrl)
+                                .putString(Udp2RawTestActivity.PREF_PROXY_URL, proxyUrl)
+                                .putString(Udp2RawTestActivity.PREF_RAW_MODE, rawMode)
+                                .apply()
+                            resetAll()
+                            isRunning = true
+                            testJob = scope.launch {
+                                try {
+                                    runTest(
+                                        context = context,
+                                        pluginUrl = pluginUrl,
+                                        proxyUrl = proxyUrl.ifBlank { null },
+                                        rawMode = rawMode,
+                                        addLog = { addLog(it) },
+                                        setStep = { i, s -> setStep(i, s) },
+                                    )
+                                } catch (_: CancellationException) {
+                                    addLog("⚠️ 测试已取消")
+                                } finally {
+                                    steps.forEachIndexed { i, step ->
+                                        if (step.status == StepStatus.RUNNING) {
+                                            steps[i] = step.copy(status = StepStatus.IDLE)
+                                        }
+                                    }
+                                    isRunning = false
+                                    testJob = null
+                                }
+                            }
+                        },
+                        enabled = pluginUrl.isNotBlank(),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("开始测试")
+                    }
                 }
             }
 
@@ -312,9 +340,14 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().height(6.dp),
             )
 
-            // Step list
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                steps.forEach { step -> StepRow(step) }
+            // Step list (max 3 visible, auto-scroll to active)
+            LazyColumn(
+                state = stepListState,
+                modifier = Modifier.fillMaxWidth().height(88.dp),
+                userScrollEnabled = false,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                items(steps) { step -> StepRow(step) }
             }
 
             // Log output
@@ -403,38 +436,6 @@ private fun StepRow(step: TestStep) {
 
 // ── Test logic (suspend) ──────────────────────────────────────────────────────
 
-private fun startLogTailer(logFile: File, prefix: String, addLog: (String) -> Unit): Thread {
-    return Thread({
-        try {
-            var position = 0L
-            while (!Thread.currentThread().isInterrupted()) {
-                if (logFile.exists()) {
-                    val len = logFile.length()
-                    if (len > position) {
-                        try {
-                            RandomAccessFile(logFile, "r").use { raf ->
-                                raf.seek(position)
-                                val bytes = ByteArray((len - position).toInt())
-                                raf.readFully(bytes)
-                                position = len
-                                String(bytes)
-                                    .lines()
-                                    .forEach { line ->
-                                        if (line.isNotBlank()) addLog("$prefix$line")
-                                    }
-                            }
-                        } catch (_: Exception) {}
-                    }
-                }
-                Thread.sleep(300)
-            }
-        } catch (_: InterruptedException) {}
-    }, "udp2raw-${prefix.trim('【', '】')}-log-tailer").apply {
-        isDaemon = true
-        start()
-    }
-}
-
 private suspend fun runTest(
     context: Context,
     pluginUrl: String,
@@ -443,10 +444,12 @@ private suspend fun runTest(
     addLog: (String) -> Unit,
     setStep: (Int, StepStatus) -> Unit,
 ) {
-    val clientPlugin = Udp2RawPluginCore()
-    var serviceConn: ServiceConnection? = null
-    var serviceMessenger: Messenger? = null
-    var clientLogTailer: Thread? = null
+    var serverConn: ServiceConnection? = null
+    var serverMessenger: Messenger? = null
+    var clientServiceConn: ServiceConnection? = null
+    var clientServiceMessenger: Messenger? = null
+    var serverBound = false
+    var clientBound = false
     var cleanedUp = false
 
     // Prepare log directory (use external storage for easy access)
@@ -601,14 +604,15 @@ private suspend fun runTest(
                     }
                 }
             }
-        serviceConn = conn
+        serverConn = conn
 
         withContext(Dispatchers.Main) {
             val intent = Intent(context, Udp2RawTestHelperService::class.java)
             context.bindService(intent, conn, Context.BIND_AUTO_CREATE)
         }
+        serverBound = true
 
-        serviceMessenger =
+        serverMessenger =
             try {
                 withTimeout(8_000) { bindDeferred.await() }
             } catch (e: CancellationException) {
@@ -641,7 +645,7 @@ private suspend fun runTest(
                         putString("raw_mode", rawMode)
                     }
             }
-        serviceMessenger.send(startMsg)
+        serverMessenger.send(startMsg)
 
         try {
             withTimeout(30_000) { serverReadyDeferred.await() }
@@ -662,41 +666,92 @@ private suspend fun runTest(
         }
         setStep(3, StepStatus.SUCCESS)
 
-        // ── Step 4: Start udp2raw client in main process ───────────────────────
+        // ── Step 4: Start udp2raw client in separate process ──────────────────
         setStep(4, StepStatus.RUNNING)
-        try {
-            withContext(Dispatchers.IO) {
-                clientPlugin.load(soPath)
-                val ver = clientPlugin.version()
-                addLog("【客户端】插件加载成功, 版本: ${ver ?: "unknown"}")
-                addLog("【客户端】日志文件: ${clientLogFile.absolutePath}")
-                clientLogFile.parentFile?.mkdirs()
-                if (!clientLogFile.exists()) clientLogFile.createNewFile()
-                val clientArgs =
-                    listOf(
-                        "-c",
-                        "-l127.0.0.1:${Udp2RawTestActivity.PORT_CLIENT_UDP}",
-                        "-r127.0.0.1:${Udp2RawTestActivity.PORT_SERVER_RAW}",
-                        "--raw-mode",
-                        rawMode,
-                        "-k",
-                        Udp2RawTestActivity.TUNNEL_KEY,
-                    )
-                addLog("【客户端】参数: ${clientArgs.joinToString(" ")}")
-                val ret = clientPlugin.start(clientArgs, logFile = clientLogFile.absolutePath)
-                if (ret != 0) error("start() 返回 $ret")
-                clientLogTailer = startLogTailer(clientLogFile, "【客户端】", addLog)
-                Thread.sleep(2500)
-                if (!clientPlugin.isRunning()) {
-                    dumpLogFile(clientLogFile, "客户端", addLog)
-                    error("客户端启动后立即退出")
+        val clientReadyDeferred = CompletableDeferred<Unit>()
+
+        val clientIncomingHandler =
+            object : Handler(Looper.getMainLooper()) {
+                override fun handleMessage(msg: Message) {
+                    when (msg.what) {
+                        Udp2RawClientTestService.MSG_LOG ->
+                            addLog(msg.data.getString("text", ""))
+                        Udp2RawClientTestService.MSG_CLIENT_READY ->
+                            clientReadyDeferred.complete(Unit)
+                        Udp2RawClientTestService.MSG_ERROR -> {
+                            val err = msg.data.getString("error", "未知错误")
+                            if (!clientReadyDeferred.isCompleted) {
+                                clientReadyDeferred.completeExceptionally(Exception(err))
+                            }
+                        }
+                    }
                 }
-                addLog("【客户端】udp2raw 客户端运行中")
             }
+        val clientActivityMessenger = Messenger(clientIncomingHandler)
+
+        val clientBindDeferred = CompletableDeferred<Messenger>()
+        val cConn =
+            object : ServiceConnection {
+                override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+                    clientBindDeferred.complete(Messenger(binder))
+                }
+
+                override fun onServiceDisconnected(name: ComponentName) {
+                    if (!clientReadyDeferred.isCompleted) {
+                        clientReadyDeferred.completeExceptionally(
+                            Exception("客户端服务进程异常退出")
+                        )
+                    }
+                }
+            }
+        clientServiceConn = cConn
+
+        withContext(Dispatchers.Main) {
+            val intent = Intent(context, Udp2RawClientTestService::class.java)
+            context.bindService(intent, cConn, Context.BIND_AUTO_CREATE)
+        }
+        clientBound = true
+
+        clientServiceMessenger =
+            try {
+                withTimeout(8_000) { clientBindDeferred.await() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                addLog("❌ 绑定客户端服务超时")
+                setStep(4, StepStatus.FAILED)
+                return
+            }
+
+        clientLogFile.parentFile?.mkdirs()
+        if (!clientLogFile.exists()) clientLogFile.createNewFile()
+        val clientStartMsg =
+            Message.obtain(null, Udp2RawClientTestService.MSG_START).apply {
+                replyTo = clientActivityMessenger
+                data =
+                    Bundle().apply {
+                        putString("plugin_path", soPath)
+                        putString("log_file", clientLogFile.absolutePath)
+                        putString("raw_mode", rawMode)
+                        putInt("client_port", Udp2RawTestActivity.PORT_CLIENT_UDP)
+                        putInt("server_port", Udp2RawTestActivity.PORT_SERVER_RAW)
+                        putString("tunnel_key", Udp2RawTestActivity.TUNNEL_KEY)
+                    }
+            }
+        clientServiceMessenger.send(clientStartMsg)
+
+        try {
+            withTimeout(30_000) { clientReadyDeferred.await() }
+        } catch (e: TimeoutCancellationException) {
+            addLog("❌ 客户端启动超时")
+            dumpLogFile(clientLogFile, "客户端", addLog)
+            captureNativeCrashLogs(addLog)
+            setStep(4, StepStatus.FAILED)
+            return
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Throwable) {
-            addLog("❌ 客户端启动失败: ${e.javaClass.simpleName}: ${e.message}")
+        } catch (e: Exception) {
+            addLog("❌ 客户端错误: ${e.message}")
             dumpLogFile(clientLogFile, "客户端", addLog)
             captureNativeCrashLogs(addLog)
             setStep(4, StepStatus.FAILED)
@@ -769,12 +824,20 @@ private suspend fun runTest(
 
         // ── Step 7: Cleanup ────────────────────────────────────────────────────
         setStep(7, StepStatus.RUNNING)
-        doCleanup(serviceMessenger, serviceConn, context, clientPlugin, clientLogTailer, addLog)
+        doCleanup(
+            serverMessenger, serverConn,
+            clientServiceMessenger, clientServiceConn,
+            context, serverBound, clientBound, addLog
+        )
         cleanedUp = true
         setStep(7, StepStatus.SUCCESS)
     } finally {
         if (!cleanedUp) {
-            doCleanup(serviceMessenger, serviceConn, context, clientPlugin, clientLogTailer)
+            doCleanup(
+                serverMessenger, serverConn,
+                clientServiceMessenger, clientServiceConn,
+                context, serverBound, clientBound
+            )
         }
     }
 }
@@ -798,24 +861,39 @@ private fun dumpLogFile(logFile: File, tag: String, addLog: (String) -> Unit) {
 }
 
 private fun doCleanup(
-    serviceMessenger: Messenger?,
-    serviceConn: ServiceConnection?,
+    serverMessenger: Messenger?,
+    serverConn: ServiceConnection?,
+    clientMessenger: Messenger?,
+    clientConn: ServiceConnection?,
     context: Context,
-    clientPlugin: Udp2RawPluginCore,
-    clientLogTailer: Thread?,
+    serverBound: Boolean,
+    clientBound: Boolean,
     addLog: ((String) -> Unit)? = null,
 ) {
-    clientLogTailer?.interrupt()
+    // Stop client service
     try {
-        clientPlugin.stop()
-        addLog?.invoke("【客户端】udp2raw 已停止")
+        clientMessenger?.send(Message.obtain(null, Udp2RawClientTestService.MSG_STOP))
     } catch (_: Exception) {}
+    if (clientBound) {
+        try {
+            clientConn?.let { context.unbindService(it) }
+        } catch (_: Exception) {}
+        try {
+            context.stopService(Intent(context, Udp2RawClientTestService::class.java))
+        } catch (_: Exception) {}
+    }
+    // Stop server service
     try {
-        serviceMessenger?.send(Message.obtain(null, Udp2RawTestHelperService.MSG_STOP))
+        serverMessenger?.send(Message.obtain(null, Udp2RawTestHelperService.MSG_STOP))
     } catch (_: Exception) {}
-    try {
-        serviceConn?.let { context.unbindService(it) }
-    } catch (_: Exception) {}
+    if (serverBound) {
+        try {
+            serverConn?.let { context.unbindService(it) }
+        } catch (_: Exception) {}
+        try {
+            context.stopService(Intent(context, Udp2RawTestHelperService::class.java))
+        } catch (_: Exception) {}
+    }
 }
 
 private fun captureNativeCrashLogs(addLog: (String) -> Unit) {

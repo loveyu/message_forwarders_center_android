@@ -135,6 +135,11 @@
             android:process=":udp2rawtest" />
 
         <service
+            android:name=".test.Udp2RawClientTestService"
+            android:exported="false"
+            android:process=":udp2rawclienttest" />
+
+        <service
             android:name=".service.ForwardService"
             android:exported="false"
             android:foregroundServiceType="remoteMessaging" />
