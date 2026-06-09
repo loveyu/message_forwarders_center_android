@@ -184,11 +184,36 @@ private fun prettifyJson(content: String): String {
 private const val HLJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0"
 
 private fun htmlToPreviewHtml(html: String, isDark: Boolean): String {
-    val shellBg = if (isDark) "#0d1117" else "#f6f8fa"
-    val frameBg = "#ffffff"
-    val borderColor = if (isDark) "#30363d" else "#d0d7de"
-    val shadowColor = if (isDark) "rgba(1, 4, 9, 0.45)" else "rgba(31, 35, 40, 0.08)"
-    val escapedHtml = html
+    val bgColor = if (isDark) "#1A1C1E" else "#FDFCFF"
+    val textColor = if (isDark) "#E2E2E6" else "#1A1C1E"
+    val colorScheme = if (isDark) "dark" else "light"
+
+    val themeStyle = """
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="color-scheme" content="$colorScheme">
+        <style>
+            html, body {
+                margin: 0;
+                padding: 0;
+                background-color: $bgColor;
+                color: $textColor;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+    """.trimIndent()
+
+    val injected: String
+    val headRegex = Regex("<head\\b[^>]*>", RegexOption.IGNORE_CASE)
+    val headMatch = headRegex.find(html)
+    if (headMatch != null) {
+        injected = html.replaceRange(headMatch.range.last + 1, headMatch.range.last + 1, themeStyle)
+    } else {
+        injected = themeStyle + html
+    }
+
+    val escapedInner = injected
         .replace("&", "&amp;")
         .replace("\"", "&quot;")
         .replace("<", "&lt;")
@@ -199,39 +224,26 @@ private fun htmlToPreviewHtml(html: String, isDark: Boolean): String {
         <html>
         <head>
             <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <meta name="color-scheme" content="${if (isDark) "dark" else "light"}">
+            <meta name="color-scheme" content="$colorScheme">
             <style>
                 html, body {
                     margin: 0;
                     padding: 0;
-                    min-height: 100%;
-                    background: $shellBg;
-                }
-                body {
-                    padding: 12px;
-                    box-sizing: border-box;
-                }
-                .preview-frame {
-                    overflow: hidden;
-                    border: 1px solid $borderColor;
-                    border-radius: 12px;
-                    background: $frameBg;
-                    box-shadow: 0 12px 32px $shadowColor;
+                    height: 100%;
+                    background-color: $bgColor;
                 }
                 iframe {
                     display: block;
                     width: 100%;
-                    min-height: calc(100vh - 26px);
+                    height: 100%;
                     border: 0;
-                    background: $frameBg;
+                    background-color: $bgColor;
                 }
             </style>
         </head>
         <body>
-            <div class="preview-frame">
-                <iframe srcdoc="$escapedHtml" sandbox="allow-same-origin"></iframe>
-            </div>
+            <iframe srcdoc="$escapedInner" sandbox=""
+                    style="color-scheme: $colorScheme"></iframe>
         </body>
         </html>
     """.trimIndent()

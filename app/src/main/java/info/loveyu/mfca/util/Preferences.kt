@@ -49,6 +49,10 @@ class Preferences(context: Context) {
         get() = prefs.getInt("max_log_lines", 1000)
         set(value) = prefs.edit().putInt("max_log_lines", value).apply()
 
+    var themeMode: String
+        get() = prefs.getString("theme_mode", "auto") ?: "auto"
+        set(value) = prefs.edit().putString("theme_mode", value).apply()
+
     var showTabLabel: Boolean
         get() = prefs.getBoolean("show_tab_label", true)
         set(value) = prefs.edit().putBoolean("show_tab_label", value).apply()

@@ -3,5 +3,6 @@
     <style name="Theme.FlowGate" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/window_background_light</item>
     </style>
 </resources>

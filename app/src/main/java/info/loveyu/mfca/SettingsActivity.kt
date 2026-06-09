@@ -62,12 +62,14 @@ import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.ui.ComponentStatus
 import info.loveyu.mfca.ui.theme.MfcaTheme
+import info.loveyu.mfca.ui.theme.ThemeModeManager
 import info.loveyu.mfca.util.AppStatusManager
 import info.loveyu.mfca.util.ConfigBackupManager
 import info.loveyu.mfca.util.IconCacheManager
 import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
+import androidx.compose.material3.FilterChip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -120,6 +122,7 @@ fun SettingsScreenContent(
     var showExportSuccess by remember { mutableStateOf<String?>(null) }
     var autoStart by remember { mutableStateOf(false) }
     var showTabLabel by remember { mutableStateOf(preferences.showTabLabel) }
+    var themeMode by remember { mutableStateOf(ThemeModeManager.themeMode.value) }
 
     // Icon cache state
     var iconCacheCount by remember { mutableIntStateOf(0) }
@@ -398,6 +401,34 @@ fun SettingsScreenContent(
                                 preferences.showTabLabel = enabled
                             }
                         )
+                    }
+                }
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text("主题样式")
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            val themeOptions = listOf("auto" to "自动", "light" to "亮色", "dark" to "暗色")
+                            themeOptions.forEach { (value, label) ->
+                                FilterChip(
+                                    selected = themeMode == value,
+                                    onClick = {
+                                        themeMode = value
+                                        ThemeModeManager.setThemeMode(value, context)
+                                    },
+                                    label = { Text(label) }
+                                )
+                            }
+                        }
                     }
                 }
             }

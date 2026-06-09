@@ -5,6 +5,7 @@ import android.app.Application
 import android.os.Process
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.service.ForwardService
+import info.loveyu.mfca.ui.theme.ThemeModeManager
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
 
@@ -16,8 +17,13 @@ class Application : Application() {
         super.onCreate()
         val preferences = Preferences(this)
         LogManager.init(this, preferences)
+        ThemeModeManager.initialize(this)
         installCrashLogging()
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) {
+                ThemeModeManager.applyWindowBackground(activity)
+            }
+
             override fun onActivityResumed(activity: Activity) {
                 if (ForwardService.isServiceAlive()) {
                     LinkManager.refreshNetworkState()
@@ -27,7 +33,6 @@ class Application : Application() {
                 lastActivityResumeTime = System.currentTimeMillis()
             }
 
-            override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) {}
             override fun onActivityStarted(activity: Activity) {}
             override fun onActivityPaused(activity: Activity) {}
             override fun onActivityStopped(activity: Activity) {}
