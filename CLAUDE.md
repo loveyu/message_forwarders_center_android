@@ -28,6 +28,8 @@ FlowGate - Android 消息转发中心，基于 Android Foreground Service 的常
 3. `./gradlew testDebugUnitTest` — 运行单元测试，确保全部通过
 4. `./gradlew generateConfigDoc` — 更新配置 Schema 文档（修改 Schema 后需执行）
 
+**每次修改完成后必须确保本地编译通过**：运行 `./gradlew assembleDebug` 验证，编译失败则不可结束任务。
+
 禁止提交存在 ktlint/ktfmt 违规的代码，或单元测试失败的代码。CI 会拒绝违规的 PR。
 
 详细规范见 `.editorconfig` 和 `app/build.gradle.kts` 中的 spotless 配置。

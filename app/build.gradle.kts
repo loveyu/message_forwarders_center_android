@@ -144,7 +144,7 @@ val buildVpnBridgeBinaries =
                         append("GOARM=${target.goArm} ")
                     }
                     appendLine(
-                        "'${goBinary.get().absolutePath}' build -trimpath -o '${outputRoot.resolve("${target.abi}/libvpnbridge.so").absolutePath}' .",
+                        "'${goBinary.get().absolutePath}' build -trimpath -ldflags='-extldflags=-Wl,-z,max-page-size=16384' -o '${outputRoot.resolve("${target.abi}/libvpnbridge.so").absolutePath}' .",
                     )
                 }
             }
