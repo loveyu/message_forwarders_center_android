@@ -31,11 +31,42 @@ class MihomoPluginCore : PluginCore {
 
     override fun isRunning(): Boolean = loaded && nativeIsRunning()
 
+    /**
+     * Enable or disable socket protection via VpnService.protect().
+     * Must be called before [start] when running inside a VPN context.
+     * When enabled, the native side calls [notifyMarkSocket] on every outbound socket.
+     */
+    fun setSocketProtector(enabled: Boolean) {
+        if (loaded) {
+            nativeSetSocketProtector(enabled)
+        }
+    }
+
     private external fun nativeGetVersion(): String
-
     private external fun nativeStart(args: Array<String>, logFile: String?): Int
-
     private external fun nativeStop()
-
     private external fun nativeIsRunning(): Boolean
+    private external fun nativeSetSocketProtector(enabled: Boolean)
+
+    /**
+     * Callback invoked from native code on an arbitrary goroutine thread
+     * to protect a socket file descriptor via VpnService.protect().
+     */
+    companion object {
+        @Volatile
+        var socketProtector: SocketProtector? = null
+
+        @JvmStatic
+        fun notifyMarkSocket(fd: Int) {
+            socketProtector?.protect(fd)
+        }
+    }
+
+    /**
+     * Interface for protecting socket file descriptors.
+     * Typically backed by [android.net.VpnService.protect].
+     */
+    fun interface SocketProtector {
+        fun protect(fd: Int): Boolean
+    }
 }

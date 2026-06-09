@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
+import info.loveyu.mfca.plugin.MihomoPluginCore
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.LogManager
 import kotlinx.coroutines.CoroutineScope
@@ -137,6 +138,9 @@ class MfcaVpnService : VpnService() {
         VpnManager.updateRuntimeStatus(VpnRuntimeStatus.starting, "Starting ${artifacts.candidate.name}")
         updateNotification(VpnManager.state.value.statusMessage)
 
+        // Enable socket protection so mihomo outbound connections bypass VPN tunnel
+        MihomoPluginCore.socketProtector = MihomoPluginCore.SocketProtector { fd -> protect(fd) }
+
         val runningCore = MihomoProcessManager.start(
             context = this,
             artifacts = artifacts,
@@ -206,6 +210,7 @@ class MfcaVpnService : VpnService() {
     private fun stopRuntime(disableVpn: Boolean, stopService: Boolean) {
         cancelPendingRetry("runtime stopping")
         resetRuntimeSession()
+        MihomoPluginCore.socketProtector = null
         val bridgeStopped = VpnBridgeProcessManager.stop()
         closeTunInterface()
         val stopped = MihomoProcessManager.stop() ?: bridgeStopped
@@ -234,6 +239,7 @@ class MfcaVpnService : VpnService() {
         val retryReason = nextRetryReason(candidateName, sessionId)
         LogManager.logError("VPN", message)
         resetRuntimeSession()
+        MihomoPluginCore.socketProtector = null
         VpnBridgeProcessManager.stop()
         closeTunInterface()
         MihomoProcessManager.stop()

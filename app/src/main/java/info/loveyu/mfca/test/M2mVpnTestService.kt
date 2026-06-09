@@ -15,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
 import info.loveyu.mfca.config.VpnInputConfig
+import info.loveyu.mfca.plugin.MihomoPluginCore
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.vpn.MfcaVpnService
@@ -94,6 +95,7 @@ class M2mVpnTestService : VpnService() {
 
         // Start mihomo core
         emit(Event.Log("正在启动 m2m 核心代理…"))
+        MihomoPluginCore.socketProtector = MihomoPluginCore.SocketProtector { fd -> protect(fd) }
         val runningCore = MihomoProcessManager.start(this, artifacts) { _, tail ->
             LogManager.logError("M2mVpnTest", "Core exited: $tail")
         }.getOrElse { error ->
@@ -153,6 +155,7 @@ class M2mVpnTestService : VpnService() {
     }
 
     private fun stopVpn() {
+        MihomoPluginCore.socketProtector = null
         VpnBridgeProcessManager.stop()
         closeTun()
         MihomoProcessManager.stop()

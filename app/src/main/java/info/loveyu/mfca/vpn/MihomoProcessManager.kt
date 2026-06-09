@@ -56,6 +56,10 @@ object MihomoProcessManager {
 
             val core = MihomoPluginCore()
             core.load(artifacts.coreFilePath)
+            // Enable socket protector if a VpnService protector is registered
+            if (MihomoPluginCore.socketProtector != null) {
+                core.setSocketProtector(true)
+            }
             val ret = core.start(buildArgs(workDir = workDir, profileFile = File(artifacts.profileFilePath)), stdoutLog.absolutePath)
             if (ret != 0) {
                 throw IllegalStateException("Mihomo plugin start failed (code $ret): ${readFailureOutput(stdoutLog, stderrLog)}")
