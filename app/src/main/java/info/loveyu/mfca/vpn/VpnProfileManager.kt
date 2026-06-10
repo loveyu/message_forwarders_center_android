@@ -1,6 +1,7 @@
 package info.loveyu.mfca.vpn
 
 import android.content.Context
+import info.loveyu.mfca.util.LogManager
 import org.snakeyaml.engine.v2.api.Dump
 import org.snakeyaml.engine.v2.api.DumpSettings
 import org.snakeyaml.engine.v2.api.Load
@@ -24,6 +25,7 @@ object VpnProfileManager {
             val targetFile = File(targetDir, "$candidateName.runtime.yaml")
             targetDir.mkdirs()
             targetFile.writeText(buildRuntimeProfileContent(sourceContent, localProxyPort, ruleMode, logLevel))
+            LogManager.logDebug("VPN", "Runtime profile written to ${targetFile.absolutePath}:\n${targetFile.readText().take(2000)}")
             targetFile
         }
     }

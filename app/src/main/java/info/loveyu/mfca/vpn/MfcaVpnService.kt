@@ -137,9 +137,11 @@ class MfcaVpnService : VpnService() {
 
         VpnManager.updateRuntimeStatus(VpnRuntimeStatus.starting, "Starting ${artifacts.candidate.name}")
         updateNotification(VpnManager.state.value.statusMessage)
+        LogManager.logDebug("VPN", "Artifacts: port=${artifacts.localProxyPort}, udpRelay=${artifacts.udpRelay}, dnsHijack=${artifacts.dnsHijack}, core=${artifacts.coreFilePath}, profile=${artifacts.profileFilePath}")
 
         // Enable socket protection so mihomo outbound connections bypass VPN tunnel
         MihomoPluginCore.socketProtector = MihomoPluginCore.SocketProtector { fd -> protect(fd) }
+        LogManager.logDebug("VPN", "Socket protector registered")
 
         val runningCore = MihomoProcessManager.start(
             context = this,
@@ -161,6 +163,7 @@ class MfcaVpnService : VpnService() {
             )
             return
         }
+        LogManager.logDebug("VPN", "Mihomo core started: ${runningCore.candidateName}")
 
         val tun = establishTun(selected) ?: run {
             MihomoProcessManager.stop()
@@ -173,6 +176,7 @@ class MfcaVpnService : VpnService() {
         }
         tunInterface = tun
         LogManager.logInfo("VPN", "Established TUN for ${artifacts.candidate.name}")
+        LogManager.logDebug("VPN", "TUN fd=${tun.fd}, mtu=$TUN_MTU, gateway=$TUN_GATEWAY/$TUN_SUBNET_PREFIX, dns=$TUN_DNS_PRIMARY/$TUN_DNS_SECONDARY")
 
         val runningBridge = VpnBridgeProcessManager.start(
             context = this,
@@ -198,6 +202,7 @@ class MfcaVpnService : VpnService() {
             )
             return
         }
+        LogManager.logDebug("VPN", "VPN bridge started: ${runningBridge.candidateName}")
 
         cancelPendingRetry("runtime started")
         retryAttempts = 0

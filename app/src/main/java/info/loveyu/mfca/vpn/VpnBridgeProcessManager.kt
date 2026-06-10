@@ -57,8 +57,7 @@ object VpnBridgeProcessManager {
                 "Starting VPN bridge for ${artifacts.candidate.name}: binary=${bridgeBinary.absolutePath}, workDir=${workDir.absolutePath}, socks=127.0.0.1:${artifacts.localProxyPort}",
             )
 
-            val process = ProcessBuilder(
-                buildList {
+            val command = buildList {
                     add(bridgeBinary.absolutePath)
                     add("--control-socket")
                     add(controlName)
@@ -75,8 +74,9 @@ object VpnBridgeProcessManager {
                     if (!artifacts.udpRelay) {
                         add("--udp-relay=false")
                     }
-                },
-            )
+                }
+            LogManager.logDebug("VPN", "Bridge command: ${command.joinToString(" ")}")
+            val process = ProcessBuilder(command)
                 .directory(workDir)
                 .redirectOutput(ProcessBuilder.Redirect.appendTo(stdoutLog))
                 .redirectError(ProcessBuilder.Redirect.appendTo(stderrLog))

@@ -204,6 +204,7 @@ object VpnManager {
                 val effectiveLogLevel = store?.getLogLevel(selected.config.name)
                 val effectiveUdpRelay = store?.getUdpRelay(selected.config.name) ?: true
                 val effectiveDnsHijack = store?.getDnsHijack(selected.config.name) ?: true
+                LogManager.logDebug("VPN", "Effective settings for ${selected.config.name}: port=$effectivePort, ruleMode=$effectiveRuleMode, logLevel=$effectiveLogLevel, udpRelay=$effectiveUdpRelay, dnsHijack=$effectiveDnsHijack")
                 VpnProfileManager.buildRuntimeProfile(
                     context,
                     selected.config.name,

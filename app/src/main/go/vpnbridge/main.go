@@ -112,6 +112,8 @@ func main() {
 		udpSession: make(map[string]*udpAssociation),
 	}
 
+	log.Printf("bridge started: socks=%s gateway=%s portal=%s dns=%s udp-relay=%v", socksAddr, gatewayCIDR, portalAddr, dnsAddr, udpRelay)
+
 	go b.runTCP(ctx)
 	go b.runUDP(ctx)
 
@@ -196,6 +198,7 @@ func (b *bridge) runUDP(ctx context.Context) {
 			dnsConnLock.Lock()
 			entry, exists := dnsConns[sourceAddr.String()]
 			if !exists {
+				log.Printf("dns: new connection %s -> %s via %s", sourceAddr, targetAddr, b.dnsAddr)
 				resolvedAddr, resolveErr := net.ResolveUDPAddr("udp", b.dnsAddr)
 				if resolveErr != nil {
 					dnsConnLock.Unlock()
@@ -227,6 +230,7 @@ func (b *bridge) runUDP(ctx context.Context) {
 
 		// Drop non-DNS UDP when relay is disabled
 		if !b.udpRelay {
+			log.Printf("udp: dropped %s -> %s (relay disabled)", sourceAddr, targetAddr)
 			continue
 		}
 
@@ -253,8 +257,10 @@ func dnsResponseReader(entry *dnsConnEntry, dnsConns *map[string]*dnsConnEntry, 
 	entry.conn.Close()
 
 	if err != nil {
+		log.Printf("dns: read failed for %s: %v", entry.source, err)
 		return
 	}
+	log.Printf("dns: response %d bytes for %s", n, entry.source)
 	if _, writeErr := udpWriter.WriteTo(buf[:n], entry.target, entry.source); writeErr != nil {
 		log.Printf("dns response write failed: %v", writeErr)
 	}
