@@ -146,3 +146,7 @@ protocol://[username:password@]host:port[?param1=value1&param2=value2...]
 
 列表位于：`app/src/main/java/info/loveyu/mfca/HelpActivity.kt` → `private fun loadSampleFiles()` → `sampleList`
 
+## VPN 模块
+
+VPN 模块基于 mihomo (Clash.Meta) 实现 Android 透明代理，详细架构文档见 [`docs/vpn-architecture.md`](docs/vpn-architecture.md)。
+
