@@ -2,22 +2,17 @@ package info.loveyu.mfca.plugin
 
 import android.content.Context
 import android.os.Build
+import info.loveyu.mfca.util.HttpDownloader
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.StoragePathResolver
 import java.io.File
 import java.io.FileNotFoundException
-import java.io.FilterInputStream
 import java.io.InputStream
-import java.net.HttpURLConnection
-import java.net.InetSocketAddress
-import java.net.Proxy
-import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
@@ -36,7 +31,6 @@ import kotlinx.coroutines.withContext
  */
 object PluginManager {
     private const val TAG = "PluginManager"
-    private const val PROGRESS_LOG_INTERVAL_MS = 20_000L
 
     private val downloadLocks = ConcurrentHashMap<String, ReentrantLock>()
 
@@ -123,53 +117,40 @@ object PluginManager {
             }
 
             LogManager.logInfo(TAG, "Downloading plugin '$pluginName' from $url")
-            val proxy = proxyAddress?.trim()?.takeIf { it.isNotBlank() }?.let { parseProxy(it) }
-            val conn = (if (proxy != null) URL(url).openConnection(proxy) else URL(url).openConnection()) as HttpURLConnection
-            conn.connectTimeout = 30_000
-            conn.readTimeout = 30_000
-            conn.instanceFollowRedirects = true
-
+            val proxy = proxyAddress?.trim()?.takeIf { it.isNotBlank() }?.let {
+                HttpDownloader.parseProxy(it)
+            }
+            val tempFile = File(context.cacheDir, "plugin_download_${pluginName}_${System.currentTimeMillis()}")
             try {
-                val totalSize = conn.contentLengthLong.let { if (it > 0) it else -1L }
-                var networkBytes = 0L
-                var lastLogTime = System.currentTimeMillis()
-
-                val rawStream = conn.inputStream.buffered()
-                val trackingStream = object : FilterInputStream(rawStream) {
-                    override fun read(b: ByteArray, off: Int, len: Int): Int {
-                        val n = super.read(b, off, len)
-                        if (n > 0) {
-                            networkBytes += n
-                            val now = System.currentTimeMillis()
-                            if (now - lastLogTime >= PROGRESS_LOG_INTERVAL_MS) {
-                                logProgress(pluginName, networkBytes, totalSize)
-                                lastLogTime = now
-                            }
-                        }
-                        return n
-                    }
-                }
+                HttpDownloader.downloadToFile(
+                    url,
+                    tempFile,
+                    HttpDownloader.Config(
+                        connectTimeoutMs = 30_000L,
+                        readTimeoutMs = 30_000L,
+                        proxy = proxy,
+                        tag = "plugin_$pluginName",
+                    ),
+                    progressCallback = HttpDownloader.ProgressCallback { downloaded, total ->
+                        logProgress(pluginName, downloaded, total)
+                    },
+                )
 
                 val isGz = detectFormat(url) == "gz"
-                val installStream = if (isGz) GZIPInputStream(trackingStream) else trackingStream
-
                 val dest = getInstalledPath(context, pluginName)
                 dest.parentFile?.mkdirs()
-                installStream.use { input ->
-                    dest.outputStream().buffered().use { output ->
-                        val buf = ByteArray(8192)
-                        while (true) {
-                            val n = input.read(buf)
-                            if (n == -1) break
-                            output.write(buf, 0, n)
-                        }
+                if (isGz) {
+                    GZIPInputStream(tempFile.inputStream().buffered()).use { gis ->
+                        dest.outputStream().buffered().use { out -> gis.copyTo(out) }
                     }
+                } else {
+                    tempFile.copyTo(dest, overwrite = true)
                 }
 
-                val pct = if (totalSize > 0) " (${networkBytes * 100 / totalSize}%)" else ""
-                LogManager.logInfo(TAG, "Installed plugin '$pluginName' from $url (${networkBytes / 1024}KB$pct)")
+                val sizeKB = dest.length() / 1024
+                LogManager.logInfo(TAG, "Installed plugin '$pluginName' from $url (${sizeKB}KB)")
             } finally {
-                conn.disconnect()
+                tempFile.delete()
             }
 
             sourceMarkerFile(context, pluginName).writeText(url)
@@ -177,6 +158,10 @@ object PluginManager {
         } finally {
             lock.unlock()
         }
+    }
+
+    fun cancelInstall(pluginName: String) {
+        HttpDownloader.cancel("plugin_$pluginName")
     }
 
     private fun logProgress(pluginName: String, downloaded: Long, totalSize: Long) {
@@ -291,59 +276,19 @@ object PluginManager {
     }
 
     private suspend fun downloadToTempFile(url: String, proxyAddress: String?, dest: File) {
-        val proxy = proxyAddress?.trim()?.takeIf { it.isNotBlank() }?.let { parseProxy(it) }
-        val conn =
-            (
-                if (proxy != null) URL(url).openConnection(proxy) else URL(url).openConnection()
-            ) as HttpURLConnection
-        conn.connectTimeout = 30_000
-        conn.readTimeout = 30_000
-        conn.instanceFollowRedirects = true
-
-        try {
-            conn.inputStream.buffered().use { input ->
-                dest.outputStream().buffered().use { output ->
-                    val buf = ByteArray(8192)
-                    while (true) {
-                        currentCoroutineContext().ensureActive()
-                        val n = input.read(buf)
-                        if (n == -1) break
-                        output.write(buf, 0, n)
-                    }
-                }
-            }
-        } finally {
-            conn.disconnect()
+        val proxy = proxyAddress?.trim()?.takeIf { it.isNotBlank() }?.let {
+            HttpDownloader.parseProxy(it)
         }
-    }
-
-    private fun parseProxy(address: String): Proxy {
-        val trimmed = address.trim()
-        return when {
-            trimmed.startsWith("socks5://", ignoreCase = true) ||
-                trimmed.startsWith("socks4://", ignoreCase = true) -> {
-                val parts = trimmed.substringAfter("://").split(":")
-                Proxy(
-                    Proxy.Type.SOCKS,
-                    InetSocketAddress(parts[0], parts.getOrElse(1) { "1080" }.toInt()),
-                )
-            }
-            trimmed.startsWith("http://", ignoreCase = true) ||
-                trimmed.startsWith("https://", ignoreCase = true) -> {
-                val parts = trimmed.substringAfter("://").split(":")
-                Proxy(
-                    Proxy.Type.HTTP,
-                    InetSocketAddress(parts[0], parts.getOrElse(1) { "8080" }.toInt()),
-                )
-            }
-            else -> {
-                val parts = trimmed.split(":")
-                Proxy(
-                    Proxy.Type.HTTP,
-                    InetSocketAddress(parts[0], parts.getOrElse(1) { "8080" }.toInt()),
-                )
-            }
-        }
+        HttpDownloader.downloadToFileSuspend(
+            url,
+            dest,
+            HttpDownloader.Config(
+                connectTimeoutMs = 30_000L,
+                readTimeoutMs = 30_000L,
+                proxy = proxy,
+                tag = "plugin_download",
+            ),
+        )
     }
 
     private fun extractSoFromZip(zipFile: File): File {

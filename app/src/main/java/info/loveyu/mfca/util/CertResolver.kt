@@ -5,8 +5,6 @@ import android.util.Base64
 import info.loveyu.mfca.config.TlsConfig
 import java.io.File
 import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import java.security.KeyFactory
 import java.security.KeyStore
 import java.security.MessageDigest
@@ -132,7 +130,10 @@ object CertResolver {
 
             // 下载证书
             LogManager.logDebug(TAG, "开始下载证书: $url")
-            val certContent = downloadFromHttp(url)
+            val certContent = HttpDownloader.downloadString(
+                url,
+                HttpDownloader.Config(connectTimeoutMs = 15_000L, readTimeoutMs = 15_000L, tag = TAG),
+            )
 
             // 写入文件
             FileOutputStream(certFile).use { fos ->
@@ -145,28 +146,6 @@ object CertResolver {
         } catch (e: Exception) {
             LogManager.logError(TAG, "证书下载失败: ${e.message}")
             null
-        }
-    }
-
-    /**
-     * 从网络下载内容
-     */
-    private fun downloadFromHttp(httpUrl: String): String {
-        val url = URL(httpUrl)
-        val connection = url.openConnection() as HttpURLConnection
-        connection.requestMethod = "GET"
-        connection.connectTimeout = 15000
-        connection.readTimeout = 15000
-
-        try {
-            val responseCode = connection.responseCode
-            if (responseCode != HttpURLConnection.HTTP_OK) {
-                throw IllegalArgumentException("HTTP error: $responseCode")
-            }
-
-            return connection.inputStream.bufferedReader().use { it.readText() }
-        } finally {
-            connection.disconnect()
         }
     }
 

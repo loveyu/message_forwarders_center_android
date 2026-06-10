@@ -61,6 +61,10 @@ class Preferences(context: Context) {
         get() = prefs.getBoolean("battery_opt_prompted", false)
         set(value) = prefs.edit().putBoolean("battery_opt_prompted", value).apply()
 
+    var insecureConfigDownload: Boolean
+        get() = prefs.getBoolean("insecure_config_download", false)
+        set(value) = prefs.edit().putBoolean("insecure_config_download", value).apply()
+
     fun saveFullConfig(configJson: String) {
         prefs.edit().putString("full_config", configJson).apply()
     }

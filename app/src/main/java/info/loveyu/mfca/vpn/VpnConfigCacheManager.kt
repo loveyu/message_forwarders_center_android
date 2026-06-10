@@ -2,14 +2,17 @@ package info.loveyu.mfca.vpn
 
 import android.content.Context
 import info.loveyu.mfca.config.VpnInputConfig
+import info.loveyu.mfca.util.HttpDownloader
 import info.loveyu.mfca.util.LogManager
 import org.json.JSONObject
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 import java.security.MessageDigest
 
 object VpnConfigCacheManager {
+
+    fun cancelDownload() {
+        HttpDownloader.cancel("vpn_config")
+    }
 
     private data class CacheMeta(
         val lastUpdatedMs: Long,
@@ -46,7 +49,16 @@ object VpnConfigCacheManager {
                 "configUrl 仅支持 http/https"
             }
             cacheDir(context).mkdirs()
-            val content = fetchContent(config.configUrl)
+            val content = HttpDownloader.downloadString(
+                config.configUrl,
+                HttpDownloader.Config(
+                    connectTimeoutMs = 15_000L,
+                    readTimeoutMs = 30_000L,
+                    sslRetryCount = 2,
+                    tag = "vpn_config",
+                    userAgent = "FlowGate-Android",
+                ),
+            )
             val newHash = sha256(content)
             val oldMeta = loadMeta(context, config.name)
             val changed = oldMeta?.contentHash != newHash
@@ -75,26 +87,6 @@ object VpnConfigCacheManager {
 
     fun getCachedSourceFile(context: Context, candidateName: String): File? {
         return sourceFile(context, candidateName).takeIf { it.exists() }
-    }
-
-    private fun fetchContent(url: String): String {
-        val connection =
-            (URL(url).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 15_000
-                readTimeout = 30_000
-                setRequestProperty("User-Agent", "FlowGate-Android")
-            }
-        try {
-            if (connection.responseCode !in 200..299) {
-                val error = connection.errorStream?.bufferedReader()?.use { it.readText() }
-                throw IllegalStateException(
-                    "配置下载失败: HTTP ${connection.responseCode}${if (error.isNullOrBlank()) "" else " - $error"}",
-                )
-            }
-            return connection.inputStream.bufferedReader().use { it.readText() }
-        } finally {
-            connection.disconnect()
-        }
     }
 
     private fun cacheDir(context: Context) = File(context.filesDir, "vpn/config_cache")

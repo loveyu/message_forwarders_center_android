@@ -7,8 +7,8 @@ import android.net.VpnService
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
@@ -43,8 +42,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -84,19 +87,21 @@ fun VpnScreen(contentPadding: PaddingValues) {
 
     LazyColumn(
         contentPadding = contentPadding,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
+        // ── Runtime Card ──
         item {
             ElevatedCard {
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(18.dp),
                 ) {
                     Row(
                         horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
@@ -121,27 +126,34 @@ fun VpnScreen(contentPadding: PaddingValues) {
                                         ContextCompat.startForegroundService(context, MfcaVpnService.enableIntent(context))
                                     }
                                 } else {
+                                    VpnManager.setEnabled(false)
                                     context.startService(MfcaVpnService.disableIntent(context))
                                 }
                             },
                         )
                     }
 
-                    if (uiState.runtimeStatus in setOf(VpnRuntimeStatus.preparing, VpnRuntimeStatus.starting, VpnRuntimeStatus.stopping)) {
+                    if (uiState.isBusy) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
 
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    // Compact status line
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        VpnStatusChip(label = runtimeStatusLabel(uiState.runtimeStatus))
+                        Text(
+                            text = runtimeStatusLabel(uiState.runtimeStatus),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                         uiState.activeCandidateName?.let {
-                            VpnStatusChip(label = context.getString(R.string.vpn_active_candidate, it))
-                        } ?: VpnStatusChip(label = stringResource(R.string.vpn_no_active_candidate))
-                        uiState.runningCandidateName?.let {
-                            VpnStatusChip(label = context.getString(R.string.vpn_running_candidate, it))
-                        } ?: VpnStatusChip(label = stringResource(R.string.vpn_not_running))
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                     }
 
                     if (uiState.isRuntimeOutOfSync) {
@@ -153,20 +165,18 @@ fun VpnScreen(contentPadding: PaddingValues) {
                                 text = stringResource(R.string.vpn_runtime_out_of_sync),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                             )
                         }
                     }
 
-                    FlowRow(
+                    // Action buttons
+                    Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        OutlinedButton(onClick = { VpnManager.refresh() }) {
-                            Text(stringResource(R.string.vpn_refresh))
-                        }
                         Button(
-                            enabled = uiState.isEnabled && uiState.activeCandidateName != null,
+                            enabled = uiState.isEnabled && uiState.activeCandidateName != null && !uiState.isBusy,
                             onClick = {
                                 ContextCompat.startForegroundService(
                                     context,
@@ -207,16 +217,11 @@ fun VpnScreen(contentPadding: PaddingValues) {
                             text = stringResource(R.string.vpn_core_plugin_title),
                             style = MaterialTheme.typography.labelLarge,
                         )
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            VpnStatusChip(
-                                label = stringResource(
-                                    if (uiState.coreState.isReady) R.string.vpn_core_ready else R.string.vpn_core_missing,
-                                ),
-                            )
-                        }
+                        Text(
+                            text = if (uiState.coreState.isReady) stringResource(R.string.vpn_core_ready) else stringResource(R.string.vpn_core_missing),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (uiState.coreState.isReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        )
                         if (coreActionError != null) {
                             Text(
                                 text = coreActionError!!,
@@ -224,13 +229,13 @@ fun VpnScreen(contentPadding: PaddingValues) {
                                 color = MaterialTheme.colorScheme.error,
                             )
                         }
-                        FlowRow(
+                        Row(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             if (uiState.m2mCoreUrl.isNotBlank()) {
                                 FilledTonalButton(
-                                    enabled = !coreActionWorking,
+                                    enabled = !coreActionWorking && !uiState.isBusy,
                                     onClick = {
                                         coreActionWorking = true
                                         coreActionError = null
@@ -259,7 +264,7 @@ fun VpnScreen(contentPadding: PaddingValues) {
                             }
                             if (uiState.coreState.isReady) {
                                 OutlinedButton(
-                                    enabled = !coreActionWorking,
+                                    enabled = !coreActionWorking && !uiState.isBusy,
                                     onClick = {
                                         coreActionWorking = true
                                         coreActionError = null
@@ -284,66 +289,64 @@ fun VpnScreen(contentPadding: PaddingValues) {
             }
         }
 
+        // ── Candidate Cards ──
         items(uiState.candidates, key = { it.config.name }) { candidate ->
             ElevatedCard {
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(18.dp),
                 ) {
+                    // Header: name + status
                     Row(
                         horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f),
+                        ) {
                             Text(candidate.config.name, style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                candidate.config.configUrl,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            if (candidate.isSelected) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = MaterialTheme.shapes.small,
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.vpn_selected),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    )
+                                }
+                            }
+                            if (uiState.runningCandidateName == candidate.config.name) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    shape = MaterialTheme.shapes.small,
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.vpn_candidate_running_chip),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    )
+                                }
+                            }
                         }
-                        VpnStatusChip(
-                            label = stringResource(
-                                if (candidate.isAvailable) {
-                                    R.string.vpn_candidate_available
-                                } else {
-                                    R.string.vpn_candidate_unavailable
-                                },
+                        Text(
+                            text = stringResource(
+                                if (candidate.isAvailable) R.string.vpn_candidate_available else R.string.vpn_candidate_unavailable,
                             ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (candidate.isAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                         )
                     }
 
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        if (candidate.isSelected) {
-                            VpnStatusChip(label = stringResource(R.string.vpn_selected))
-                        }
-                        if (uiState.runningCandidateName == candidate.config.name) {
-                            VpnStatusChip(label = stringResource(R.string.vpn_candidate_running_chip))
-                        }
-                        VpnStatusChip(
-                            label = stringResource(
-                                if (candidate.coreState.isReady) R.string.vpn_core_ready else R.string.vpn_core_missing,
-                            ),
-                        )
-                        AssistChip(
-                            onClick = { context.startActivity(VpnAppSelectActivity.intent(context, candidate.config.name)) },
-                            label = {
-                                Text(
-                                    context.getString(
-                                        R.string.vpn_access_summary,
-                                        candidate.effectiveAccessControlMode.name,
-                                        candidate.effectivePackages.size,
-                                    ),
-                                )
-                            },
-                        )
-                    }
-
+                    // Availability reason
                     candidate.availabilityReason?.takeIf { it.isNotBlank() }?.let {
                         Text(
                             text = it,
@@ -351,47 +354,32 @@ fun VpnScreen(contentPadding: PaddingValues) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    HorizontalDivider()
 
-                    // Config cache section
+                    // Cache status (compact text line)
                     val cacheState = candidate.configCacheState
                     val isWorking = workingConfigCandidateName == candidate.config.name
-                    Text(
-                        text = stringResource(R.string.vpn_config_cache_title),
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        VpnStatusChip(
-                            label = stringResource(
-                                if (cacheState.isCached) R.string.vpn_config_cached else R.string.vpn_config_not_cached,
-                            ),
-                        )
-                        if (cacheState.isCached) {
-                            val sdf = remember { java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()) }
+                    if (cacheState.isCached) {
+                        val sdf = remember { java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault()) }
+                        val cacheInfo = buildString {
+                            append(stringResource(R.string.vpn_config_cached))
                             cacheState.lastUpdatedMs?.let { ms ->
-                                VpnStatusChip(
-                                    label = stringResource(
-                                        R.string.vpn_config_last_updated,
-                                        sdf.format(java.util.Date(ms)),
-                                    ),
-                                )
-                            }
-                            val nextMs = cacheState.nextRefreshMs
-                            if (nextMs != null && nextMs > 0) {
-                                VpnStatusChip(
-                                    label = stringResource(
-                                        R.string.vpn_config_next_refresh,
-                                        sdf.format(java.util.Date(nextMs)),
-                                    ),
-                                )
-                            } else {
-                                VpnStatusChip(label = stringResource(R.string.vpn_config_no_auto_refresh))
+                                append(" · ")
+                                append(sdf.format(java.util.Date(ms)))
                             }
                         }
+                        Text(
+                            text = cacheInfo,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        Text(
+                            text = stringResource(R.string.vpn_config_not_cached),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
+
                     if (configActionErrorCandidateName == candidate.config.name && configActionError != null) {
                         Text(
                             text = configActionError!!,
@@ -399,63 +387,16 @@ fun VpnScreen(contentPadding: PaddingValues) {
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        FilledTonalButton(
-                            enabled = !isWorking,
-                            onClick = {
-                                workingConfigCandidateName = candidate.config.name
-                                configActionError = null
-                                configActionErrorCandidateName = null
-                                scope.launch {
-                                    val result = withContext(Dispatchers.IO) {
-                                        VpnManager.downloadConfig(context, candidate.config.name)
-                                    }
-                                    result.onFailure { e ->
-                                        configActionError = e.message ?: e.toString()
-                                        configActionErrorCandidateName = candidate.config.name
-                                    }
-                                    VpnManager.refresh()
-                                    workingConfigCandidateName = null
-                                }
-                            },
-                        ) {
-                            if (isWorking) {
-                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            } else {
-                                Text(
-                                    stringResource(
-                                        if (cacheState.isCached) R.string.vpn_config_redownload else R.string.vpn_config_download,
-                                    ),
-                                )
-                            }
-                        }
-                        if (cacheState.isCached) {
-                            OutlinedButton(
-                                enabled = !isWorking,
-                                onClick = {
-                                    scope.launch {
-                                        withContext(Dispatchers.IO) {
-                                            VpnManager.deleteConfigCache(context, candidate.config.name)
-                                        }
-                                        VpnManager.refresh()
-                                    }
-                                },
-                            ) {
-                                Text(stringResource(R.string.vpn_config_delete))
-                            }
-                        }
-                    }
-                    HorizontalDivider()
 
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    // Action row: select button + overflow menu
+                    HorizontalDivider()
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         Button(
-                            enabled = candidate.isAvailable,
+                            enabled = candidate.isAvailable && !uiState.isBusy,
                             onClick = {
                                 VpnManager.selectCandidate(candidate.config.name)
                                 if (uiState.isEnabled) {
@@ -474,11 +415,79 @@ fun VpnScreen(contentPadding: PaddingValues) {
                                 },
                             )
                         }
-                        OutlinedButton(onClick = { context.startActivity(VpnAppSelectActivity.intent(context, candidate.config.name)) }) {
-                            Text(stringResource(R.string.vpn_edit_apps))
-                        }
-                        OutlinedButton(onClick = { context.startActivity(VpnCandidateSettingsActivity.intent(context, candidate.config.name)) }) {
-                            Text(stringResource(R.string.vpn_settings))
+                        var showMenu by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { showMenu = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = stringResource(R.string.vpn_settings),
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showMenu,
+                                onDismissRequest = { showMenu = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = {
+                                        if (isWorking) {
+                                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                        } else {
+                                            Text(
+                                                stringResource(
+                                                    if (cacheState.isCached) R.string.vpn_config_redownload else R.string.vpn_config_download,
+                                                ),
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        workingConfigCandidateName = candidate.config.name
+                                        configActionError = null
+                                        configActionErrorCandidateName = null
+                                        scope.launch {
+                                            val result = withContext(Dispatchers.IO) {
+                                                VpnManager.downloadConfig(context, candidate.config.name)
+                                            }
+                                            result.onFailure { e ->
+                                                configActionError = e.message ?: e.toString()
+                                                configActionErrorCandidateName = candidate.config.name
+                                            }
+                                            VpnManager.refresh()
+                                            workingConfigCandidateName = null
+                                        }
+                                    },
+                                    enabled = !isWorking && !uiState.isBusy,
+                                )
+                                if (cacheState.isCached) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.vpn_config_delete)) },
+                                        onClick = {
+                                            showMenu = false
+                                            scope.launch {
+                                                withContext(Dispatchers.IO) {
+                                                    VpnManager.deleteConfigCache(context, candidate.config.name)
+                                                }
+                                                VpnManager.refresh()
+                                            }
+                                        },
+                                        enabled = !isWorking && !uiState.isBusy,
+                                    )
+                                }
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.vpn_edit_apps)) },
+                                    onClick = {
+                                        showMenu = false
+                                        context.startActivity(VpnAppSelectActivity.intent(context, candidate.config.name))
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.vpn_settings)) },
+                                    onClick = {
+                                        showMenu = false
+                                        context.startActivity(VpnCandidateSettingsActivity.intent(context, candidate.config.name))
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -528,26 +537,6 @@ fun VpnScreen(contentPadding: PaddingValues) {
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun VpnStatusChip(label: String) {
-    AssistChip(onClick = { }, label = { Text(label) })
-}
-
-@Composable
-private fun VpnInfoLine(label: String, value: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-        )
     }
 }
 

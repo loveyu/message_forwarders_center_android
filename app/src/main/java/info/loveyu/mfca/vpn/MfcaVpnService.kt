@@ -49,6 +49,7 @@ class MfcaVpnService : VpnService() {
             }
 
             ACTION_DISABLE -> {
+                startVpnForeground("Stopping VPN")
                 serviceScope.launch {
                     stopRuntime(disableVpn = true, stopService = true)
                 }
@@ -91,6 +92,10 @@ class MfcaVpnService : VpnService() {
         if (!isRetry) {
             cancelPendingRetry("runtime sync requested")
             retryAttempts = 0
+        }
+        if (VpnManager.state.value.runtimeStatus == VpnRuntimeStatus.preparing) {
+            LogManager.logDebug("VPN", "Skipping sync, preparation already in progress")
+            return
         }
         if (prepare(this) != null) {
             resetRuntimeSession()
@@ -215,6 +220,8 @@ class MfcaVpnService : VpnService() {
     private fun stopRuntime(disableVpn: Boolean, stopService: Boolean) {
         cancelPendingRetry("runtime stopping")
         resetRuntimeSession()
+        VpnConfigCacheManager.cancelDownload()
+        MihomoCoreManager.cancelDownload()
         MihomoPluginCore.socketProtector = null
         val bridgeStopped = VpnBridgeProcessManager.stop()
         closeTunInterface()

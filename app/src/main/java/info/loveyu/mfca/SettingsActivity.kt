@@ -122,6 +122,7 @@ fun SettingsScreenContent(
     var showExportSuccess by remember { mutableStateOf<String?>(null) }
     var autoStart by remember { mutableStateOf(false) }
     var showTabLabel by remember { mutableStateOf(preferences.showTabLabel) }
+    var insecureConfigDownload by remember { mutableStateOf(preferences.insecureConfigDownload) }
     var themeMode by remember { mutableStateOf(ThemeModeManager.themeMode.value) }
 
     // Icon cache state
@@ -411,6 +412,37 @@ fun SettingsScreenContent(
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("跳过配置下载 SSL 校验")
+                            Switch(
+                                checked = insecureConfigDownload,
+                                onCheckedChange = { enabled ->
+                                    insecureConfigDownload = enabled
+                                    preferences.insecureConfigDownload = enabled
+                                }
+                            )
+                        }
+                        Text(
+                            text = "适用于内网自签名证书服务器，启用后不验证 HTTPS 证书",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text("主题样式")
@@ -545,6 +577,67 @@ fun SettingsScreenContent(
                                 onCheckedChange = { enabled ->
                                     logToLogcatAll = enabled
                                     LogManager.setAllLogcatEnabled(enabled, preferences)
+                                }
+                            )
+                        }
+
+                        HorizontalDivider()
+
+                        // 清空日志
+                        var showClearLogsDialog by remember { mutableStateOf(false) }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "清空日志",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                Text(
+                                    text = "清空内存日志、应用日志文件、VPN 进程日志",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Button(
+                                onClick = { showClearLogsDialog = true },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.error
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("清空")
+                            }
+                        }
+
+                        if (showClearLogsDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showClearLogsDialog = false },
+                                title = { Text("确认清空日志") },
+                                text = { Text("将清空内存中的日志缓冲、所有日志文件（包括应用日志和 VPN 进程日志）。此操作不可撤销。") },
+                                confirmButton = {
+                                    TextButton(
+                                        onClick = {
+                                            showClearLogsDialog = false
+                                            LogManager.clearAllLogs(context)
+                                            Toast.makeText(context, "日志已清空", Toast.LENGTH_SHORT).show()
+                                            LogManager.logInfo("SETTINGS", "All logs cleared")
+                                        }
+                                    ) {
+                                        Text("确认清空", color = MaterialTheme.colorScheme.error)
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showClearLogsDialog = false }) {
+                                        Text("取消")
+                                    }
                                 }
                             )
                         }

@@ -8,34 +8,37 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import java.net.HttpURLConnection
-import java.net.URL
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.TimeUnit
 
 object MessageForwarder {
     private const val TAG = "MessageForwarder"
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    private val client by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(ApiConstants.CONNECT_TIMEOUT.toLong(), TimeUnit.MILLISECONDS)
+            .readTimeout(ApiConstants.READ_TIMEOUT.toLong(), TimeUnit.MILLISECONDS)
+            .build()
+    }
+
     fun forward(targetUrl: String, payload: String, callback: ((Boolean) -> Unit)? = null) {
         scope.launch {
             try {
-                val url = URL(targetUrl)
-                val connection = url.openConnection() as HttpURLConnection
-                connection.requestMethod = "POST"
-                connection.setRequestProperty("Content-Type", "application/json")
-                connection.connectTimeout = ApiConstants.CONNECT_TIMEOUT
-                connection.readTimeout = ApiConstants.READ_TIMEOUT
-                connection.doOutput = true
-
-                connection.outputStream.use { os ->
-                    val input = payload.toByteArray(Charsets.UTF_8)
-                    os.write(input, 0, input.size)
+                val body = payload.toByteArray(Charsets.UTF_8)
+                    .toRequestBody("application/json".toMediaType())
+                val request = Request.Builder()
+                    .url(targetUrl)
+                    .post(body)
+                    .build()
+                val response = client.newCall(request).execute()
+                response.use {
+                    LogManager.log(LogLevel.DEBUG, TAG, "Forwarded to $targetUrl, response: ${it.code}")
+                    callback?.invoke(it.isSuccessful)
                 }
-
-                val responseCode = connection.responseCode
-                connection.disconnect()
-
-                LogManager.log(LogLevel.DEBUG, TAG, "Forwarded to $targetUrl, response: $responseCode")
-                callback?.invoke(responseCode in 200..299)
             } catch (e: Exception) {
                 LogManager.log(LogLevel.ERROR, TAG, "Failed to forward message to $targetUrl", e)
                 callback?.invoke(false)

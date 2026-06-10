@@ -136,7 +136,7 @@
 
         <activity
             android:name=".test.M2mVpnTestActivity"
-            android:exported="false"
+            android:exported="true"
             android:theme="@style/Theme.FlowGate" />
 
         <service

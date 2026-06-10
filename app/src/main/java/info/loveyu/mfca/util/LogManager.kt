@@ -245,8 +245,7 @@ object LogManager {
 
     private fun startFileLogging() {
         val ctx = contextRef?.get() ?: return
-        val baseDir = ctx.getExternalFilesDir(null) ?: ctx.filesDir
-        val logDir = File(baseDir, "logs")
+        val logDir = File(ctx.cacheDir, "logs")
         if (!logDir.exists()) {
             logDir.mkdirs()
         }
@@ -332,8 +331,7 @@ object LogManager {
         throwable: Throwable? = null,
         extras: Map<String, String> = emptyMap()
     ): String? {
-        val baseDir = ctx.getExternalFilesDir(null) ?: ctx.filesDir
-        val exitDir = File(File(baseDir, "logs"), "exit")
+        val exitDir = File(ctx.cacheDir, "logs/exit")
         if (!exitDir.exists()) {
             exitDir.mkdirs()
         }
@@ -376,8 +374,7 @@ object LogManager {
     }
 
     fun saveLogsToFile(ctx: Context): String? {
-        val baseDir = ctx.getExternalFilesDir(null) ?: ctx.filesDir
-        val logDir = File(baseDir, "logs")
+        val logDir = File(ctx.cacheDir, "logs")
         if (!logDir.exists()) {
             logDir.mkdirs()
         }
@@ -396,11 +393,33 @@ object LogManager {
     }
 
     fun getLogsDir(ctx: Context): File {
-        val baseDir = ctx.getExternalFilesDir(null) ?: ctx.filesDir
-        val logDir = File(baseDir, "logs")
+        val logDir = File(ctx.cacheDir, "logs")
         if (!logDir.exists()) {
             logDir.mkdirs()
         }
         return logDir
+    }
+
+    fun clearAllLogs(ctx: Context) {
+        clearLogs()
+        stopFileLogging()
+        logFile = null
+        logFileStream = null
+        logFileWriter = null
+        deleteRecursive(File(ctx.cacheDir, "logs"))
+        deleteRecursive(File(ctx.cacheDir, "vpn"))
+        val extDir = ctx.getExternalFilesDir(null)
+        if (extDir != null) {
+            deleteRecursive(File(extDir, "logs"))
+            deleteRecursive(File(extDir, "vpn_debug"))
+        }
+    }
+
+    private fun deleteRecursive(dir: File) {
+        if (!dir.exists()) return
+        dir.listFiles()?.forEach { file ->
+            if (file.isDirectory) deleteRecursive(file) else file.delete()
+        }
+        dir.delete()
     }
 }

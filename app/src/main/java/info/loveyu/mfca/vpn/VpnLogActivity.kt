@@ -62,11 +62,11 @@ class VpnLogActivity : ComponentActivity() {
 
         fun exportDiagnostics(context: Context): String {
             val extDir = File(context.getExternalFilesDir(null), "vpn_debug").apply { mkdirs() }
-            val intDir = File(context.filesDir, "vpn")
+            val cacheVpnDir = File(context.cacheDir, "vpn")
             val files = mutableListOf<Pair<File, String>>()
 
-            // Runtime profiles
-            val profilesDir = File(intDir, "profiles")
+            // Runtime profiles (still in filesDir/vpn/profiles)
+            val profilesDir = File(context.filesDir, "vpn/profiles")
             if (profilesDir.exists()) {
                 profilesDir.listFiles()?.forEach { f ->
                     if (f.name.endsWith(".runtime.yaml")) {
@@ -75,10 +75,9 @@ class VpnLogActivity : ComponentActivity() {
                 }
             }
 
-            // Runtime logs
-            val runtimeDir = File(intDir, "runtime")
-            if (runtimeDir.exists()) {
-                runtimeDir.listFiles()?.forEach { candidateDir ->
+            // VPN process logs (now in cacheDir/vpn/{candidate}/)
+            if (cacheVpnDir.exists()) {
+                cacheVpnDir.listFiles()?.forEach { candidateDir ->
                     if (candidateDir.isDirectory) {
                         // mihomo logs
                         File(candidateDir, "mihomo.stdout.log").takeIf { it.exists() }?.let {
@@ -101,12 +100,22 @@ class VpnLogActivity : ComponentActivity() {
                 }
             }
 
-            // Cached configs
-            val cacheDir = File(intDir, "config_cache")
-            if (cacheDir.exists()) {
-                cacheDir.listFiles()?.forEach { f ->
+            // Cached configs (still in filesDir/vpn/config_cache)
+            val configCacheDir = File(context.filesDir, "vpn/config_cache")
+            if (configCacheDir.exists()) {
+                configCacheDir.listFiles()?.forEach { f ->
                     if (f.name.endsWith(".yaml")) {
                         files.add(f to "config_cache/${f.name}")
+                    }
+                }
+            }
+
+            // App logs (in cacheDir/logs/)
+            val appLogsDir = File(context.cacheDir, "logs")
+            if (appLogsDir.exists()) {
+                appLogsDir.listFiles()?.forEach { f ->
+                    if (f.isFile) {
+                        files.add(f to "app_logs/${f.name}")
                     }
                 }
             }

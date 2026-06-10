@@ -73,4 +73,7 @@ data class VpnUiState(
     val m2mCoreUrl: String = "",
     val downloadProxy: String = "",
     val candidates: List<VpnCandidateState> = emptyList(),
-)
+) {
+    val isBusy: Boolean
+        get() = runtimeStatus in setOf(VpnRuntimeStatus.preparing, VpnRuntimeStatus.starting, VpnRuntimeStatus.stopping)
+}

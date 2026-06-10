@@ -29,6 +29,10 @@ object MihomoCoreManager {
         LogManager.logInfo("VPN", "Deleted mihomo core plugin cache")
     }
 
+    fun cancelDownload() {
+        PluginManager.cancelInstall(PLUGIN_NAME)
+    }
+
     fun downloadCore(context: Context, pluginUrl: String, proxyAddress: String? = null): Result<File> = runCatching {
         PluginManager.uninstall(context, PLUGIN_NAME)
         LogManager.logInfo("VPN", "Re-downloading mihomo core from $pluginUrl")

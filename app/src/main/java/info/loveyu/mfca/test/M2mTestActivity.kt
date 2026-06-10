@@ -40,6 +40,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -70,18 +72,15 @@ import info.loveyu.mfca.R
 import info.loveyu.mfca.plugin.MihomoPluginCore
 import info.loveyu.mfca.plugin.PluginManager
 import info.loveyu.mfca.ui.theme.MfcaTheme
+import info.loveyu.mfca.util.HttpDownloader
 import info.loveyu.mfca.util.StoragePathResolver
 import java.io.File
-import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.Socket
-import java.net.URL
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -94,6 +93,7 @@ class M2mTestActivity : ComponentActivity() {
         const val PREF_CONFIG_URL = "config_url"
         const val PREF_MIXED_PORT = "mixed_port"
         const val PREF_TEST_URL = "test_url"
+        const val PREF_INSECURE = "insecure"
         const val DEFAULT_MIXED_PORT = 2080
         const val DEFAULT_TEST_URL = "https://www.google.com"
     }
@@ -126,6 +126,8 @@ private fun SettingsSheetContent(
     onMixedPortChange: (String) -> Unit,
     testUrl: String,
     onTestUrlChange: (String) -> Unit,
+    insecure: Boolean,
+    onInsecureChange: (Boolean) -> Unit,
     onConfirm: () -> Unit,
 ) {
     Column(
@@ -171,6 +173,14 @@ private fun SettingsSheetContent(
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("跳过 SSL 证书校验", style = MaterialTheme.typography.bodyMedium)
+            Switch(checked = insecure, onCheckedChange = onInsecureChange)
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End,
         ) {
             TextButton(onClick = onConfirm) { Text("确定") }
@@ -211,6 +221,9 @@ private fun M2mTestScreen(onBack: () -> Unit) {
             prefs.getString(M2mTestActivity.PREF_TEST_URL, M2mTestActivity.DEFAULT_TEST_URL)
                 ?: M2mTestActivity.DEFAULT_TEST_URL
         )
+    }
+    var insecure by remember {
+        mutableStateOf(prefs.getBoolean(M2mTestActivity.PREF_INSECURE, true))
     }
     var showSettings by remember { mutableStateOf(false) }
     var isRunning by remember { mutableStateOf(false) }
@@ -276,10 +289,13 @@ private fun M2mTestScreen(onBack: () -> Unit) {
             .putString(M2mTestActivity.PREF_CONFIG_URL, configUrl)
             .putString(M2mTestActivity.PREF_MIXED_PORT, mixedPort)
             .putString(M2mTestActivity.PREF_TEST_URL, testUrl)
+            .putBoolean(M2mTestActivity.PREF_INSECURE, insecure)
             .apply()
     }
 
-    val sheetState = rememberBottomSheetScaffoldState()
+    val sheetState = rememberBottomSheetScaffoldState(
+        bottomSheetState = rememberStandardBottomSheetState(skipHiddenState = false)
+    )
 
     fun openSettings() {
         showSettings = true
@@ -309,6 +325,7 @@ private fun M2mTestScreen(onBack: () -> Unit) {
                     configUrl = configUrl,
                     mixedPort = mixedPort.toIntOrNull() ?: M2mTestActivity.DEFAULT_MIXED_PORT,
                     testUrl = testUrl.ifBlank { M2mTestActivity.DEFAULT_TEST_URL },
+                    insecure = insecure,
                     addLog = { addLog(it) },
                     setStep = { i, s -> setStep(i, s) },
                 )
@@ -351,6 +368,8 @@ private fun M2mTestScreen(onBack: () -> Unit) {
                     onMixedPortChange = { mixedPort = it },
                     testUrl = testUrl,
                     onTestUrlChange = { testUrl = it },
+                    insecure = insecure,
+                    onInsecureChange = { insecure = it },
                     onConfirm = {
                         saveSettings()
                         closeSettings()
@@ -511,6 +530,7 @@ private suspend fun runM2mTest(
     configUrl: String,
     mixedPort: Int,
     testUrl: String,
+    insecure: Boolean,
     addLog: (String) -> Unit,
     setStep: (Int, M2mStepStatus) -> Unit,
 ) {
@@ -552,7 +572,7 @@ private suspend fun runM2mTest(
         val configFile =
             try {
                 withContext(Dispatchers.IO) {
-                    downloadConfigFile(context, configUrl, proxyUrl, workDir, addLog)
+                    downloadConfigFile(context, configUrl, proxyUrl, workDir, addLog, insecure)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -646,32 +666,39 @@ private suspend fun runM2mTest(
             withContext(Dispatchers.IO) {
                 addLog("通过代理访问: $testUrl")
                 val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", mixedPort))
-                val conn = URL(testUrl).openConnection(proxy) as HttpURLConnection
-                conn.connectTimeout = 10_000
-                conn.readTimeout = 15_000
-                conn.instanceFollowRedirects = true
-                val code = conn.responseCode
-                val stream = if (code in 200..399) conn.inputStream else conn.errorStream
-                val body = stream?.bufferedReader()?.readText() ?: ""
-                val bodyPreview = body.take(200)
-                addLog("响应状态: $code, Content-Type: ${conn.contentType ?: "未知"}")
-                addLog("响应大小: ${body.length} 字符")
-                if (bodyPreview.isNotBlank()) {
-                    addLog("内容预览: $bodyPreview")
+                val response = HttpDownloader.openResponse(
+                    testUrl,
+                    HttpDownloader.Config(
+                        connectTimeoutMs = 10_000L,
+                        readTimeoutMs = 15_000L,
+                        proxy = proxy,
+                        tag = "M2M_TEST",
+                    ),
+                )
+                try {
+                    val code = response.code
+                    val body = response.body?.string() ?: ""
+                    val bodyPreview = body.take(200)
+                    addLog("响应状态: $code, Content-Type: ${response.header("Content-Type") ?: "未知"}")
+                    addLog("响应大小: ${body.length} 字符")
+                    if (bodyPreview.isNotBlank()) {
+                        addLog("内容预览: $bodyPreview")
+                    }
+                    if (code !in 200..399) {
+                        error("非成功状态码: $code")
+                    }
+                    if (body.isBlank()) {
+                        error("响应体为空")
+                    }
+                    val isHtml = body.trimStart().startsWith("<", ignoreCase = true)
+                    val looksLikeContent = body.length > 100
+                    if (!isHtml && !looksLikeContent) {
+                        error("响应内容不像有效页面 (前缀: ${body.take(50)})")
+                    }
+                    addLog("访问测试通过")
+                } finally {
+                    response.close()
                 }
-                conn.disconnect()
-                if (code !in 200..399) {
-                    error("非成功状态码: $code")
-                }
-                if (body.isBlank()) {
-                    error("响应体为空")
-                }
-                val isHtml = body.trimStart().startsWith("<", ignoreCase = true)
-                val looksLikeContent = body.length > 100
-                if (!isHtml && !looksLikeContent) {
-                    error("响应内容不像有效页面 (前缀: ${body.take(50)})")
-                }
-                addLog("访问测试通过")
             }
         } catch (e: CancellationException) {
             throw e
@@ -721,6 +748,7 @@ internal suspend fun downloadConfigFile(
     proxyAddress: String?,
     workDir: File,
     addLog: (String) -> Unit,
+    insecure: Boolean = true,
 ): File = withContext(Dispatchers.IO) {
     val destFile = File(workDir, "config.yaml")
     val isLocal =
@@ -733,61 +761,24 @@ internal suspend fun downloadConfigFile(
         src.copyTo(destFile, overwrite = true)
     } else {
         addLog("正在下载配置文件: $url")
-        val proxy = proxyAddress?.trim()?.takeIf { it.isNotBlank() }?.let { parseProxy(it) }
-        val conn =
-            (
-                if (proxy != null) URL(url).openConnection(proxy) else URL(url).openConnection()
-            ) as HttpURLConnection
-        conn.connectTimeout = 30_000
-        conn.readTimeout = 30_000
-        conn.instanceFollowRedirects = true
-        try {
-            conn.inputStream.buffered().use { input ->
-                destFile.outputStream().buffered().use { output ->
-                    val buf = ByteArray(8192)
-                    while (true) {
-                        currentCoroutineContext().ensureActive()
-                        val n = input.read(buf)
-                        if (n == -1) break
-                        output.write(buf, 0, n)
-                    }
-                }
-            }
-            addLog("配置文件下载完成 (${destFile.length()} bytes)")
-        } finally {
-            conn.disconnect()
+        val proxy = proxyAddress?.trim()?.takeIf { it.isNotBlank() }?.let {
+            HttpDownloader.parseProxy(it)
         }
+        HttpDownloader.downloadToFileSuspend(
+            url,
+            destFile,
+            HttpDownloader.Config(
+                connectTimeoutMs = 30_000L,
+                readTimeoutMs = 30_000L,
+                proxy = proxy,
+                sslRetryCount = 2,
+                tag = "M2M_TEST",
+                insecure = insecure,
+            ),
+        )
+        addLog("配置文件下载完成 (${destFile.length()} bytes)")
     }
     destFile
-}
-
-internal fun parseProxy(address: String): Proxy {
-    val trimmed = address.trim()
-    return when {
-        trimmed.startsWith("socks5://", ignoreCase = true) ||
-            trimmed.startsWith("socks4://", ignoreCase = true) -> {
-            val parts = trimmed.substringAfter("://").split(":")
-            Proxy(
-                Proxy.Type.SOCKS,
-                InetSocketAddress(parts[0], parts.getOrElse(1) { "1080" }.toInt()),
-            )
-        }
-        trimmed.startsWith("http://", ignoreCase = true) ||
-            trimmed.startsWith("https://", ignoreCase = true) -> {
-            val parts = trimmed.substringAfter("://").split(":")
-            Proxy(
-                Proxy.Type.HTTP,
-                InetSocketAddress(parts[0], parts.getOrElse(1) { "8080" }.toInt()),
-            )
-        }
-        else -> {
-            val parts = trimmed.split(":")
-            Proxy(
-                Proxy.Type.HTTP,
-                InetSocketAddress(parts[0], parts.getOrElse(1) { "8080" }.toInt()),
-            )
-        }
-    }
 }
 
 internal fun canConnect(port: Int): Boolean {

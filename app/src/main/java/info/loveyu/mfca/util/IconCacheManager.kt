@@ -7,9 +7,6 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 
 /**
  * 图标缓存管理器
@@ -142,36 +139,23 @@ class IconCacheManager private constructor(private val context: Context) {
      * 下载并缓存图标
      */
     private suspend fun downloadAndCacheIcon(url: String): Bitmap? = withContext(Dispatchers.IO) {
-        var connection: HttpURLConnection? = null
         try {
-            val targetUrl = URL(url)
-            connection = targetUrl.openConnection() as HttpURLConnection
-            connection.connectTimeout = CONNECT_TIMEOUT_MS
-            connection.readTimeout = READ_TIMEOUT_MS
-
-            val responseCode = connection.responseCode
-            if (responseCode != HttpURLConnection.HTTP_OK) {
-                LogManager.logWarn("ICON_CACHE", "HTTP error $responseCode for $url")
-                return@withContext null
-            }
-
-            val contentLength = connection.contentLength
-            if (contentLength > MAX_ICON_SIZE) {
-                LogManager.logWarn("ICON_CACHE", "Icon too large: $contentLength bytes for $url")
-                return@withContext null
-            }
-
-            val inputStream = connection.inputStream
-            val bytes = inputStream.readBytes()
+            val bytes = HttpDownloader.downloadBytes(
+                url,
+                HttpDownloader.Config(
+                    connectTimeoutMs = CONNECT_TIMEOUT_MS.toLong(),
+                    readTimeoutMs = READ_TIMEOUT_MS.toLong(),
+                    tag = "ICON_CACHE",
+                ),
+                maxSize = MAX_ICON_SIZE.toLong(),
+            )
 
             // 生成缓存文件名
             val fileName = "${url.hashCode()}.icon"
             val cacheFile = File(cacheDir, fileName)
 
             // 写入缓存文件
-            FileOutputStream(cacheFile).use { fos ->
-                fos.write(bytes)
-            }
+            cacheFile.writeBytes(bytes)
 
             // 保存到数据库
             dbHelper.putCache(url, cacheFile.absolutePath)
@@ -181,8 +165,6 @@ class IconCacheManager private constructor(private val context: Context) {
         } catch (e: Exception) {
             LogManager.logWarn("ICON_CACHE", "Failed to download icon $url: ${e.message}")
             null
-        } finally {
-            connection?.disconnect()
         }
     }
 

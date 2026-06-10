@@ -44,6 +44,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -73,11 +74,10 @@ import androidx.core.content.ContextCompat
 import info.loveyu.mfca.R
 import info.loveyu.mfca.plugin.PluginManager
 import info.loveyu.mfca.ui.theme.MfcaTheme
+import info.loveyu.mfca.util.HttpDownloader
 import java.io.File
-import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.Proxy
-import java.net.URL
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -295,7 +295,9 @@ private fun M2mVpnTestScreen(onBack: () -> Unit) {
         }
     }
 
-    val sheetState = rememberBottomSheetScaffoldState()
+    val sheetState = rememberBottomSheetScaffoldState(
+        bottomSheetState = rememberStandardBottomSheetState(skipHiddenState = false)
+    )
 
     fun openSettings() {
         showSettings = true
@@ -657,21 +659,28 @@ private suspend fun runVpnTest(
             withContext(Dispatchers.IO) {
                 addLog("通过代理访问: $testUrl")
                 val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", mixedPort))
-                val conn = URL(testUrl).openConnection(proxy) as HttpURLConnection
-                conn.connectTimeout = 10_000
-                conn.readTimeout = 15_000
-                conn.instanceFollowRedirects = true
-                val code = conn.responseCode
-                val stream = if (code in 200..399) conn.inputStream else conn.errorStream
-                val body = stream?.bufferedReader()?.readText() ?: ""
-                val bodyPreview = body.take(200)
-                addLog("响应状态: $code, Content-Type: ${conn.contentType ?: "未知"}")
-                addLog("响应大小: ${body.length} 字符")
-                if (bodyPreview.isNotBlank()) addLog("内容预览: $bodyPreview")
-                conn.disconnect()
-                if (code !in 200..399) error("非成功状态码: $code")
-                if (body.isBlank()) error("响应体为空")
-                addLog("代理访问测试通过")
+                val response = HttpDownloader.openResponse(
+                    testUrl,
+                    HttpDownloader.Config(
+                        connectTimeoutMs = 10_000L,
+                        readTimeoutMs = 15_000L,
+                        proxy = proxy,
+                        tag = "VPN_TEST",
+                    ),
+                )
+                try {
+                    val code = response.code
+                    val body = response.body?.string() ?: ""
+                    val bodyPreview = body.take(200)
+                    addLog("响应状态: $code, Content-Type: ${response.header("Content-Type") ?: "未知"}")
+                    addLog("响应大小: ${body.length} 字符")
+                    if (bodyPreview.isNotBlank()) addLog("内容预览: $bodyPreview")
+                    if (code !in 200..399) error("非成功状态码: $code")
+                    if (body.isBlank()) error("响应体为空")
+                    addLog("代理访问测试通过")
+                } finally {
+                    response.close()
+                }
             }
         } catch (e: CancellationException) {
             throw e
@@ -719,21 +728,27 @@ private suspend fun runVpnTest(
         try {
             withContext(Dispatchers.IO) {
                 addLog("通过 VPN 直接访问: $testUrl")
-                val conn = URL(testUrl).openConnection() as HttpURLConnection
-                conn.connectTimeout = 10_000
-                conn.readTimeout = 15_000
-                conn.instanceFollowRedirects = true
-                val code = conn.responseCode
-                val stream = if (code in 200..399) conn.inputStream else conn.errorStream
-                val body = stream?.bufferedReader()?.readText() ?: ""
-                val bodyPreview = body.take(200)
-                addLog("响应状态: $code, Content-Type: ${conn.contentType ?: "未知"}")
-                addLog("响应大小: ${body.length} 字符")
-                if (bodyPreview.isNotBlank()) addLog("内容预览: $bodyPreview")
-                conn.disconnect()
-                if (code !in 200..399) error("非成功状态码: $code")
-                if (body.isBlank()) error("响应体为空")
-                addLog("VPN 直接访问测试通过")
+                val response = HttpDownloader.openResponse(
+                    testUrl,
+                    HttpDownloader.Config(
+                        connectTimeoutMs = 10_000L,
+                        readTimeoutMs = 15_000L,
+                        tag = "VPN_TEST",
+                    ),
+                )
+                try {
+                    val code = response.code
+                    val body = response.body?.string() ?: ""
+                    val bodyPreview = body.take(200)
+                    addLog("响应状态: $code, Content-Type: ${response.header("Content-Type") ?: "未知"}")
+                    addLog("响应大小: ${body.length} 字符")
+                    if (bodyPreview.isNotBlank()) addLog("内容预览: $bodyPreview")
+                    if (code !in 200..399) error("非成功状态码: $code")
+                    if (body.isBlank()) error("响应体为空")
+                    addLog("VPN 直接访问测试通过")
+                } finally {
+                    response.close()
+                }
             }
         } catch (e: CancellationException) {
             throw e

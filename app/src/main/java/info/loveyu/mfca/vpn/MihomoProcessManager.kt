@@ -46,8 +46,11 @@ object MihomoProcessManager {
             val workDir = File(context.filesDir, "vpn/runtime/${sanitize(artifacts.candidate.name)}").apply {
                 mkdirs()
             }
-            val stdoutLog = File(workDir, "mihomo.stdout.log").apply { writeText("") }
-            val stderrLog = File(workDir, "mihomo.stderr.log").apply { writeText("") }
+            val logDir = File(context.cacheDir, "vpn/${sanitize(artifacts.candidate.name)}").apply {
+                mkdirs()
+            }
+            val stdoutLog = File(logDir, "mihomo.stdout.log").apply { writeText("") }
+            val stderrLog = File(logDir, "mihomo.stderr.log").apply { writeText("") }
             lastLogFiles = Pair(stdoutLog, stderrLog)
             LogManager.logInfo(
                 "VPN",

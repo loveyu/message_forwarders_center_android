@@ -191,45 +191,51 @@ object VpnManager {
             ?: return Result.failure(IllegalStateException("No available VPN candidate selected"))
         LogManager.logInfo("VPN", "Preparing VPN candidate ${selected.config.name}")
         updateRuntimeStatus(VpnRuntimeStatus.preparing, "Preparing ${selected.config.name}")
-        return MihomoCoreManager.ensureCore(context, m2mCoreUrl, effectiveDownloadProxy()).fold(
-            onSuccess = { coreFile ->
-                LogManager.logInfo("VPN", "Prepared mihomo core for ${selected.config.name}: ${coreFile.absolutePath}")
-                val cachedSource =
-                    VpnConfigCacheManager.getCachedSourceFile(context, selected.config.name)
-                        ?: return@fold Result.failure(
-                            IllegalStateException("配置未缓存，请先下载 ${selected.config.name} 的配置"),
-                        )
-                val effectivePort = store?.getLocalPort(selected.config.name) ?: LOCAL_PROXY_PORT
-                val effectiveRuleMode = store?.getRuleMode(selected.config.name)
-                val effectiveLogLevel = store?.getLogLevel(selected.config.name)
-                val effectiveUdpRelay = store?.getUdpRelay(selected.config.name) ?: true
-                val effectiveDnsHijack = store?.getDnsHijack(selected.config.name) ?: true
-                LogManager.logDebug("VPN", "Effective settings for ${selected.config.name}: port=$effectivePort, ruleMode=$effectiveRuleMode, logLevel=$effectiveLogLevel, udpRelay=$effectiveUdpRelay, dnsHijack=$effectiveDnsHijack")
-                VpnProfileManager.buildRuntimeProfile(
-                    context,
-                    selected.config.name,
-                    cachedSource.readText(),
-                    effectivePort,
-                    effectiveRuleMode,
-                    effectiveLogLevel,
-                ).map { profileFile ->
-                    LogManager.logInfo("VPN", "Prepared VPN profile for ${selected.config.name}: ${profileFile.absolutePath}")
-                    PreparedVpnArtifacts(
-                        candidate = selected.config,
-                        coreFilePath = coreFile.absolutePath,
-                        profileFilePath = profileFile.absolutePath,
-                        localProxyPort = effectivePort,
-                        udpRelay = effectiveUdpRelay,
-                        dnsHijack = effectiveDnsHijack,
-                    )
+
+        // Step 1: Ensure config is cached (auto-download if needed)
+        val cachedSource =
+            VpnConfigCacheManager.getCachedSourceFile(context, selected.config.name)
+                ?: run {
+                    updateRuntimeStatus(VpnRuntimeStatus.preparing, "Downloading config for ${selected.config.name}")
+                    LogManager.logInfo("VPN", "Config not cached, auto-downloading for ${selected.config.name}")
+                    VpnConfigCacheManager.downloadConfig(context, selected.config)
+                        .getOrNull()
+                        ?.let { VpnConfigCacheManager.getCachedSourceFile(context, selected.config.name) }
                 }
-            },
-            onFailure = { error -> Result.failure(error) },
-        ).onSuccess {
-            updateRuntimeStatus(
-                VpnRuntimeStatus.prepared,
-                "Prepared ${it.candidate.name}",
+        if (cachedSource == null) {
+            LogManager.logError("VPN", "Failed to download config for ${selected.config.name}")
+            updateRuntimeStatus(VpnRuntimeStatus.error, "Failed to download config for ${selected.config.name}")
+            return Result.failure(IllegalStateException("Failed to download config for ${selected.config.name}"))
+        }
+
+        // Step 2: Ensure core is available (auto-download if needed)
+        return MihomoCoreManager.ensureCore(context, m2mCoreUrl, effectiveDownloadProxy()).map { coreFile ->
+            LogManager.logInfo("VPN", "Prepared mihomo core for ${selected.config.name}: ${coreFile.absolutePath}")
+            val effectivePort = store?.getLocalPort(selected.config.name) ?: LOCAL_PROXY_PORT
+            val effectiveRuleMode = store?.getRuleMode(selected.config.name)
+            val effectiveLogLevel = store?.getLogLevel(selected.config.name)
+            val effectiveUdpRelay = store?.getUdpRelay(selected.config.name) ?: true
+            val effectiveDnsHijack = store?.getDnsHijack(selected.config.name) ?: true
+            LogManager.logDebug("VPN", "Effective settings for ${selected.config.name}: port=$effectivePort, ruleMode=$effectiveRuleMode, logLevel=$effectiveLogLevel, udpRelay=$effectiveUdpRelay, dnsHijack=$effectiveDnsHijack")
+            val profileFile = VpnProfileManager.buildRuntimeProfile(
+                context,
+                selected.config.name,
+                cachedSource.readText(),
+                effectivePort,
+                effectiveRuleMode,
+                effectiveLogLevel,
+            ).getOrThrow()
+            LogManager.logInfo("VPN", "Prepared VPN profile for ${selected.config.name}: ${profileFile.absolutePath}")
+            PreparedVpnArtifacts(
+                candidate = selected.config,
+                coreFilePath = coreFile.absolutePath,
+                profileFilePath = profileFile.absolutePath,
+                localProxyPort = effectivePort,
+                udpRelay = effectiveUdpRelay,
+                dnsHijack = effectiveDnsHijack,
             )
+        }.onSuccess {
+            updateRuntimeStatus(VpnRuntimeStatus.prepared, "Prepared ${it.candidate.name}")
         }.onFailure { error ->
             LogManager.logError("VPN", "Failed to prepare VPN artifacts: ${error.message}")
             updateRuntimeStatus(VpnRuntimeStatus.error, error.message ?: "Failed to prepare VPN")

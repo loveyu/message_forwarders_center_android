@@ -48,8 +48,11 @@ object VpnBridgeProcessManager {
             val workDir = File(context.filesDir, "vpn/runtime/${sanitize(artifacts.candidate.name)}/bridge").apply {
                 mkdirs()
             }
-            val stdoutLog = File(workDir, "bridge.stdout.log").apply { writeText("") }
-            val stderrLog = File(workDir, "bridge.stderr.log").apply { writeText("") }
+            val logDir = File(context.cacheDir, "vpn/${sanitize(artifacts.candidate.name)}/bridge").apply {
+                mkdirs()
+            }
+            val stdoutLog = File(logDir, "bridge.stdout.log").apply { writeText("") }
+            val stderrLog = File(logDir, "bridge.stderr.log").apply { writeText("") }
             val controlName = "mfca_vpn_${UUID.randomUUID().toString().replace("-", "")}"
             val controlServer = LocalServerSocket(controlName)
             LogManager.logInfo(
