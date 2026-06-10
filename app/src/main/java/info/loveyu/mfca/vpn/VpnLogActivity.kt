@@ -20,6 +20,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -33,6 +36,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +51,7 @@ import info.loveyu.mfca.ui.theme.MfcaTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -142,6 +147,7 @@ private fun VpnLogScreen(onBack: () -> Unit) {
     var isRunning by remember { mutableStateOf(false) }
     var hasEverStarted by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
     // Poll log files every second
     LaunchedEffect(Unit) {
@@ -171,11 +177,11 @@ private fun VpnLogScreen(onBack: () -> Unit) {
     }
 
     Scaffold(
-        topBar = {
+            topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text("mihomo 日志")
+                        Text("m2m 日志")
                         Text(
                             text = if (isRunning) "● 运行中" else "已停止",
                             style = MaterialTheme.typography.labelSmall,
@@ -199,19 +205,50 @@ private fun VpnLogScreen(onBack: () -> Unit) {
                             }
                             val text = lines.joinToString("\n") { it.text }
                             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            cm.setPrimaryClip(ClipData.newPlainText("mihomo_logs", text))
+                            cm.setPrimaryClip(ClipData.newPlainText("m2m_logs", text))
                             Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
                         },
                     ) {
                         Text("复制")
                     }
-                    TextButton(
-                        onClick = {
-                            val msg = VpnLogActivity.exportDiagnostics(context)
-                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                        },
-                    ) {
-                        Text(stringResource(R.string.vpn_export_diagnostics))
+                    var showOverflowMenu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { showOverflowMenu = true }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = null,
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showOverflowMenu,
+                            onDismissRequest = { showOverflowMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("清空日志") },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    lines = emptyList()
+                                    scope.launch {
+                                        withContext(Dispatchers.IO) {
+                                            val logFiles = MihomoProcessManager.getLastLogFiles()
+                                            if (logFiles != null) {
+                                                val (stdoutFile, stderrFile) = logFiles
+                                                stdoutFile.writeText("")
+                                                stderrFile.writeText("")
+                                            }
+                                        }
+                                    }
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.vpn_export_diagnostics)) },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    val msg = VpnLogActivity.exportDiagnostics(context)
+                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                },
+                            )
+                        }
                     }
                 },
             )
