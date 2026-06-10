@@ -24,7 +24,6 @@ object VpnBridgeProcessManager {
 
     @Volatile private var runningProcess: RunningProcess? = null
 
-    @Synchronized
     fun current(): RunningProcess? {
         val current = runningProcess ?: return null
         if (current.process.isAlive) {
@@ -34,7 +33,6 @@ object VpnBridgeProcessManager {
         return null
     }
 
-    @Synchronized
     fun start(
         context: Context,
         artifacts: PreparedVpnArtifacts,
@@ -57,26 +55,15 @@ object VpnBridgeProcessManager {
             val controlServer = LocalServerSocket(controlName)
             LogManager.logInfo(
                 "VPN",
-                "Starting VPN bridge for ${artifacts.candidate.name}: binary=${bridgeBinary.absolutePath}, workDir=${workDir.absolutePath}, socks=127.0.0.1:${artifacts.localProxyPort}",
+                "Starting VPN bridge for ${artifacts.candidate.name}: binary=${bridgeBinary.absolutePath}, workDir=${workDir.absolutePath}, socks=127.0.0.1:${artifacts.localProxyPort}, udpRelay=${artifacts.udpRelay}, dnsHijack=${artifacts.dnsHijack}",
             )
 
             val command = buildList {
                     add(bridgeBinary.absolutePath)
                     add("--control-socket")
                     add(controlName)
-                    add("--socks")
-                    add("127.0.0.1:${artifacts.localProxyPort}")
-                    add("--gateway")
-                    add(MfcaVpnService.TUN_GATEWAY_CIDR)
-                    add("--portal")
-                    add(MfcaVpnService.TUN_PORTAL)
-                    if (artifacts.dnsHijack) {
-                        add("--dns")
-                        add("127.0.0.1:${MfcaVpnService.MIHOMO_DNS_PORT}")
-                    }
-                    if (!artifacts.udpRelay) {
-                        add("--udp-relay=false")
-                    }
+                    add("--config")
+                    add(writeConfigFile(workDir, artifacts).absolutePath)
                 }
             LogManager.logDebug("VPN", "Bridge command: ${command.joinToString(" ")}")
             val process = ProcessBuilder(command)
@@ -88,7 +75,17 @@ object VpnBridgeProcessManager {
                 }
                 .start()
 
-            val controlSocket = controlServer.accept()
+            // Accept with timeout: close the server socket to unblock accept() if needed
+            val acceptResult = acceptWithTimeout(controlServer, 10_000L)
+            if (acceptResult == null) {
+                process.destroy()
+                process.waitFor(1500, TimeUnit.MILLISECONDS)
+                controlServer.close()
+                throw IllegalStateException(
+                    "VPN bridge did not connect to control socket within timeout: ${readFailureOutput(stdoutLog, stderrLog)}",
+                )
+            }
+            val controlSocket = acceptResult
             controlSocket.setFileDescriptorsForSend(arrayOf(tunInterface.fileDescriptor))
             controlSocket.outputStream.write(byteArrayOf(1))
             controlSocket.outputStream.flush()
@@ -101,7 +98,7 @@ object VpnBridgeProcessManager {
                 )
             }
 
-            RunningProcess(
+            val running = RunningProcess(
                 candidateName = artifacts.candidate.name,
                 process = process,
                 controlServer = controlServer,
@@ -109,29 +106,53 @@ object VpnBridgeProcessManager {
                 workingDirectory = workDir,
                 stdoutLogFile = stdoutLog,
                 stderrLogFile = stderrLog,
-            ).also { running ->
-                runningProcess = running
-                Thread {
-                    val exitCode = process.waitFor()
-                    val tail = readFailureOutput(stdoutLog, stderrLog)
-                    synchronized(this) {
-                        if (runningProcess?.process == process) {
-                            runningProcess = null
-                        }
-                    }
-                    if (!running.stopping) {
-                        onUnexpectedExit(exitCode, tail)
-                    }
-                }.apply {
-                    isDaemon = true
-                    name = "vpn-bridge-watch-${sanitize(artifacts.candidate.name)}"
-                    start()
+            )
+            runningProcess = running
+            Thread {
+                val exitCode = process.waitFor()
+                val tail = readFailureOutput(stdoutLog, stderrLog)
+                if (!running.stopping) {
+                    runningProcess = null
+                    onUnexpectedExit(exitCode, tail)
                 }
+            }.apply {
+                isDaemon = true
+                name = "vpn-bridge-watch-${sanitize(artifacts.candidate.name)}"
+                start()
             }
+            running
         }
     }
 
-    @Synchronized
+    /**
+     * Accept a connection on [controlServer] with a timeout of [timeoutMs] milliseconds.
+     * Uses a dedicated thread so the caller is not blocked indefinitely and [stop] can close
+     * the server socket to unblock the accept if the bridge process fails to connect.
+     */
+    private fun acceptWithTimeout(
+        controlServer: LocalServerSocket,
+        timeoutMs: Long,
+    ): LocalSocket? {
+        var socket: LocalSocket? = null
+        var error: Exception? = null
+        val thread = Thread({
+            try {
+                socket = controlServer.accept()
+            } catch (e: Exception) {
+                error = e
+            }
+        }, "vpn-bridge-accept").apply { isDaemon = true; start() }
+        thread.join(timeoutMs)
+        if (thread.isAlive) {
+            // Timeout: close the server socket to unblock accept()
+            runCatching { controlServer.close() }
+            thread.join(1500)
+            return null
+        }
+        error?.let { throw it }
+        return socket
+    }
+
     fun stop(): String? {
         val current = runningProcess ?: return null
         current.stopping = true
@@ -175,4 +196,23 @@ object VpnBridgeProcessManager {
     }
 
     private fun sanitize(value: String): String = value.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+
+    private fun writeConfigFile(workDir: File, artifacts: PreparedVpnArtifacts): File {
+        val config = buildString {
+            appendLine("tunnel:")
+            appendLine("  mtu: ${MfcaVpnService.TUN_MTU}")
+            appendLine("  ipv4: '${MfcaVpnService.TUN_GATEWAY}'")
+            appendLine("socks5:")
+            appendLine("  port: ${artifacts.localProxyPort}")
+            appendLine("  address: '127.0.0.1'")
+            if (artifacts.udpRelay) {
+                appendLine("  udp: 'udp'")
+            }
+            appendLine("misc:")
+            appendLine("  log-level: 'warn'")
+        }
+        val configFile = File(workDir, "config.yml")
+        configFile.writeText(config)
+        return configFile
+    }
 }

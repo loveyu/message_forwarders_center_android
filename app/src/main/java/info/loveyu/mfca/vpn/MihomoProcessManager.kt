@@ -24,7 +24,6 @@ object MihomoProcessManager {
     fun getLastLogFiles(): Pair<File, File>? = lastLogFiles
     fun isRunning(): Boolean = current() != null
 
-    @Synchronized
     fun current(): RunningCore? {
         val current = runningCore ?: return null
         if (current.core.isRunning()) {
@@ -34,7 +33,6 @@ object MihomoProcessManager {
         return null
     }
 
-    @Synchronized
     fun start(
         context: Context,
         artifacts: PreparedVpnArtifacts,
@@ -59,13 +57,13 @@ object MihomoProcessManager {
 
             val core = MihomoPluginCore()
             core.load(artifacts.coreFilePath)
-            // Enable socket protector if a VpnService protector is registered
-            if (MihomoPluginCore.socketProtector != null) {
-                core.setSocketProtector(true)
-            }
             val ret = core.start(buildArgs(workDir = workDir, profileFile = File(artifacts.profileFilePath)), stdoutLog.absolutePath)
             if (ret != 0) {
                 throw IllegalStateException("Mihomo plugin start failed (code $ret): ${readFailureOutput(stdoutLog, stderrLog)}")
+            }
+            // Enable socket protector AFTER start so the hook survives nativeStart() reinitialization
+            if (MihomoPluginCore.socketProtector != null) {
+                core.setSocketProtector(true)
             }
             Thread.sleep(1500)
             if (!core.isRunning()) {
@@ -87,11 +85,7 @@ object MihomoProcessManager {
                     }
                     if (!running.stopping) {
                         val tail = readFailureOutput(stdoutLog, stderrLog)
-                        synchronized(this) {
-                            if (runningCore?.core == core) {
-                                runningCore = null
-                            }
-                        }
+                        runningCore = null
                         onUnexpectedExit(-1, tail)
                     }
                 }.apply {
@@ -103,7 +97,6 @@ object MihomoProcessManager {
         }
     }
 
-    @Synchronized
     fun stop(): String? {
         val current = runningCore ?: return null
         current.stopping = true

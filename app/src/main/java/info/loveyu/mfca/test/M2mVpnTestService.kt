@@ -22,11 +22,13 @@ import info.loveyu.mfca.vpn.MfcaVpnService
 import info.loveyu.mfca.vpn.MihomoProcessManager
 import info.loveyu.mfca.vpn.PreparedVpnArtifacts
 import info.loveyu.mfca.vpn.VpnBridgeProcessManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class M2mVpnTestService : VpnService() {
 
@@ -38,6 +40,7 @@ class M2mVpnTestService : VpnService() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var tunInterface: ParcelFileDescriptor? = null
+    @Volatile private var isRunning: Boolean = false
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -103,26 +106,36 @@ class M2mVpnTestService : VpnService() {
             stopSelf()
             return
         }
+        isRunning = true
         emit(Event.Log("核心代理已启动"))
 
         // Wait for proxy port ready
-        val deadline = System.currentTimeMillis() + 15_000
-        while (System.currentTimeMillis() < deadline) {
-            if (!runningCore.core.isRunning()) {
-                emit(Event.Error("核心代理意外退出"))
-                MihomoProcessManager.stop()
-                stopSelf()
-                return
+        try {
+            withContext(Dispatchers.IO) {
+                val deadline = System.currentTimeMillis() + 15_000
+                while (System.currentTimeMillis() < deadline) {
+                    if (!runningCore.core.isRunning()) {
+                        emit(Event.Error("核心代理意外退出"))
+                        MihomoProcessManager.stop()
+                        stopSelf()
+                        return@withContext
+                    }
+                    if (canConnect(mixedPort)) return@withContext
+                    Thread.sleep(300)
+                }
+                if (!canConnect(mixedPort)) {
+                    emit(Event.Error("代理端口就绪超时"))
+                    MihomoProcessManager.stop()
+                    stopSelf()
+                    return@withContext
+                }
             }
-            if (canConnect(mixedPort)) break
-            Thread.sleep(300)
-        }
-        if (!canConnect(mixedPort)) {
-            emit(Event.Error("代理端口就绪超时"))
+        } catch (_: CancellationException) {
             MihomoProcessManager.stop()
             stopSelf()
             return
         }
+        if (!isRunning) return
         emit(Event.Log("代理端口 $mixedPort 已就绪"))
 
         // Establish TUN
@@ -155,6 +168,7 @@ class M2mVpnTestService : VpnService() {
     }
 
     private fun stopVpn() {
+        isRunning = false
         MihomoPluginCore.socketProtector = null
         VpnBridgeProcessManager.stop()
         closeTun()

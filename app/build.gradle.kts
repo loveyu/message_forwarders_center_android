@@ -40,30 +40,6 @@ plugins {
     alias(libs.plugins.spotless)
 }
 
-data class GoBridgeTarget(
-    val abi: String,
-    val goArch: String,
-    val goArm: String? = null,
-    val clangTriple: String,
-)
-
-val vpnBridgeTargets =
-    listOf(
-        GoBridgeTarget("arm64-v8a", "arm64", clangTriple = "aarch64-linux-android33-clang"),
-        GoBridgeTarget("armeabi-v7a", "arm", "7", "armv7a-linux-androideabi33-clang"),
-        GoBridgeTarget("x86_64", "amd64", clangTriple = "x86_64-linux-android33-clang"),
-        GoBridgeTarget("x86", "386", clangTriple = "i686-linux-android33-clang"),
-    )
-
-val goToolchainVersion = "1.24.1"
-val goToolchainArchive = "go${goToolchainVersion}.linux-amd64.tar.gz"
-val goToolchainUrl = "https://go.dev/dl/$goToolchainArchive"
-val goToolchainRootDir =
-    providers
-        .environmentVariable("FLOWGATE_GO_TOOLCHAIN_DIR")
-        .map { file(it) }
-        .orElse(layout.buildDirectory.dir("tools/go/$goToolchainVersion").map { it.asFile })
-val goBinary = goToolchainRootDir.map { it.resolve("bin/go") }
 val androidNdkVersion = "r27c"
 val androidNdkArchive = "android-ndk-$androidNdkVersion-linux.zip"
 val androidNdkUrl = "https://dl.google.com/android/repository/$androidNdkArchive"
@@ -72,29 +48,9 @@ val androidNdkRootDir =
         .environmentVariable("FLOWGATE_ANDROID_NDK_DIR")
         .map { file(it) }
         .orElse(layout.buildDirectory.dir("tools/android-ndk/$androidNdkVersion").map { it.asFile })
-val vpnBridgeSourceDir = layout.projectDirectory.dir("src/main/go/vpnbridge")
 val vpnBridgeJniLibDir = layout.buildDirectory.dir("generated/jniLibs/vpnbridge")
-val ensureGoToolchain =
-    tasks.register<Exec>("ensureGoToolchain") {
-        outputs.dir(goToolchainRootDir)
-        onlyIf { !goBinary.get().exists() }
-        val toolchainRoot = goToolchainRootDir.get()
-        toolchainRoot.parentFile.mkdirs()
-        commandLine(
-            "bash",
-            "-lc",
-            """
-            set -euo pipefail
-            tmpdir=${'$'}(mktemp -d)
-            trap 'rm -rf "${'$'}tmpdir"' EXIT
-            curl -L "$goToolchainUrl" -o "${'$'}tmpdir/$goToolchainArchive"
-            rm -rf "${toolchainRoot.absolutePath}"
-            mkdir -p "${toolchainRoot.parentFile.absolutePath}"
-            tar -C "${toolchainRoot.parentFile.absolutePath}" -xzf "${'$'}tmpdir/$goToolchainArchive"
-            mv "${toolchainRoot.parentFile.absolutePath}/go" "${toolchainRoot.absolutePath}"
-            """.trimIndent(),
-        )
-    }
+val socks5TunnelDir = layout.projectDirectory.dir("src/main/c/hev-socks5-tunnel")
+val vpnBridgeWrapperDir = layout.projectDirectory.dir("src/main/c/vpnbridge")
 val ensureAndroidNdk =
     tasks.register<Exec>("ensureAndroidNdk") {
         outputs.dir(androidNdkRootDir)
@@ -118,34 +74,93 @@ val ensureAndroidNdk =
     }
 val buildVpnBridgeBinaries =
     tasks.register<Exec>("buildVpnBridgeBinaries") {
-        dependsOn(ensureGoToolchain)
         dependsOn(ensureAndroidNdk)
-        inputs.dir(vpnBridgeSourceDir)
-        inputs.property("goToolchainVersion", goToolchainVersion)
-        inputs.property("androidNdkVersion", androidNdkVersion)
+        inputs.dir(socks5TunnelDir)
+        inputs.dir(vpnBridgeWrapperDir)
         outputs.dir(vpnBridgeJniLibDir)
         val outputRoot = vpnBridgeJniLibDir.get().asFile
+        val ndkRoot = androidNdkRootDir.get()
+        val hevDir = socks5TunnelDir.asFile.absolutePath
+        val wrapperDir = vpnBridgeWrapperDir.asFile.absolutePath
         onlyIf {
-            vpnBridgeTargets.any { target ->
-                !outputRoot.resolve("${target.abi}/libvpnbridge.so").exists()
-            }
+            !outputRoot.resolve("arm64-v8a/libvpnbridge.so").exists()
         }
-        outputRoot.mkdirs()
-        val ndkBinDir = androidNdkRootDir.get().resolve("toolchains/llvm/prebuilt/linux-x86_64/bin")
+        // A shell helper function to compile sources preserving directory structure
+        // so that files with the same basename (e.g. lwip mem.c) don't collide.
+        val compileHelper = """
+            compile_to_objdir() {
+              local cc="${'$'}1" flags="${'$'}2" inc="${'$'}3" objdir="${'$'}4" src="${'$'}5"
+              local relpath="${'$'}{src#${'$'}HEV/}"
+              local objfile="${'$'}objdir/${'$'}{relpath%.*}.o"
+              mkdir -p "${'$'}(dirname "${'$'}objfile")"
+              ${'$'}cc ${'$'}flags ${'$'}inc -c "${'$'}src" -o "${'$'}objfile"
+            }
+            make_static_lib() {
+              local ar="${'$'}1" libpath="${'$'}2" objdir="${'$'}3"
+              ${'$'}ar rcs "${'$'}libpath" ${'$'}(find "${'$'}objdir" -name '*.o')
+            }
+        """.trimIndent()
         val buildScript =
             buildString {
                 appendLine("set -euo pipefail")
-                appendLine("cd '${vpnBridgeSourceDir.asFile.absolutePath}'")
-                appendLine("'${goBinary.get().absolutePath}' mod tidy")
-                vpnBridgeTargets.forEach { target ->
-                    appendLine("mkdir -p '${outputRoot.resolve(target.abi).absolutePath}'")
-                    append("GOOS=android GOARCH=${target.goArch} CGO_ENABLED=1 CC='${ndkBinDir.resolve(target.clangTriple).absolutePath}' ")
-                    if (target.goArm != null) {
-                        append("GOARM=${target.goArm} ")
-                    }
-                    appendLine(
-                        "'${goBinary.get().absolutePath}' build -trimpath -ldflags='-extldflags=-Wl,-z,max-page-size=16384' -o '${outputRoot.resolve("${target.abi}/libvpnbridge.so").absolutePath}' .",
+                appendLine("NDK_BIN='${ndkRoot.absolutePath}/toolchains/llvm/prebuilt/linux-x86_64/bin'")
+                appendLine("HEV='$hevDir'")
+                appendLine("OUT='${outputRoot.absolutePath}'")
+                appendLine(compileHelper)
+                // Common include paths and flags
+                appendLine("COMMON_INC=\"-I\$HEV/src -I\$HEV/src/misc -I\$HEV/src/core/include")
+                appendLine("  -I\$HEV/third-part/yaml/src")
+                appendLine("  -I\$HEV/third-part/lwip/src/include -I\$HEV/third-part/lwip/src/ports/include")
+                appendLine("  -I\$HEV/third-part/hev-task-system/include -I\$HEV/third-part/hev-task-system/src")
+                appendLine("  -I\$HEV/include\"")
+                appendLine("COMMON_FLAGS=\"-O3 -DFD_SET_DEFINED -DSOCKLEN_T_DEFINED -DENABLE_LIBRARY\"")
+                // Per-ABI build
+                val targets =
+                    listOf(
+                        Triple("arm64-v8a", "aarch64-linux-android33-clang", ""),
+                        Triple("armeabi-v7a", "armv7a-linux-androideabi33-clang", "-mfpu=neon"),
+                        Triple("x86_64", "x86_64-linux-android33-clang", ""),
+                        Triple("x86", "i686-linux-android33-clang", ""),
                     )
+                for ((abi, triple, extraFlags) in targets) {
+                    val cc = "\$NDK_BIN/$triple"
+                    val ar = "\$NDK_BIN/llvm-ar"
+                    appendLine("echo '=== Building VPN bridge for $abi ==='")
+                    appendLine("ABI_OUT=\"\$OUT/$abi\"")
+                    appendLine("OBJDIR=\"\$ABI_OUT/obj\"")
+                    appendLine("mkdir -p \"\$ABI_OUT\"")
+                    // yaml
+                    appendLine("YAML_FLAGS=\"-DYAML_VERSION_MAJOR=0 -DYAML_VERSION_MINOR=2 -DYAML_VERSION_PATCH=5 -DYAML_VERSION_STRING=\\\"0.2.5\\\"\"")
+                    appendLine("for f in \$(find \"\$HEV/third-part/yaml/src\" -name '*.c'); do")
+                    appendLine("  compile_to_objdir $cc \"\$COMMON_FLAGS \$YAML_FLAGS\" \"\$COMMON_INC\" \"\$OBJDIR/yaml\" \"\$f\"")
+                    appendLine("done")
+                    appendLine("make_static_lib $ar \"\$OBJDIR/libyaml.a\" \"\$OBJDIR/yaml\"")
+                    // lwip
+                    appendLine("for f in \$(find \"\$HEV/third-part/lwip/src\" -name '*.c'); do")
+                    appendLine("  compile_to_objdir $cc \"\$COMMON_FLAGS\" \"\$COMMON_INC\" \"\$OBJDIR/lwip\" \"\$f\"")
+                    appendLine("done")
+                    appendLine("make_static_lib $ar \"\$OBJDIR/liblwip.a\" \"\$OBJDIR/lwip\"")
+                    // hev-task-system
+                    appendLine("TASK_FLAGS=\"-fvisibility=hidden -DENABLE_STACK_OVERFLOW_DETECTION -DENABLE_MEMALLOC_SLICE -DENABLE_IO_SPLICE_SYSCALL -DCONFIG_STACK_BACKEND=STACK_MMAP -DCONFIG_STACK_OVERFLOW_DETECTION=1 -DCONFIG_MEMALLOC_SLICE_ALIGN=16 -DCONFIG_MEMALLOC_SLICE_MAX_SIZE=4096 -DCONFIG_MEMALLOC_SLICE_MAX_COUNT=1000 -DCONFIG_SCHED_CLOCK=CLOCK_NONE\"")
+                    appendLine("for f in \$(find \"\$HEV/third-part/hev-task-system/src\" -name '*.c'); do")
+                    appendLine("  compile_to_objdir $cc \"\$COMMON_FLAGS $extraFlags \$TASK_FLAGS\" \"\$COMMON_INC\" \"\$OBJDIR/task\" \"\$f\"")
+                    appendLine("done")
+                    appendLine("for f in \$(find \"\$HEV/third-part/hev-task-system/src\" -name '*.S'); do")
+                    appendLine("  compile_to_objdir $cc \"$extraFlags\" \"\$COMMON_INC\" \"\$OBJDIR/task\" \"\$f\"")
+                    appendLine("done")
+                    appendLine("make_static_lib $ar \"\$OBJDIR/libhev-task-system.a\" \"\$OBJDIR/task\"")
+                    // hev-socks5-tunnel
+                    appendLine("for f in \$(find \"\$HEV/src\" -name '*.c'); do")
+                    appendLine("  compile_to_objdir $cc \"\$COMMON_FLAGS $extraFlags\" \"\$COMMON_INC\" \"\$OBJDIR/tunnel\" \"\$f\"")
+                    appendLine("done")
+                    // wrapper
+                    appendLine("mkdir -p \"\$OBJDIR/wrapper\"")
+                    appendLine("$cc \$COMMON_FLAGS $extraFlags \$COMMON_INC -c '$wrapperDir/main.c' -o \"\$OBJDIR/wrapper/main.o\"")
+                    // Link
+                    appendLine(
+                        "$cc -Wl,-z,max-page-size=16384 -o \"\$ABI_OUT/libvpnbridge.so\" \"\$OBJDIR/wrapper/main.o\" \$(find \"\$OBJDIR/tunnel\" -name '*.o') \"\$OBJDIR/libyaml.a\" \"\$OBJDIR/liblwip.a\" \"\$OBJDIR/libhev-task-system.a\"",
+                    )
+                    appendLine("\$NDK_BIN/llvm-strip \"\$ABI_OUT/libvpnbridge.so\"")
                 }
             }
         commandLine("bash", "-lc", buildScript)
