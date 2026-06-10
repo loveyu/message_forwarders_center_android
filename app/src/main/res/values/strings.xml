@@ -169,6 +169,9 @@
     <string name="vpn_core_download">下载核心</string>
     <string name="vpn_core_redownload">重新下载</string>
     <string name="vpn_core_delete">删除缓存</string>
+    <string name="vpn_core_unavailable">核心不可用</string>
+    <string name="more_options">更多选项</string>
+    <string name="vpn_running_title_format">运行中：%1$s</string>
 
     <!-- 测试中心 -->
     <string name="test_hub_title">测试中心</string>
