@@ -142,7 +142,7 @@ class MfcaVpnService : VpnService() {
 
         VpnManager.updateRuntimeStatus(VpnRuntimeStatus.starting, "Starting ${artifacts.candidate.name}")
         updateNotification(VpnManager.state.value.statusMessage)
-        LogManager.logDebug("VPN", "Artifacts: port=${artifacts.localProxyPort}, udpRelay=${artifacts.udpRelay}, dnsHijack=${artifacts.dnsHijack}, core=${artifacts.coreFilePath}, profile=${artifacts.profileFilePath}")
+        LogManager.logDebug("VPN", "Artifacts: port=${artifacts.localProxyPort}, apiPort=${artifacts.apiPort}, udpRelay=${artifacts.udpRelay}, dnsHijack=${artifacts.dnsHijack}, core=${artifacts.coreFilePath}, profile=${artifacts.profileFilePath}")
 
         // Enable socket protection so mihomo outbound connections bypass VPN tunnel
         MihomoPluginCore.socketProtector = MihomoPluginCore.SocketProtector { fd -> protect(fd) }

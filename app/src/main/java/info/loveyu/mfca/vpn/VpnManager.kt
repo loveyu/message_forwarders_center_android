@@ -6,6 +6,7 @@ import info.loveyu.mfca.config.VpnInputConfig
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.NetworkChecker
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.net.ServerSocket
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -216,12 +217,16 @@ object VpnManager {
             val effectiveLogLevel = store?.getLogLevel(selected.config.name)
             val effectiveUdpRelay = store?.getUdpRelay(selected.config.name) ?: true
             val effectiveDnsHijack = store?.getDnsHijack(selected.config.name) ?: true
-            LogManager.logDebug("VPN", "Effective settings for ${selected.config.name}: port=$effectivePort, ruleMode=$effectiveRuleMode, logLevel=$effectiveLogLevel, udpRelay=$effectiveUdpRelay, dnsHijack=$effectiveDnsHijack")
+            val apiPort = ServerSocket(0).use { it.localPort }
+            val apiSecret = store?.getOrCreateApiSecret() ?: ""
+            LogManager.logDebug("VPN", "Effective settings for ${selected.config.name}: port=$effectivePort, apiPort=$apiPort, ruleMode=$effectiveRuleMode, logLevel=$effectiveLogLevel, udpRelay=$effectiveUdpRelay, dnsHijack=$effectiveDnsHijack")
             val profileFile = VpnProfileManager.buildRuntimeProfile(
                 context,
                 selected.config.name,
                 cachedSource.readText(),
                 effectivePort,
+                apiPort,
+                apiSecret,
                 effectiveRuleMode,
                 effectiveLogLevel,
             ).getOrThrow()
@@ -231,6 +236,8 @@ object VpnManager {
                 coreFilePath = coreFile.absolutePath,
                 profileFilePath = profileFile.absolutePath,
                 localProxyPort = effectivePort,
+                apiPort = apiPort,
+                apiSecret = apiSecret,
                 udpRelay = effectiveUdpRelay,
                 dnsHijack = effectiveDnsHijack,
             )

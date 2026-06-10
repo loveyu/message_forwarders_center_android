@@ -57,6 +57,8 @@ data class PreparedVpnArtifacts(
     val coreFilePath: String,
     val profileFilePath: String,
     val localProxyPort: Int,
+    val apiPort: Int,
+    val apiSecret: String,
     val udpRelay: Boolean = true,
     val dnsHijack: Boolean = true,
 )

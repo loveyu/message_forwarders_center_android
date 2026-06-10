@@ -3,6 +3,7 @@ package info.loveyu.mfca.vpn
 import android.content.Context
 import info.loveyu.mfca.config.VpnAccessControlMode
 import org.json.JSONArray
+import java.util.UUID
 
 class VpnStateStore(context: Context) {
     private val preferences = context.getSharedPreferences("vpn_state_store", Context.MODE_PRIVATE)
@@ -113,6 +114,15 @@ class VpnStateStore(context: Context) {
         editor.apply()
     }
 
+    fun getOrCreateApiSecret(): String {
+        var secret = preferences.getString(KEY_API_SECRET, null)
+        if (secret == null) {
+            secret = UUID.randomUUID().toString().replace("-", "")
+            preferences.edit().putString(KEY_API_SECRET, secret).apply()
+        }
+        return secret
+    }
+
     fun getUdpRelay(candidateName: String, defaultValue: Boolean = false): Boolean {
         return preferences.getBoolean(udpRelayKey(candidateName), defaultValue)
     }
@@ -147,6 +157,7 @@ class VpnStateStore(context: Context) {
         private const val KEY_GLOBAL_ENABLED = "global_enabled"
         private const val KEY_SELECTION_HISTORY = "selection_history"
         private const val KEY_DOWNLOAD_PROXY = "download_proxy"
+        private const val KEY_API_SECRET = "api_secret"
 
         private fun modeKey(candidateName: String): String = "mode_${sanitize(candidateName)}"
 

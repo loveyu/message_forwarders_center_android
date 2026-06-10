@@ -17,6 +17,8 @@ object VpnProfileManager {
         candidateName: String,
         sourceContent: String,
         localProxyPort: Int,
+        apiPort: Int,
+        apiSecret: String,
         ruleMode: VpnRuleMode? = null,
         logLevel: VpnLogLevel? = null,
     ): Result<File> {
@@ -24,7 +26,7 @@ object VpnProfileManager {
             val targetDir = File(context.filesDir, "vpn/profiles")
             val targetFile = File(targetDir, "$candidateName.runtime.yaml")
             targetDir.mkdirs()
-            targetFile.writeText(buildRuntimeProfileContent(sourceContent, localProxyPort, ruleMode, logLevel))
+            targetFile.writeText(buildRuntimeProfileContent(sourceContent, localProxyPort, apiPort, apiSecret, ruleMode, logLevel))
             LogManager.logDebug("VPN", "Runtime profile written to ${targetFile.absolutePath}:\n${targetFile.readText().take(2000)}")
             targetFile
         }
@@ -33,6 +35,8 @@ object VpnProfileManager {
     internal fun buildRuntimeProfileContent(
         source: String,
         localProxyPort: Int,
+        apiPort: Int,
+        apiSecret: String,
         ruleMode: VpnRuleMode? = null,
         logLevel: VpnLogLevel? = null,
     ): String {
@@ -49,11 +53,14 @@ object VpnProfileManager {
         normalized["mixed-port"] = localProxyPort
         normalized["allow-lan"] = false
         normalized["bind-address"] = "127.0.0.1"
-        // Remove external controller to prevent "http: Server closed" error on restart
-        // (Go c-shared runtime cannot fully clean up the old HTTP server between stops)
-        normalized.remove("external-controller")
+        // External controller: localhost-only with auto-detected port
+        normalized["external-controller"] = "127.0.0.1:$apiPort"
         normalized.remove("external-ui")
-        normalized.remove("secret")
+        // Use config secret if present, otherwise use the generated one
+        val existingSecret = normalized["secret"]?.toString()?.ifBlank { null }
+        if (existingSecret == null) {
+            normalized["secret"] = apiSecret
+        }
         // mixed-port handles both HTTP and SOCKS5, making these redundant
         normalized.remove("port")
         normalized.remove("socks-port")

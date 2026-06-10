@@ -89,11 +89,14 @@ class M2mVpnTestService : VpnService() {
         }
 
         val candidate = VpnInputConfig(name = "m2m-test", configUrl = "")
+        val apiPort = java.net.ServerSocket(0).use { it.localPort }
         val artifacts = PreparedVpnArtifacts(
             candidate = candidate,
             coreFilePath = pluginPath,
             profileFilePath = configPath,
             localProxyPort = mixedPort,
+            apiPort = apiPort,
+            apiSecret = "",
         )
 
         // Start mihomo core

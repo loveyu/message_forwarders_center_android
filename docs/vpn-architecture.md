@@ -149,7 +149,9 @@ Android 应用 → TUN 接口 → vpnbridge (tun2socks)
 - **文件**: `app/src/main/java/info/loveyu/mfca/vpn/VpnProfileManager.kt`
 - **职责**: 从缓存的原始配置构建运行时 YAML profile
 - **覆盖字段**:
-  - `mixed-port` → 用户覆盖或默认 `17890`
+  - `mixed-port` → 用户覆盖或默认 `17890`（由 mixed-port 统一处理 HTTP + SOCKS5）
+  - `external-controller` → 强制 `127.0.0.1:{随机端口}`（VPN 启动时自动探测可用端口）
+  - `secret` → 配置中已有则保留，否则使用持久化的随机认证令牌
   - `allow-lan` → 强制 `false`
   - `bind-address` → 强制 `127.0.0.1`
   - `tun.enable` → 强制 `false`（TUN 由 vpnbridge 处理）
@@ -162,6 +164,9 @@ Android 应用 → TUN 接口 → vpnbridge (tun2socks)
   - `dns.fake-ip-filter` → 默认排除 LAN/localhost/Google DL 等（仅在配置未指定时注入）
   - `dns.default-nameserver` → 默认 `223.5.5.5`, `119.29.29.29`（仅在配置未指定时注入）
   - `dns.nameserver` → 默认国内公共 DNS + DoH（仅在配置未指定时注入）
+- **移除字段**（mixed-port 已覆盖，无需独立端口）:
+  - `port`、`socks-port`、`redir-port`、`tproxy-port`
+  - `external-ui`（app 不需要 Web UI）
 
 ### VpnConfigCacheManager
 
@@ -182,6 +187,7 @@ Android 应用 → TUN 接口 → vpnbridge (tun2socks)
   - 每个候选的端口/规则模式/日志级别覆盖
   - 每个候选的 UDP 中继/IPv6 泄漏防护/DNS 劫持开关
   - 下载代理覆盖
+  - API 认证令牌（首次使用时自动生成随机 secret，持久化存储）
 
 ## 数据模型
 
@@ -193,7 +199,7 @@ Android 应用 → TUN 接口 → vpnbridge (tun2socks)
 | `VpnCoreState` | 核心插件状态: isReady/path/pluginVersion |
 | `VpnConfigCacheState` | 配置缓存状态: isCached/lastUpdatedMs/nextRefreshMs |
 | `VpnCandidateState` | 候选完整状态: config + 访问控制 + 核心 + 缓存 + 可用性 |
-| `PreparedVpnArtifacts` | 运行时产物: candidate + coreFilePath + profileFilePath + localProxyPort + udpRelay + dnsHijack |
+| `PreparedVpnArtifacts` | 运行时产物: candidate + coreFilePath + profileFilePath + localProxyPort + apiPort + apiSecret + udpRelay + dnsHijack |
 | `VpnUiState` | UI 完整状态: isEnabled + runtimeStatus + candidates + coreState |
 | `VpnRuleMode` | 规则模式: rule/global/direct |
 | `VpnLogLevel` | 日志级别: debug/info/warning/error/silent |
@@ -320,7 +326,8 @@ inputs:
 
 通过 UI 设置的覆盖保存在 SharedPreferences，优先级高于配置文件：
 
-- **端口覆盖** (`mixed-port`): 1024-65535，留空使用默认 17890
+- **端口覆盖** (`mixed-port`): 1024-65535，留空使用默认 17890（强制覆盖，替代独立的 `port`/`socks-port`）
+- **External Controller**: VPN 启动时自动探测随机可用端口，强制绑定 `127.0.0.1`，仅允许本机访问。认证令牌首次生成后持久化
 - **规则模式**: rule / global / direct
 - **日志级别**: debug / info / warning / error / silent
 - **UDP 中继**: 开启后非 DNS 的 UDP 流量通过 SOCKS5 转发（需代理支持 UDP），关闭后丢弃非 DNS UDP 防止流量泄漏
