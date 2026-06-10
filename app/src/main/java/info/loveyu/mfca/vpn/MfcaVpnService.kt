@@ -414,6 +414,9 @@ class MfcaVpnService : VpnService() {
         const val TUN_DNS_SECONDARY = "8.8.8.8"
         const val NET_ANY = "0.0.0.0"
         const val MIHOMO_DNS_PORT = 1053
+        const val MAPDNS_NETWORK = "100.64.0.0"
+        const val MAPDNS_NETMASK = "255.192.0.0"
+        const val MAPDNS_CACHE_SIZE = 10000
 
         const val ACTION_ENABLE = "info.loveyu.mfca.action.ENABLE_VPN"
         const val ACTION_REFRESH = "info.loveyu.mfca.action.REFRESH_VPN"

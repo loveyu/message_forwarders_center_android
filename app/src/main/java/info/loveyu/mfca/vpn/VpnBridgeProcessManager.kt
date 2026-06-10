@@ -208,6 +208,14 @@ object VpnBridgeProcessManager {
             if (artifacts.udpRelay) {
                 appendLine("  udp: 'udp'")
             }
+            if (artifacts.dnsHijack) {
+                appendLine("mapdns:")
+                appendLine("  address: '${MfcaVpnService.TUN_DNS_PRIMARY}'")
+                appendLine("  port: 53")
+                appendLine("  network: '${MfcaVpnService.MAPDNS_NETWORK}'")
+                appendLine("  netmask: '${MfcaVpnService.MAPDNS_NETMASK}'")
+                appendLine("  cache-size: ${MfcaVpnService.MAPDNS_CACHE_SIZE}")
+            }
             appendLine("misc:")
             appendLine("  log-level: 'warn'")
         }
