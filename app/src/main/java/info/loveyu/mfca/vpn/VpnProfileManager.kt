@@ -49,6 +49,16 @@ object VpnProfileManager {
         normalized["mixed-port"] = localProxyPort
         normalized["allow-lan"] = false
         normalized["bind-address"] = "127.0.0.1"
+        // Remove external controller to prevent "http: Server closed" error on restart
+        // (Go c-shared runtime cannot fully clean up the old HTTP server between stops)
+        normalized.remove("external-controller")
+        normalized.remove("external-ui")
+        normalized.remove("secret")
+        // mixed-port handles both HTTP and SOCKS5, making these redundant
+        normalized.remove("port")
+        normalized.remove("socks-port")
+        normalized.remove("redir-port")
+        normalized.remove("tproxy-port")
         if (ruleMode != null) normalized["mode"] = ruleMode.name
         if (logLevel != null) normalized["log-level"] = logLevel.name
         val tun =
