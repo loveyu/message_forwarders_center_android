@@ -38,14 +38,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import info.loveyu.mfca.R
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
+import java.io.File
 
 class VpnLogActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -56,6 +59,67 @@ class VpnLogActivity : ComponentActivity() {
 
     companion object {
         fun intent(context: Context): Intent = Intent(context, VpnLogActivity::class.java)
+
+        fun exportDiagnostics(context: Context): String {
+            val extDir = File(context.getExternalFilesDir(null), "vpn_debug").apply { mkdirs() }
+            val intDir = File(context.filesDir, "vpn")
+            val files = mutableListOf<Pair<File, String>>()
+
+            // Runtime profiles
+            val profilesDir = File(intDir, "profiles")
+            if (profilesDir.exists()) {
+                profilesDir.listFiles()?.forEach { f ->
+                    if (f.name.endsWith(".runtime.yaml")) {
+                        files.add(f to "profiles/${f.name}")
+                    }
+                }
+            }
+
+            // Runtime logs
+            val runtimeDir = File(intDir, "runtime")
+            if (runtimeDir.exists()) {
+                runtimeDir.listFiles()?.forEach { candidateDir ->
+                    if (candidateDir.isDirectory) {
+                        // mihomo logs
+                        File(candidateDir, "mihomo.stdout.log").takeIf { it.exists() }?.let {
+                            files.add(it to "${candidateDir.name}/mihomo.stdout.log")
+                        }
+                        File(candidateDir, "mihomo.stderr.log").takeIf { it.exists() }?.let {
+                            files.add(it to "${candidateDir.name}/mihomo.stderr.log")
+                        }
+                        // bridge logs
+                        val bridgeDir = File(candidateDir, "bridge")
+                        if (bridgeDir.exists()) {
+                            File(bridgeDir, "bridge.stdout.log").takeIf { it.exists() }?.let {
+                                files.add(it to "${candidateDir.name}/bridge/bridge.stdout.log")
+                            }
+                            File(bridgeDir, "bridge.stderr.log").takeIf { it.exists() }?.let {
+                                files.add(it to "${candidateDir.name}/bridge/bridge.stderr.log")
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Cached configs
+            val cacheDir = File(intDir, "config_cache")
+            if (cacheDir.exists()) {
+                cacheDir.listFiles()?.forEach { f ->
+                    if (f.name.endsWith(".yaml")) {
+                        files.add(f to "config_cache/${f.name}")
+                    }
+                }
+            }
+
+            var count = 0
+            files.forEach { (src, relPath) ->
+                val target = File(extDir, relPath)
+                target.parentFile?.mkdirs()
+                src.copyTo(target, overwrite = true)
+                count++
+            }
+            return "已导出 $count 个文件到 ${extDir.absolutePath}"
+        }
     }
 }
 
@@ -131,6 +195,14 @@ private fun VpnLogScreen(onBack: () -> Unit) {
                         },
                     ) {
                         Text("复制")
+                    }
+                    TextButton(
+                        onClick = {
+                            val msg = VpnLogActivity.exportDiagnostics(context)
+                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                        },
+                    ) {
+                        Text(stringResource(R.string.vpn_export_diagnostics))
                     }
                 },
             )
