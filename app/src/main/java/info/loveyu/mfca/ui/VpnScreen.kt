@@ -99,10 +99,23 @@ fun VpnScreen(contentPadding: PaddingValues) {
                 ) {
                     val runningName = uiState.runningCandidateName
                     if (uiState.runtimeStatus == VpnRuntimeStatus.running && runningName != null) {
-                        Text(
-                            text = stringResource(R.string.vpn_running_title_format, runningName),
-                            style = MaterialTheme.typography.titleLarge,
-                        )
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.vpn_running_title_format, runningName),
+                                style = MaterialTheme.typography.titleLarge,
+                            )
+                            Switch(
+                                checked = true,
+                                onCheckedChange = {
+                                    VpnManager.setEnabled(false)
+                                    context.startService(MfcaVpnService.disableIntent(context))
+                                },
+                            )
+                        }
                     } else {
                         Row(
                             horizontalArrangement = Arrangement.SpaceBetween,
