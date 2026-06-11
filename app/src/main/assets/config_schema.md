@@ -98,7 +98,7 @@ Input source configurations
 |------|------|:----:|--------|------|
 | `http` | list[object] |  |  | HTTP server input sources |
 | `link` | list[object] |  |  | Link-based input sources (MQTT subscriber, WebSocket, TCP) |
-| `m2m` | list[object] |  |  | m2m inputs backed by a remote mihomo config and a mihomo JNI plugin |
+| `m2m` | list[object] |  |  | m2m inputs backed by a remote m2m config and a m2m JNI plugin |
 | `udp2raw` | list[object] |  |  | udp2raw inputs – plugin loaded dynamically from internal storage |
 
 ### `http`
@@ -159,7 +159,7 @@ Message replay configuration
 
 ### `m2m`
 
-m2m inputs backed by a remote mihomo config and a mihomo JNI plugin
+m2m inputs backed by a remote m2m config and a m2m JNI plugin
 
 - **Type**: list[object]
 
@@ -167,7 +167,7 @@ m2m inputs backed by a remote mihomo config and a mihomo JNI plugin
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|:----:|--------|------|
 | `name` | string | ✓ |  | Unique VPN candidate name |
-| `configUrl` | string | ✓ |  | Remote mihomo config URL |
+| `configUrl` | string | ✓ |  | Remote m2m config URL |
 | `refreshInterval` | duration |  | `0` | Auto-refresh interval for the config (e.g. '1h', '24h'); omit or set to '0' to disable |
 | `enabled` | boolean |  | `true` | Whether this VPN candidate is enabled by default |
 | `accessControlMode` | enum |  | `acceptAll` | App access control mode for this VPN profile `acceptAll` / `include` / `exclude` |

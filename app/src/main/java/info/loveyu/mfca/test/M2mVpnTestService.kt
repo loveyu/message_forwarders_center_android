@@ -15,11 +15,11 @@ import androidx.core.app.NotificationCompat
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
 import info.loveyu.mfca.config.VpnInputConfig
-import info.loveyu.mfca.plugin.MihomoPluginCore
+import info.loveyu.mfca.plugin.M2mPluginCore
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.vpn.MfcaVpnService
-import info.loveyu.mfca.vpn.MihomoProcessManager
+import info.loveyu.mfca.vpn.M2mProcessManager
 import info.loveyu.mfca.vpn.PreparedVpnArtifacts
 import info.loveyu.mfca.vpn.VpnBridgeProcessManager
 import kotlinx.coroutines.CancellationException
@@ -99,10 +99,10 @@ class M2mVpnTestService : VpnService() {
             apiSecret = "",
         )
 
-        // Start mihomo core
+        // Start m2m core
         emit(Event.Log("正在启动 m2m 核心代理…"))
-        MihomoPluginCore.socketProtector = MihomoPluginCore.SocketProtector { fd -> protect(fd) }
-        val runningCore = MihomoProcessManager.start(this, artifacts) { _, tail ->
+        M2mPluginCore.socketProtector = M2mPluginCore.SocketProtector { fd -> protect(fd) }
+        val runningCore = M2mProcessManager.start(this, artifacts) { _, tail ->
             LogManager.logError("M2mVpnTest", "Core exited: $tail")
         }.getOrElse { error ->
             emit(Event.Error("核心启动失败: ${error.message}"))
@@ -119,7 +119,7 @@ class M2mVpnTestService : VpnService() {
                 while (System.currentTimeMillis() < deadline) {
                     if (!runningCore.core.isRunning()) {
                         emit(Event.Error("核心代理意外退出"))
-                        MihomoProcessManager.stop()
+                        M2mProcessManager.stop()
                         stopSelf()
                         return@withContext
                     }
@@ -128,13 +128,13 @@ class M2mVpnTestService : VpnService() {
                 }
                 if (!canConnect(mixedPort)) {
                     emit(Event.Error("代理端口就绪超时"))
-                    MihomoProcessManager.stop()
+                    M2mProcessManager.stop()
                     stopSelf()
                     return@withContext
                 }
             }
         } catch (_: CancellationException) {
-            MihomoProcessManager.stop()
+            M2mProcessManager.stop()
             stopSelf()
             return
         }
@@ -146,7 +146,7 @@ class M2mVpnTestService : VpnService() {
         val tun = establishTun(includeSelf)
         if (tun == null) {
             emit(Event.Error("TUN 接口建立失败"))
-            MihomoProcessManager.stop()
+            M2mProcessManager.stop()
             stopSelf()
             return
         }
@@ -160,7 +160,7 @@ class M2mVpnTestService : VpnService() {
         }.getOrElse { error ->
             emit(Event.Error("VPN 桥接启动失败: ${error.message}"))
             closeTun()
-            MihomoProcessManager.stop()
+            M2mProcessManager.stop()
             stopSelf()
             return
         }
@@ -172,10 +172,10 @@ class M2mVpnTestService : VpnService() {
 
     private fun stopVpn() {
         isRunning = false
-        MihomoPluginCore.socketProtector = null
+        M2mPluginCore.socketProtector = null
         VpnBridgeProcessManager.stop()
         closeTun()
-        MihomoProcessManager.stop()
+        M2mProcessManager.stop()
         try {
             stopForeground(STOP_FOREGROUND_DETACH)
         } catch (_: Exception) {}

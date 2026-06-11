@@ -69,7 +69,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import info.loveyu.mfca.R
-import info.loveyu.mfca.plugin.MihomoPluginCore
+import info.loveyu.mfca.plugin.M2mPluginCore
 import info.loveyu.mfca.plugin.PluginManager
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import info.loveyu.mfca.util.HttpDownloader
@@ -535,7 +535,7 @@ private suspend fun runM2mTest(
     setStep: (Int, M2mStepStatus) -> Unit,
 ) {
     val workDir = File(context.filesDir, "m2m_test").apply { mkdirs() }
-    var core: MihomoPluginCore? = null
+    var core: M2mPluginCore? = null
 
     try {
         // -- Step 0: Download / verify plugin --
@@ -544,16 +544,16 @@ private suspend fun runM2mTest(
             try {
                 withContext(Dispatchers.IO) {
                     addLog("正在检查核心插件…")
-                    val installed = PluginManager.isInstalledFrom(context, "mihomo", coreUrl)
+                    val installed = PluginManager.isInstalledFrom(context, "m2m", coreUrl)
                     if (installed) {
                         addLog("核心插件已缓存，跳过下载")
                     } else {
                         addLog("正在下载核心插件: $coreUrl")
                         if (!proxyUrl.isNullOrBlank()) addLog("使用代理: $proxyUrl")
-                        PluginManager.installPlugin(context, "mihomo", coreUrl, proxyUrl)
+                        PluginManager.installPlugin(context, "m2m", coreUrl, proxyUrl)
                         addLog("核心插件下载完成")
                     }
-                    val path = PluginManager.getInstalledPath(context, "mihomo")
+                    val path = PluginManager.getInstalledPath(context, "m2m")
                     addLog("插件文件大小: ${path.length()} bytes, ABI: ${PluginManager.deviceAbi}")
                     path.absolutePath
                 }
@@ -608,7 +608,7 @@ private suspend fun runM2mTest(
         try {
             withContext(Dispatchers.IO) {
                 logFile.writeText("")
-                core = MihomoPluginCore().also {
+                core = M2mPluginCore().also {
                     it.load(soPath)
                     addLog("核心版本: ${it.version() ?: "未知"}")
                     val args = listOf("-d", workDir.absolutePath, "-f", configFile.absolutePath)

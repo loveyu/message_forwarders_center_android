@@ -165,7 +165,7 @@ object AppConfigSchema {
 
             objectList(
                 "m2m",
-                block = { description = "m2m inputs backed by a remote mihomo config and a mihomo JNI plugin" },
+                block = { description = "m2m inputs backed by a remote m2m config and a m2m JNI plugin" },
             ) {
                 string("name") {
                     required()
@@ -173,7 +173,7 @@ object AppConfigSchema {
                 }
                 string("configUrl") {
                     required()
-                    description = "Remote mihomo config URL"
+                    description = "Remote m2m config URL"
                 }
                 duration("refreshInterval") {
                     description = "Auto-refresh interval for the config (e.g. '1h', '24h'); omit or set to '0' to disable"

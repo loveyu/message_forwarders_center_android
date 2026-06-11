@@ -13,7 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
-import info.loveyu.mfca.plugin.MihomoPluginCore
+import info.loveyu.mfca.plugin.M2mPluginCore
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.LogManager
 import kotlinx.coroutines.CoroutineScope
@@ -85,7 +85,7 @@ class MfcaVpnService : VpnService() {
         cancelPendingRetry("service destroyed")
         closeTunInterface()
         VpnBridgeProcessManager.stop()
-        MihomoProcessManager.stop()
+        M2mProcessManager.stop()
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -111,13 +111,13 @@ class MfcaVpnService : VpnService() {
             resetRuntimeSession()
             VpnBridgeProcessManager.stop()
             closeTunInterface()
-            MihomoProcessManager.stop()
+            M2mProcessManager.stop()
             VpnManager.clearRunningCandidate(VpnRuntimeStatus.error, "当前没有可用 VPN 候选")
             updateNotification(VpnManager.state.value.statusMessage)
             return
         }
 
-        val current = MihomoProcessManager.current()
+        val current = M2mProcessManager.current()
         val currentBridge = VpnBridgeProcessManager.current()
         if (!forceRestart && current?.candidateName == selected.config.name && currentBridge?.candidateName == selected.config.name) {
             val message = "VPN 运行中: ${selected.config.name}"
@@ -146,11 +146,11 @@ class MfcaVpnService : VpnService() {
         updateNotification(VpnManager.state.value.statusMessage)
         LogManager.logDebug("VPN", "Artifacts: port=${artifacts.localProxyPort}, apiPort=${artifacts.apiPort}, udpRelay=${artifacts.udpRelay}, dnsHijack=${artifacts.dnsHijack}, core=${artifacts.coreFilePath}, profile=${artifacts.profileFilePath}")
 
-        // Enable socket protection so mihomo outbound connections bypass VPN tunnel
-        MihomoPluginCore.socketProtector = MihomoPluginCore.SocketProtector { fd -> protect(fd) }
+        // Enable socket protection so m2m outbound connections bypass VPN tunnel
+        M2mPluginCore.socketProtector = M2mPluginCore.SocketProtector { fd -> protect(fd) }
         LogManager.logDebug("VPN", "Socket protector registered")
 
-        val runningCore = MihomoProcessManager.start(
+        val runningCore = M2mProcessManager.start(
             context = this,
             artifacts = artifacts,
             onUnexpectedExit = { exitCode, tail ->
@@ -158,7 +158,7 @@ class MfcaVpnService : VpnService() {
                     handleUnexpectedRuntimeExit(
                         candidateName = artifacts.candidate.name,
                         sessionId = sessionId,
-                        message = "Mihomo exited ($exitCode): $tail",
+                        message = "m2m exited ($exitCode): $tail",
                     )
                 }
             },
@@ -166,15 +166,15 @@ class MfcaVpnService : VpnService() {
             handleRuntimeFailure(
                 candidateName = artifacts.candidate.name,
                 sessionId = sessionId,
-                message = error.message ?: "Failed to start mihomo",
+                message = error.message ?: "Failed to start m2m",
             )
             return
         }
-        LogManager.logDebug("VPN", "Mihomo core started: ${runningCore.candidateName}")
-        applyMihomoLogLevel(artifacts.apiPort, artifacts.apiSecret, artifacts.logLevel)
+        LogManager.logDebug("VPN", "m2m core started: ${runningCore.candidateName}")
+        applyM2mLogLevel(artifacts.apiPort, artifacts.apiSecret, artifacts.logLevel)
 
         val tun = establishTun(selected, artifacts) ?: run {
-            MihomoProcessManager.stop()
+            M2mProcessManager.stop()
             handleRuntimeFailure(
                 candidateName = artifacts.candidate.name,
                 sessionId = sessionId,
@@ -202,7 +202,7 @@ class MfcaVpnService : VpnService() {
         ).getOrElse { error ->
             LogManager.logError("VPN", "Failed to start bridge: ${error.message}")
             closeTunInterface()
-            MihomoProcessManager.stop()
+            M2mProcessManager.stop()
             handleRuntimeFailure(
                 candidateName = artifacts.candidate.name,
                 sessionId = sessionId,
@@ -224,11 +224,11 @@ class MfcaVpnService : VpnService() {
         cancelPendingRetry("runtime stopping")
         resetRuntimeSession()
         VpnConfigCacheManager.cancelDownload()
-        MihomoCoreManager.cancelDownload()
-        MihomoPluginCore.socketProtector = null
+        M2mCoreManager.cancelDownload()
+        M2mPluginCore.socketProtector = null
         val bridgeStopped = VpnBridgeProcessManager.stop()
         closeTunInterface()
-        val stopped = MihomoProcessManager.stop() ?: bridgeStopped
+        val stopped = M2mProcessManager.stop() ?: bridgeStopped
         if (disableVpn) {
             retryAttempts = 0
             VpnManager.setEnabled(false)
@@ -254,10 +254,10 @@ class MfcaVpnService : VpnService() {
         val retryReason = nextRetryReason(candidateName, sessionId)
         LogManager.logError("VPN", message)
         resetRuntimeSession()
-        MihomoPluginCore.socketProtector = null
+        M2mPluginCore.socketProtector = null
         VpnBridgeProcessManager.stop()
         closeTunInterface()
-        MihomoProcessManager.stop()
+        M2mProcessManager.stop()
 
         if (retryReason == null) {
             scheduleRetry(candidateName, message)
@@ -314,7 +314,7 @@ class MfcaVpnService : VpnService() {
         retryJob = null
     }
 
-    private fun applyMihomoLogLevel(apiPort: Int, apiSecret: String?, logLevel: VpnLogLevel?) {
+    private fun applyM2mLogLevel(apiPort: Int, apiSecret: String?, logLevel: VpnLogLevel?) {
         if (logLevel == null) return
         serviceScope.launch {
             try {
@@ -445,7 +445,7 @@ class MfcaVpnService : VpnService() {
         const val TUN_DNS_PRIMARY = "1.1.1.1"
         const val TUN_DNS_SECONDARY = "8.8.8.8"
         const val NET_ANY = "0.0.0.0"
-        const val MIHOMO_DNS_PORT = 1053
+        const val M2M_DNS_PORT = 1053
         const val MAPDNS_NETWORK = "100.64.0.0"
         const val MAPDNS_NETMASK = "255.192.0.0"
         const val MAPDNS_CACHE_SIZE = 10000

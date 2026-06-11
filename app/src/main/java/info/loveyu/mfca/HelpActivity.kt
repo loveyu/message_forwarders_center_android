@@ -330,7 +330,7 @@ private fun loadSampleFiles(context: Context): List<SampleFile> {
         ),
         SampleFileInfo(
             fileName = "20_m2m_input.yaml",
-            description = "m2m 输入 - 远程 mihomo 配置、核心地址、候选切换、应用过滤"
+            description = "m2m 输入 - 远程 m2m 配置、核心地址、候选切换、应用过滤"
         ),
         SampleFileInfo(
             fileName = "99_full_demo.yaml",

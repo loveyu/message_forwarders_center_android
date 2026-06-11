@@ -1,17 +1,17 @@
 package info.loveyu.mfca.vpn
 
 import android.content.Context
-import info.loveyu.mfca.plugin.MihomoPluginCore
+import info.loveyu.mfca.plugin.M2mPluginCore
 import info.loveyu.mfca.util.LogManager
 import java.io.File
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
 
-object MihomoProcessManager {
+object M2mProcessManager {
     data class RunningCore(
         val candidateName: String,
-        val core: MihomoPluginCore,
+        val core: M2mPluginCore,
         val workingDirectory: File,
         val stdoutLogFile: File,
         val stderrLogFile: File,
@@ -47,27 +47,27 @@ object MihomoProcessManager {
             val logDir = File(context.cacheDir, "vpn/${sanitize(artifacts.candidate.name)}").apply {
                 mkdirs()
             }
-            val stdoutLog = File(logDir, "mihomo.stdout.log").apply { writeText("") }
-            val stderrLog = File(logDir, "mihomo.stderr.log").apply { writeText("") }
+            val stdoutLog = File(logDir, "m2m.stdout.log").apply { writeText("") }
+            val stderrLog = File(logDir, "m2m.stderr.log").apply { writeText("") }
             lastLogFiles = Pair(stdoutLog, stderrLog)
             LogManager.logInfo(
                 "VPN",
-                "Starting mihomo plugin for ${artifacts.candidate.name}: plugin=${artifacts.coreFilePath}, profile=${artifacts.profileFilePath}, workDir=${workDir.absolutePath}",
+                "Starting m2m plugin for ${artifacts.candidate.name}: plugin=${artifacts.coreFilePath}, profile=${artifacts.profileFilePath}, workDir=${workDir.absolutePath}",
             )
 
-            val core = MihomoPluginCore()
+            val core = M2mPluginCore()
             core.load(artifacts.coreFilePath)
             val ret = core.start(buildArgs(workDir = workDir, profileFile = File(artifacts.profileFilePath)), stdoutLog.absolutePath)
             if (ret != 0) {
-                throw IllegalStateException("Mihomo plugin start failed (code $ret): ${readFailureOutput(stdoutLog, stderrLog)}")
+                throw IllegalStateException("m2m plugin start failed (code $ret): ${readFailureOutput(stdoutLog, stderrLog)}")
             }
             // Enable socket protector AFTER start so the hook survives nativeStart() reinitialization
-            if (MihomoPluginCore.socketProtector != null) {
+            if (M2mPluginCore.socketProtector != null) {
                 core.setSocketProtector(true)
             }
             Thread.sleep(1500)
             if (!core.isRunning()) {
-                throw IllegalStateException("Mihomo exited immediately: ${readFailureOutput(stdoutLog, stderrLog)}")
+                throw IllegalStateException("m2m exited immediately: ${readFailureOutput(stdoutLog, stderrLog)}")
             }
             waitForProxyReady(core, artifacts.localProxyPort, stdoutLog, stderrLog)
 
@@ -90,7 +90,7 @@ object MihomoProcessManager {
                     }
                 }.apply {
                     isDaemon = true
-                    name = "mihomo-watch-${sanitize(artifacts.candidate.name)}"
+                    name = "m2m-watch-${sanitize(artifacts.candidate.name)}"
                     start()
                 }
             }
@@ -101,7 +101,7 @@ object MihomoProcessManager {
         val current = runningCore ?: return null
         current.stopping = true
         runningCore = null
-        LogManager.logInfo("VPN", "Stopping mihomo for ${current.candidateName}")
+        LogManager.logInfo("VPN", "Stopping m2m for ${current.candidateName}")
         current.core.stop()
         val deadline = System.currentTimeMillis() + 1500
         while (System.currentTimeMillis() < deadline && current.core.isRunning()) {
@@ -138,12 +138,12 @@ object MihomoProcessManager {
 
     private fun sanitize(value: String): String = value.replace(Regex("[^a-zA-Z0-9._-]"), "_")
 
-    private fun waitForProxyReady(core: MihomoPluginCore, port: Int, stdoutLog: File, stderrLog: File) {
+    private fun waitForProxyReady(core: M2mPluginCore, port: Int, stdoutLog: File, stderrLog: File) {
         val deadline = System.currentTimeMillis() + 15_000
         while (System.currentTimeMillis() < deadline) {
             if (!core.isRunning()) {
                 throw IllegalStateException(
-                    "Mihomo exited before proxy became ready: ${readFailureOutput(stdoutLog, stderrLog)}",
+                    "m2m exited before proxy became ready: ${readFailureOutput(stdoutLog, stderrLog)}",
                 )
             }
             if (canConnect(port)) {

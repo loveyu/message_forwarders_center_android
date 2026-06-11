@@ -27,9 +27,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -85,11 +84,11 @@ class VpnLogActivity : ComponentActivity() {
             if (cacheVpnDir.exists()) {
                 cacheVpnDir.listFiles()?.forEach { candidateDir ->
                     if (candidateDir.isDirectory) {
-                        File(candidateDir, "mihomo.stdout.log").takeIf { it.exists() }?.let {
-                            files.add(it to "${candidateDir.name}/mihomo.stdout.log")
+                        File(candidateDir, "m2m.stdout.log").takeIf { it.exists() }?.let {
+                            files.add(it to "${candidateDir.name}/m2m.stdout.log")
                         }
-                        File(candidateDir, "mihomo.stderr.log").takeIf { it.exists() }?.let {
-                            files.add(it to "${candidateDir.name}/mihomo.stderr.log")
+                        File(candidateDir, "m2m.stderr.log").takeIf { it.exists() }?.let {
+                            files.add(it to "${candidateDir.name}/m2m.stderr.log")
                         }
                         val bridgeDir = File(candidateDir, "bridge")
                         if (bridgeDir.exists()) {
@@ -139,7 +138,7 @@ private data class LogLine(val text: String, val isStderr: Boolean)
 private enum class LogSource(
     val label: String,
 ) {
-    MIHOMO("Mihomo"),
+    M2M("m2m"),
     BRIDGE("Bridge"),
 }
 
@@ -152,6 +151,8 @@ private fun VpnLogScreen(onBack: () -> Unit) {
     var lines by remember { mutableStateOf<List<LogLine>>(emptyList()) }
     var isRunning by remember { mutableStateOf(false) }
     var hasEverStarted by remember { mutableStateOf(false) }
+    var showSourceMenu by remember { mutableStateOf(false) }
+    var showOverflowMenu by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
@@ -161,13 +162,13 @@ private fun VpnLogScreen(onBack: () -> Unit) {
             val logFiles =
                 withContext(Dispatchers.IO) {
                     when (source) {
-                        LogSource.MIHOMO -> MihomoProcessManager.getLastLogFiles()
+                        LogSource.M2M -> M2mProcessManager.getLastLogFiles()
                         LogSource.BRIDGE -> VpnBridgeProcessManager.getLastLogFiles()
                     }
                 }
             isRunning =
                 when (source) {
-                    LogSource.MIHOMO -> MihomoProcessManager.isRunning()
+                    LogSource.M2M -> M2mProcessManager.isRunning()
                     LogSource.BRIDGE -> VpnBridgeProcessManager.isRunning()
                 }
             hasEverStarted = logFiles != null
@@ -196,95 +197,118 @@ private fun VpnLogScreen(onBack: () -> Unit) {
 
     Scaffold(
         topBar = {
-            Column {
-                TopAppBar(
-                    title = {
-                        Column {
-                            Text("${sources[tabIndex].label} 日志")
-                            Text(
-                                text = if (isRunning) "● 运行中" else "已停止",
-                                style = MaterialTheme.typography.labelSmall,
-                                color =
-                                    if (isRunning) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                        }
-                    },
-                    actions = {
-                        TextButton(
-                            onClick = {
-                                if (lines.isEmpty()) {
-                                    Toast.makeText(context, "暂无日志", Toast.LENGTH_SHORT).show()
-                                    return@TextButton
-                                }
-                                val text = lines.joinToString("\n") { it.text }
-                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                cm.setPrimaryClip(ClipData.newPlainText("vpn_logs", text))
-                                Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
-                            },
-                        ) {
-                            Text("复制")
-                        }
-                        var showOverflowMenu by remember { mutableStateOf(false) }
-                        Box {
-                            IconButton(onClick = { showOverflowMenu = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.MoreVert,
-                                    contentDescription = null,
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = showOverflowMenu,
-                                onDismissRequest = { showOverflowMenu = false },
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("清空日志") },
-                                    onClick = {
-                                        showOverflowMenu = false
-                                        lines = emptyList()
-                                        scope.launch {
-                                            withContext(Dispatchers.IO) {
-                                                val source = sources[tabIndex]
-                                                val logFiles =
-                                                    when (source) {
-                                                        LogSource.MIHOMO -> MihomoProcessManager.getLastLogFiles()
-                                                        LogSource.BRIDGE -> VpnBridgeProcessManager.getLastLogFiles()
-                                                    }
-                                                if (logFiles != null) {
-                                                    logFiles.first.writeText("")
-                                                    logFiles.second.writeText("")
-                                                }
-                                            }
-                                        }
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.vpn_export_diagnostics)) },
-                                    onClick = {
-                                        showOverflowMenu = false
-                                        val msg = VpnLogActivity.exportDiagnostics(context)
-                                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                                    },
-                                )
-                            }
-                        }
-                    },
-                )
-                TabRow(selectedTabIndex = tabIndex) {
-                    sources.forEachIndexed { index, source ->
-                        Tab(
-                            selected = tabIndex == index,
-                            onClick = { tabIndex = index },
-                            text = { Text(source.label) },
+            TopAppBar(
+                title = {
+                    Column {
+                        Text("${sources[tabIndex].label} 日志")
+                        Text(
+                            text = if (isRunning) "● 运行中" else "已停止",
+                            style = MaterialTheme.typography.labelSmall,
+                            color =
+                                if (isRunning) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                }
-            }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                },
+                actions = {
+                    TextButton(
+                        onClick = {
+                            if (lines.isEmpty()) {
+                                Toast.makeText(context, "暂无日志", Toast.LENGTH_SHORT).show()
+                                return@TextButton
+                            }
+                            val text = lines.joinToString("\n") { it.text }
+                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            cm.setPrimaryClip(ClipData.newPlainText("vpn_logs", text))
+                            Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+                        },
+                    ) {
+                        Text("复制")
+                    }
+                    Box {
+                        IconButton(onClick = { showOverflowMenu = true }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = null,
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showOverflowMenu,
+                            onDismissRequest = { showOverflowMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("切换日志来源") },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    showSourceMenu = true
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("清空日志") },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    lines = emptyList()
+                                    scope.launch {
+                                        withContext(Dispatchers.IO) {
+                                            val source = sources[tabIndex]
+                                            val logFiles =
+                                                when (source) {
+                                                    LogSource.M2M -> M2mProcessManager.getLastLogFiles()
+                                                    LogSource.BRIDGE -> VpnBridgeProcessManager.getLastLogFiles()
+                                                }
+                                            if (logFiles != null) {
+                                                logFiles.first.writeText("")
+                                                logFiles.second.writeText("")
+                                            }
+                                        }
+                                    }
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.vpn_export_diagnostics)) },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    val msg = VpnLogActivity.exportDiagnostics(context)
+                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                },
+                            )
+                        }
+                    }
+                    // Source switch sub-menu (rendered as a separate popup)
+                    DropdownMenu(
+                        expanded = showSourceMenu,
+                        onDismissRequest = { showSourceMenu = false },
+                    ) {
+                        sources.forEachIndexed { index, source ->
+                            DropdownMenuItem(
+                                text = {
+                                    androidx.compose.foundation.layout.Row(
+                                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                                    ) {
+                                        RadioButton(
+                                            selected = tabIndex == index,
+                                            onClick = null,
+                                        )
+                                        Text(
+                                            text = source.label,
+                                            modifier = Modifier.padding(start = 8.dp),
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    tabIndex = index
+                                    showSourceMenu = false
+                                },
+                            )
+                        }
+                    }
+                },
+            )
         },
     ) { innerPadding ->
         if (lines.isEmpty()) {

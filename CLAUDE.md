@@ -148,5 +148,5 @@ protocol://[username:password@]host:port[?param1=value1&param2=value2...]
 
 ## VPN 模块
 
-VPN 模块基于 mihomo (Clash.Meta) 实现 Android 透明代理，详细架构文档见 [`docs/vpn-architecture.md`](docs/vpn-architecture.md)。
+VPN 模块基于 m2m (Clash.Meta) 实现 Android 透明代理，详细架构文档见 [`docs/vpn-architecture.md`](docs/vpn-architecture.md)。
 

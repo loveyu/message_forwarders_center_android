@@ -1,13 +1,13 @@
 package info.loveyu.mfca.plugin
 
 /**
- * Plugin core for mihomo.
+ * Plugin core for m2m.
  *
- * Loads libmihomo_plugin.so from the app private plugin directory and calls the JNI entry points
- * exported by the c-shared mihomo build. No executable process is spawned.
+ * Loads libm2m_plugin.so from the app private plugin directory and calls the JNI entry points
+ * exported by the c-shared m2m build. No executable process is spawned.
  */
-class MihomoPluginCore : PluginCore {
-    override val name: String = "mihomo"
+class M2mPluginCore : PluginCore {
+    override val name: String = "m2m"
 
     @Volatile private var loaded = false
 

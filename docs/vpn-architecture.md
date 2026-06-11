@@ -1,6 +1,6 @@
 # VPN 模块架构文档
 
-FlowGate 的 VPN 功能基于 mihomo（Clash.Meta）代理核心，通过 Android VpnService 的 TUN 接口实现全局或按应用的透明代理。
+FlowGate 的 VPN 功能基于 m2m（Clash.Meta）代理核心，通过 Android VpnService 的 TUN 接口实现全局或按应用的透明代理。
 
 ## 整体架构
 
@@ -22,14 +22,14 @@ FlowGate 的 VPN 功能基于 mihomo（Clash.Meta）代理核心，通过 Androi
 │  生命周期管理 / 自动重试 / TUN 建立 / 前台通知                        │
 │                                                                     │
 │  ┌── prepareSelectedCandidate() ──┐                                 │
-│  │  MihomoCoreManager.ensureCore  │ ← 下载/校验 .so 插件            │
+│  │  M2mCoreManager.ensureCore  │ ← 下载/校验 .so 插件            │
 │  │  VpnConfigCacheManager         │ ← 下载/校验 YAML 配置           │
 │  │  VpnProfileManager             │ ← 构建运行时 profile            │
 │  └────────────────────────────────┘                                 │
 │                                                                     │
 │  ┌── 启动顺序 ────────────────────────────────────────────────────┐ │
-│  │  1. MihomoPluginCore.socketProtector = { fd -> protect(fd) }  │ │
-│  │  2. MihomoProcessManager.start()   → JNI 加载 mihomo .so      │ │
+│  │  1. M2mPluginCore.socketProtector = { fd -> protect(fd) }  │ │
+│  │  2. M2mProcessManager.start()   → JNI 加载 m2m .so      │ │
 │  │  3. VpnService.Builder.establish() → 创建 TUN 接口             │ │
 │  │  4. VpnBridgeProcessManager.start() → 启动 tun2socks 桥接进程  │ │
 │  └────────────────────────────────────────────────────────────────┘ │
@@ -38,7 +38,7 @@ FlowGate 的 VPN 功能基于 mihomo（Clash.Meta）代理核心，通过 Androi
           ┌──────────────────┼──────────────────┐
           v                  v                  v
    ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐
-   │ mihomo 核心  │  │ TUN 接口     │  │ vpnbridge 进程   │
+   │ m2m 核心  │  │ TUN 接口     │  │ vpnbridge 进程   │
    │ (in-process  │  │ (Android     │  │ (tun2socks,      │
    │  JNI .so)   │  │  VpnService) │  │  子进程)          │
    └──────┬──────┘  └──────┬───────┘  └────────┬─────────┘
@@ -52,7 +52,7 @@ FlowGate 的 VPN 功能基于 mihomo（Clash.Meta）代理核心，通过 Androi
           │         │
           v         v
    ┌─────────────────────────┐
-   │ mihomo SOCKS5 proxy     │
+   │ m2m SOCKS5 proxy     │
    │ 127.0.0.1:17890         │
    └────────────┬────────────┘
                 │
@@ -69,13 +69,13 @@ Android 应用 → TUN 接口 → vpnbridge (tun2socks)
                     │                                            │
                     v                                            v
           本地 DNS 转发 (绕过 SOCKS5)                   SOCKS5 handshake
-          127.0.0.1:1053 (mihomo DNS)                            │
+          127.0.0.1:1053 (m2m DNS)                            │
                     │                                            v
-                    v                                  mihomo (in-process JNI)
-          mihomo fake-ip DNS 解析                              │
+                    v                                  m2m (in-process JNI)
+          m2m fake-ip DNS 解析                              │
           返回假 IP → 域名规则匹配               dialer.DefaultSocketHook
                                                                │
-                                                   JNI → MihomoPluginCore.notifyMarkSocket(fd)
+                                                   JNI → M2mPluginCore.notifyMarkSocket(fd)
                                                                │
                                                    VpnService.protect(fd)  ← 防止路由环路
                                                                │
@@ -98,7 +98,7 @@ Android 应用 → TUN 接口 → vpnbridge (tun2socks)
   - Portal: `172.19.0.2`
   - MTU: `1500`
   - DNS: `1.1.1.1`, `8.8.8.8`
-  - DNS 监听端口: `1053`（mihomo DNS listener）
+  - DNS 监听端口: `1053`（m2m DNS listener）
   - IPv6: 可选启用（添加 `::/0` 路由，捕获 IPv6 流量到 VPN 隧道）
 - **自动重试**: 最多 3 次，间隔线性递增（5s × 次数）
 - **访问控制模式**:
@@ -121,13 +121,13 @@ Android 应用 → TUN 接口 → vpnbridge (tun2socks)
 - **候选解析**: 按选择历史（LRU）优先匹配可用候选，无历史时取第一个可用候选
 - **代理优先级**: VpnStateStore 覆盖 > 配置文件 `plugin.downloadProxy`
 
-### MihomoProcessManager
+### M2mProcessManager
 
-- **文件**: `app/src/main/java/info/loveyu/mfca/vpn/MihomoProcessManager.kt`
-- **职责**: 管理进程内 mihomo 核心的生命周期
+- **文件**: `app/src/main/java/info/loveyu/mfca/vpn/M2mProcessManager.kt`
+- **职责**: 管理进程内 m2m 核心的生命周期
 - **启动流程**: `System.load(.so)` → `setSocketProtector(true)` → `nativeStart(args)` → 等待代理就绪（TCP 连通性探测，15s 超时）
 - **守护线程**: 检测异常退出并回调通知
-- **日志**: stdout/stderr 分别写入 `mihomo.stdout.log` / `mihomo.stderr.log`
+- **日志**: stdout/stderr 分别写入 `m2m.stdout.log` / `m2m.stderr.log`
 
 ### VpnBridgeProcessManager
 
@@ -137,10 +137,10 @@ Android 应用 → TUN 接口 → vpnbridge (tun2socks)
 - **启动参数**: `--control-socket`, `--socks`, `--gateway`, `--portal`, `--dns`, `--udp-relay`
 - **内置二进制**: `libvpnbridge.so`（Go 编译），从 `nativeLibraryDir` 符号链接到工作目录执行
 
-### MihomoCoreManager
+### M2mCoreManager
 
-- **文件**: `app/src/main/java/info/loveyu/mfca/vpn/MihomoCoreManager.kt`
-- **职责**: 管理 mihomo .so 插件文件的下载、校验、缓存
+- **文件**: `app/src/main/java/info/loveyu/mfca/vpn/M2mCoreManager.kt`
+- **职责**: 管理 m2m .so 插件文件的下载、校验、缓存
 - **URL 变更检测**: 使用 `PluginManager.isInstalledFrom()` 对比 `.source_url` 标记文件
 - **下载代理**: 支持传入 `proxyAddress`，支持 HTTP/SOCKS5 代理
 
@@ -219,10 +219,10 @@ Android 应用 → TUN 接口 → vpnbridge (tun2socks)
 - **并发安全**: 每个插件一把 `ReentrantLock`，double-check 避免重复下载
 - **来源追踪**: `.source_url` 标记文件记录安装来源，用于 `isInstalledFrom()` 缓存失效
 
-### MihomoPluginCore
+### M2mPluginCore
 
-- **文件**: `app/src/main/java/info/loveyu/mfca/plugin/MihomoPluginCore.kt`
-- **职责**: mihomo Go 核心的 JNI 包装
+- **文件**: `app/src/main/java/info/loveyu/mfca/plugin/M2mPluginCore.kt`
+- **职责**: m2m Go 核心的 JNI 包装
 - **JNI 方法**:
   - `nativeGetVersion()` — 获取版本号
   - `nativeStart(args, logFile)` — 启动核心
@@ -232,11 +232,11 @@ Android 应用 → TUN 接口 → vpnbridge (tun2socks)
 
 ### Socket Protector 机制
 
-VPN include 模式下，mihomo 的出站连接如果不加保护，会被路由回 TUN 接口形成路由环路。解决方案：
+VPN include 模式下，m2m 的出站连接如果不加保护，会被路由回 TUN 接口形成路由环路。解决方案：
 
-1. **Kotlin 侧**: `MihomoPluginCore.socketProtector` 存储一个 `SocketProtector` 函数引用，由 `MfcaVpnService` 设置为 `{ fd -> protect(fd) }`
+1. **Kotlin 侧**: `M2mPluginCore.socketProtector` 存储一个 `SocketProtector` 函数引用，由 `MfcaVpnService` 设置为 `{ fd -> protect(fd) }`
 2. **Go 侧**: `nativeSetSocketProtector(true)` 将 `dialer.DefaultSocketHook` 设置为回调函数
-3. **调用链**: Go 的每次出站 socket 创建 → `DefaultSocketHook(fd)` → C 层 `mihomo_protect_socket(fd)` → JNI `AttachCurrentThread` → `MihomoPluginCore.notifyMarkSocket(fd)` → `VpnService.protect(fd)`
+3. **调用链**: Go 的每次出站 socket 创建 → `DefaultSocketHook(fd)` → C 层 `m2m_protect_socket(fd)` → JNI `AttachCurrentThread` → `M2mPluginCore.notifyMarkSocket(fd)` → `VpnService.protect(fd)`
 4. **效果**: 被标记的 socket 绑定到物理网络接口，不经过 VPN TUN
 
 ## vpnbridge (tun2socks)
@@ -248,7 +248,7 @@ VPN include 模式下，mihomo 的出站连接如果不加保护，会被路由�
   1. 通过 Unix Socket 接收 TUN fd（`SCM_RIGHTS`）
   2. 创建用户态网络栈（TCP/UDP NAT 表）
   3. TCP: 解析连接目标 → SOCKS5 握手 → 双向数据转发
-  4. UDP DNS (port 53): 当 `--dns` 启用时，直接转发到本地 mihomo DNS 监听（绕过 SOCKS5），每个 source 独立 UDP conn，30s 超时自动清理
+  4. UDP DNS (port 53): 当 `--dns` 启用时，直接转发到本地 m2m DNS 监听（绕过 SOCKS5），每个 source 独立 UDP conn，30s 超时自动清理
   5. UDP 其他: 当 `--udp-relay=true` 时通过 SOCKS5 UDP association 中继，否则丢弃
 - **命令行参数**:
   - `--control-socket` — Unix Socket 名称（接收 TUN fd）
@@ -284,7 +284,7 @@ VPN include 模式下，mihomo 的出站连接如果不加保护，会被路由�
 ### VpnLogActivity
 
 - **文件**: `app/src/main/java/info/loveyu/mfca/vpn/VpnLogActivity.kt`
-- **职责**: 实时 mihomo 日志查看
+- **职责**: 实时 m2m 日志查看
 - **功能**: 每秒轮询日志文件、单行复制、复制全部
 
 ## 配置
@@ -293,13 +293,13 @@ VPN include 模式下，mihomo 的出站连接如果不加保护，会被路由�
 
 ```yaml
 plugin:
-  m2mCore: "https://example.com/libmihomo_plugin-arm64-v8a.so.gz"
+  m2mCore: "https://example.com/libm2m_plugin-arm64-v8a.so.gz"
   downloadProxy: "socks5://127.0.0.1:1080"
 
 inputs:
   m2m:
     - name: "vpn_primary"
-      configUrl: "https://example.com/mihomo-profile.yaml"
+      configUrl: "https://example.com/m2m-profile.yaml"
       refreshIntervalMs: 3600000  # 1 小时自动刷新
       whenCondition: "network=wifi"
       enabled: true
@@ -314,7 +314,7 @@ inputs:
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `name` | String | — | 候选名称（唯一标识） |
-| `configUrl` | String | — | mihomo 配置文件远程 URL |
+| `configUrl` | String | — | m2m 配置文件远程 URL |
 | `refreshIntervalMs` | Long | `0` | 自动刷新间隔（毫秒），0 表示不自动刷新 |
 | `whenCondition` | String? | `null` | 启用条件（网络类型/SSID/BSSID/IP 范围） |
 | `deny` | String? | `null` | 禁用条件 |
@@ -332,7 +332,7 @@ inputs:
 - **日志级别**: debug / info / warning / error / silent
 - **UDP 中继**: 开启后非 DNS 的 UDP 流量通过 SOCKS5 转发（需代理支持 UDP），关闭后丢弃非 DNS UDP 防止流量泄漏
 - **IPv6 泄漏防护**: 开启后添加 `::/0` 路由到 VPN，捕获 IPv6 流量并丢弃，防止 IPv6 流量绕过代理
-- **DNS 劫持**: 开启后 vpnbridge 拦截 DNS 查询转发到 mihomo 本地 DNS 监听，启用 fake-ip 模式使域名规则生效
+- **DNS 劫持**: 开启后 vpnbridge 拦截 DNS 查询转发到 m2m 本地 DNS 监听，启用 fake-ip 模式使域名规则生效
 - **下载代理**: 覆盖 `plugin.downloadProxy`，适用于代理不可用时手动切换
 
 ## 文件结构
@@ -340,8 +340,8 @@ inputs:
 ```
 <filesDir>/
 ├── plugins/
-│   └── mihomo/<abi>/
-│       ├── libmihomo_plugin.so      # mihomo 核心二进制
+│   └── m2m/<abi>/
+│       ├── libm2m_plugin.so      # m2m 核心二进制
 │       └── .source_url              # 下载来源标记
 └── vpn/
     ├── config_cache/
@@ -352,8 +352,8 @@ inputs:
     ├── core/
     │   └── vpnbridge                # vpnbridge 符号链接
     └── runtime/<name>/
-        ├── mihomo.stdout.log        # mihomo 标准输出日志
-        ├── mihomo.stderr.log        # mihomo 错误日志
+        ├── m2m.stdout.log        # m2m 标准输出日志
+        ├── m2m.stderr.log        # m2m 错误日志
         └── bridge/
             ├── bridge.stdout.log
             └── bridge.stderr.log
@@ -364,7 +364,7 @@ inputs:
 ### M2mTestActivity
 
 - **文件**: `app/src/main/java/info/loveyu/mfca/test/M2mTestActivity.kt`
-- **测试内容**: 不含 VPN 的 mihomo 代理完整链路测试
+- **测试内容**: 不含 VPN 的 m2m 代理完整链路测试
 - **步骤**: 下载插件 → 下载配置 → 启动代理 → 等待就绪 → HTTP 访问测试 → 清理
 
 ### M2mVpnTestActivity

@@ -133,13 +133,13 @@ object VpnManager {
     }
 
     fun deleteCorePlugin(context: Context): Result<Unit> = runCatching {
-        MihomoCoreManager.deleteCore(context)
+        M2mCoreManager.deleteCore(context)
         rebuildState()
     }
 
     fun downloadCorePlugin(context: Context): Result<Unit> = runCatching {
         val url = m2mCoreUrl ?: throw IllegalStateException("未配置 plugin.m2mCore 下载地址")
-        MihomoCoreManager.downloadCore(context, url, effectiveDownloadProxy()).getOrThrow()
+        M2mCoreManager.downloadCore(context, url, effectiveDownloadProxy()).getOrThrow()
         rebuildState()
     }
 
@@ -210,8 +210,8 @@ object VpnManager {
         }
 
         // Step 2: Ensure core is available (auto-download if needed)
-        return MihomoCoreManager.ensureCore(context, m2mCoreUrl, effectiveDownloadProxy()).map { coreFile ->
-            LogManager.logInfo("VPN", "Prepared mihomo core for ${selected.config.name}: ${coreFile.absolutePath}")
+        return M2mCoreManager.ensureCore(context, m2mCoreUrl, effectiveDownloadProxy()).map { coreFile ->
+            LogManager.logInfo("VPN", "Prepared m2m core for ${selected.config.name}: ${coreFile.absolutePath}")
             val effectivePort = store?.getLocalPort(selected.config.name) ?: LOCAL_PROXY_PORT
             val effectiveRuleMode = store?.getRuleMode(selected.config.name)
             val effectiveLogLevel = store?.getLogLevel(selected.config.name)
@@ -294,7 +294,7 @@ object VpnManager {
             } else {
                 NetworkChecker.getEnableReason(context, config.whenCondition, config.deny)
             }
-            val coreState = MihomoCoreManager.inspectCore(context)
+            val coreState = M2mCoreManager.inspectCore(context)
             val configCacheState = VpnConfigCacheManager.inspect(context, config)
             VpnCandidateState(
                 config = config,
@@ -311,7 +311,7 @@ object VpnManager {
             )
         }
         val activeName = resolveActiveCandidateName(candidates, selectionHistory)
-        val globalCoreState = MihomoCoreManager.inspectCore(context)
+        val globalCoreState = M2mCoreManager.inspectCore(context)
         val normalizedRuntimeStatus = when {
             !enabled -> VpnRuntimeStatus.disabled
             runtimeStatus == VpnRuntimeStatus.disabled -> VpnRuntimeStatus.idle

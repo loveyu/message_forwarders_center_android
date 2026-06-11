@@ -557,16 +557,16 @@ private suspend fun runVpnTest(
             try {
                 withContext(Dispatchers.IO) {
                     addLog("正在检查核心插件…")
-                    val installed = PluginManager.isInstalledFrom(context, "mihomo", coreUrl)
+                    val installed = PluginManager.isInstalledFrom(context, "m2m", coreUrl)
                     if (installed) {
                         addLog("核心插件已缓存，跳过下载")
                     } else {
                         addLog("正在下载核心插件: $coreUrl")
                         if (!proxyUrl.isNullOrBlank()) addLog("使用代理: $proxyUrl")
-                        PluginManager.installPlugin(context, "mihomo", coreUrl, proxyUrl)
+                        PluginManager.installPlugin(context, "m2m", coreUrl, proxyUrl)
                         addLog("核心插件下载完成")
                     }
-                    val path = PluginManager.getInstalledPath(context, "mihomo")
+                    val path = PluginManager.getInstalledPath(context, "m2m")
                     addLog("插件文件大小: ${path.length()} bytes, ABI: ${PluginManager.deviceAbi}")
                     path.absolutePath
                 }
@@ -755,8 +755,8 @@ private suspend fun runVpnTest(
         } catch (e: Exception) {
             val msg = e.message ?: ""
             val reason = when {
-                msg.contains("resolve host", ignoreCase = true) -> "DNS 解析失败（路由环路: mihomo 出站 DNS 也经 VPN 回环）"
-                msg.contains("timeout", ignoreCase = true) -> "连接超时（路由环路: mihomo 出站经 VPN 回环）"
+                msg.contains("resolve host", ignoreCase = true) -> "DNS 解析失败（路由环路: m2m 出站 DNS 也经 VPN 回环）"
+                msg.contains("timeout", ignoreCase = true) -> "连接超时（路由环路: m2m 出站经 VPN 回环）"
                 msg.contains("Connection refused", ignoreCase = true) -> "连接被拒绝"
                 else -> msg
             }

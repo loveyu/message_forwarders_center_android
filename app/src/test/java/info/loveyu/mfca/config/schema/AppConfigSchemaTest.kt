@@ -124,13 +124,13 @@ class AppConfigSchemaTest {
             """
             plugin:
               udp2rawCore: https://example.com/libudp2raw_plugin.so
-              m2mCore: https://example.com/libmihomo_plugin.so
+              m2mCore: https://example.com/libm2m_plugin.so
               downloadProxy: socks5://127.0.0.1:1080
             """.trimIndent()
 
         val config = ConfigLoader.loadConfig(yaml)
         assertEquals("https://example.com/libudp2raw_plugin.so", config.plugin.udp2rawCore)
-        assertEquals("https://example.com/libmihomo_plugin.so", config.plugin.m2mCore)
+        assertEquals("https://example.com/libm2m_plugin.so", config.plugin.m2mCore)
         assertEquals("socks5://127.0.0.1:1080", config.plugin.downloadProxy)
     }
 
@@ -141,7 +141,7 @@ class AppConfigSchemaTest {
             inputs:
               m2m:
                 - name: office_vpn
-                  configUrl: https://example.com/mihomo.yaml
+                  configUrl: https://example.com/m2m.yaml
                   refreshInterval: "24h"
                   enabled: true
                   when: network=wifi
@@ -154,7 +154,7 @@ class AppConfigSchemaTest {
         val config = ConfigLoader.loadConfig(yaml)
         assertEquals(1, config.inputs.m2m.size)
         assertEquals("office_vpn", config.inputs.m2m[0].name)
-        assertEquals("https://example.com/mihomo.yaml", config.inputs.m2m[0].configUrl)
+        assertEquals("https://example.com/m2m.yaml", config.inputs.m2m[0].configUrl)
         assertEquals(2, config.inputs.m2m[0].packages.size)
         assertEquals(86_400_000L, config.inputs.m2m[0].refreshIntervalMs)
     }

@@ -4,10 +4,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.File
 
-class MihomoProcessManagerTest {
+class M2mProcessManagerTest {
     @Test
     fun buildArgs_usesWorkDirAndProfile() {
-        val args = MihomoProcessManager.buildArgs(
+        val args = M2mProcessManager.buildArgs(
             workDir = File("/tmp/work"),
             profileFile = File("/tmp/profile.yaml"),
         )

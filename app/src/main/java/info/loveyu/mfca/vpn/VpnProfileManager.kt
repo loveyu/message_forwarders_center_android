@@ -92,7 +92,7 @@ object VpnProfileManager {
                 }
             } ?: linkedMapOf<String, Any?>()
         dns["enable"] = true
-        dns["listen"] = "127.0.0.1:${MfcaVpnService.MIHOMO_DNS_PORT}"
+        dns["listen"] = "127.0.0.1:${MfcaVpnService.M2M_DNS_PORT}"
         dns["enhanced-mode"] = "fake-ip"
         if (!dns.containsKey("fake-ip-range")) {
             dns["fake-ip-range"] = "28.0.0.1/8"

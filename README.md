@@ -139,10 +139,10 @@ Example: `L3 I2 O4 | Pause Forward | WLock`
 ## VPN Input (scaffold)
 
 - Add VPN profiles under `inputs.vpn`
-- Each profile uses a remote `configUrl` for the mihomo config; the mihomo core is loaded as `libmihomo_plugin.so` from the app private PluginManager directory
+- Each profile uses a remote `configUrl` for the m2m config; the m2m core is loaded as `libm2m_plugin.so` from the app private PluginManager directory
 - `when` / `deny` still control candidate availability, and multiple VPN profiles can coexist under the same network condition
 - Per-profile `accessControlMode` + `packages` define include/exclude app filters
-- Set `pluginUrl` to let startup download the ABI-specific `libmihomo_plugin.so`, or install it manually through PluginManager before starting VPN
+- Set `pluginUrl` to let startup download the ABI-specific `libm2m_plugin.so`, or install it manually through PluginManager before starting VPN
 
 ## Build
 
