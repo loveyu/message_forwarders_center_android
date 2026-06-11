@@ -6,6 +6,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.ParcelFileDescriptor
 import android.net.VpnService
 import android.os.Build
@@ -36,6 +38,7 @@ class MfcaM2mService : VpnService() {
     @Volatile private var runtimeSessionId: Long = 0L
     @Volatile private var retryAttempts: Int = 0
     private var retryJob: Job? = null
+    private var physicalNetwork: Network? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action ?: "null"
@@ -192,7 +195,27 @@ class MfcaM2mService : VpnService() {
         LogManager.logDebug("VPN", "Artifacts: port=${artifacts.localProxyPort}, apiPort=${artifacts.apiPort}, udpRelay=${artifacts.udpRelay}, dnsHijack=${artifacts.dnsHijack}, core=${artifacts.coreFilePath}, profile=${artifacts.profileFilePath}")
 
         // Enable socket protection so m2m outbound connections bypass VPN tunnel
-        M2mPluginCore.socketProtector = M2mPluginCore.SocketProtector { fd -> protect(fd) }
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        physicalNetwork = cm.activeNetwork
+        if (physicalNetwork != null) {
+            LogManager.logDebug("VPN", "Physical network cached: ${physicalNetwork}")
+        } else {
+            LogManager.logWarn("VPN", "No active network available, will use VpnService.protect() fallback")
+        }
+        M2mPluginCore.socketProtector = M2mPluginCore.SocketProtector { fd ->
+            val net = physicalNetwork
+            if (net != null) {
+                try {
+                    ParcelFileDescriptor.fromFd(fd).use { pfd ->
+                        net.bindSocket(pfd.fileDescriptor)
+                    }
+                    return@SocketProtector true
+                } catch (e: Exception) {
+                    LogManager.logWarn("VPN", "Network.bindSocket failed: ${e.message}, falling back to VpnService.protect()")
+                }
+            }
+            protect(fd)
+        }
         LogManager.logDebug("VPN", "Socket protector registered")
 
         val runningCore = M2mProcessManager.start(
