@@ -14,14 +14,13 @@ import android.os.ParcelFileDescriptor
 import androidx.core.app.NotificationCompat
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
-import info.loveyu.mfca.config.VpnInputConfig
+import info.loveyu.mfca.config.M2mInputConfig
 import info.loveyu.mfca.plugin.M2mPluginCore
-import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.LogManager
-import info.loveyu.mfca.vpn.MfcaVpnService
-import info.loveyu.mfca.vpn.M2mProcessManager
-import info.loveyu.mfca.vpn.PreparedVpnArtifacts
-import info.loveyu.mfca.vpn.VpnBridgeProcessManager
+import info.loveyu.mfca.m2m.MfcaM2mService
+import info.loveyu.mfca.m2m.M2mProcessManager
+import info.loveyu.mfca.m2m.PreparedM2mArtifacts
+import info.loveyu.mfca.m2m.M2mBridgeProcessManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,7 +29,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class M2mVpnTestService : VpnService() {
+class M2mFullTestService : VpnService() {
 
     sealed class Event {
         data class Log(val message: String) : Event()
@@ -69,7 +68,7 @@ class M2mVpnTestService : VpnService() {
 
     private fun startTestForeground() {
         ensureNotificationChannel()
-        val notification = buildNotification("m2m VPN 测试运行中")
+        val notification = buildNotification("m2m 全链路测试运行中")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
@@ -83,14 +82,14 @@ class M2mVpnTestService : VpnService() {
 
     private suspend fun startVpn(pluginPath: String, configPath: String, mixedPort: Int, includeSelf: Boolean) {
         if (prepare(this) != null) {
-            emit(Event.Error("VPN 权限未授予"))
+            emit(Event.Error("m2m 权限未授予"))
             stopSelf()
             return
         }
 
-        val candidate = VpnInputConfig(name = "m2m-test", configUrl = "")
+        val candidate = M2mInputConfig(name = "m2m-test", configUrl = "")
         val apiPort = java.net.ServerSocket(0).use { it.localPort }
-        val artifacts = PreparedVpnArtifacts(
+        val artifacts = PreparedM2mArtifacts(
             candidate = candidate,
             coreFilePath = pluginPath,
             profileFilePath = configPath,
@@ -154,17 +153,17 @@ class M2mVpnTestService : VpnService() {
         emit(Event.Log("TUN 接口已建立"))
 
         // Start VPN bridge
-        emit(Event.Log("正在启动 VPN 桥接…"))
-        VpnBridgeProcessManager.start(this, artifacts, tun) { _, tail ->
+        emit(Event.Log("正在启动 m2m 桥接…"))
+        M2mBridgeProcessManager.start(this, artifacts, tun) { _, tail ->
             LogManager.logError("M2mVpnTest", "Bridge exited: $tail")
         }.getOrElse { error ->
-            emit(Event.Error("VPN 桥接启动失败: ${error.message}"))
+            emit(Event.Error("m2m 桥接启动失败: ${error.message}"))
             closeTun()
             M2mProcessManager.stop()
             stopSelf()
             return
         }
-        emit(Event.Log("VPN 桥接已启动"))
+        emit(Event.Log("m2m 桥接已启动"))
 
         Thread.sleep(1000)
         emit(Event.Ready)
@@ -173,7 +172,7 @@ class M2mVpnTestService : VpnService() {
     private fun stopVpn() {
         isRunning = false
         M2mPluginCore.socketProtector = null
-        VpnBridgeProcessManager.stop()
+        M2mBridgeProcessManager.stop()
         closeTun()
         M2mProcessManager.stop()
         try {
@@ -184,12 +183,12 @@ class M2mVpnTestService : VpnService() {
     private fun establishTun(includeSelf: Boolean): ParcelFileDescriptor? {
         val builder = Builder()
             .setBlocking(false)
-            .setMtu(MfcaVpnService.TUN_MTU)
-            .setSession("m2m VPN Test")
-            .addAddress(MfcaVpnService.TUN_GATEWAY, MfcaVpnService.TUN_SUBNET_PREFIX)
-            .addRoute(MfcaVpnService.NET_ANY, 0)
-            .addDnsServer(MfcaVpnService.TUN_DNS_PRIMARY)
-            .addDnsServer(MfcaVpnService.TUN_DNS_SECONDARY)
+            .setMtu(MfcaM2mService.TUN_MTU)
+            .setSession("m2m Full Test")
+            .addAddress(MfcaM2mService.TUN_GATEWAY, MfcaM2mService.TUN_SUBNET_PREFIX)
+            .addRoute(MfcaM2mService.NET_ANY, 0)
+            .addDnsServer(MfcaM2mService.TUN_DNS_PRIMARY)
+            .addDnsServer(MfcaM2mService.TUN_DNS_SECONDARY)
 
         if (includeSelf) {
             runCatching { builder.addAllowedApplication(packageName) }
@@ -220,7 +219,7 @@ class M2mVpnTestService : VpnService() {
     private fun emit(event: Event) {
         val msg = when (event) {
             is Event.Log -> event.message
-            is Event.Ready -> "VPN 就绪"
+            is Event.Ready -> "m2m 就绪"
             is Event.Error -> "错误: ${event.message}"
         }
         LogManager.logInfo("M2mVpnTest", msg)
@@ -233,7 +232,7 @@ class M2mVpnTestService : VpnService() {
         val manager = getSystemService(NotificationManager::class.java)
         if (manager.getNotificationChannel(CHANNEL_ID) == null) {
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "m2m VPN 测试", NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(CHANNEL_ID, "m2m 全链路测试", NotificationManager.IMPORTANCE_LOW)
             )
         }
     }
@@ -241,7 +240,7 @@ class M2mVpnTestService : VpnService() {
     private fun buildNotification(content: String): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("m2m VPN 测试")
+            .setContentTitle("m2m 全链路测试")
             .setContentText(content)
             .setOngoing(true)
             .setContentIntent(

@@ -1,37 +1,37 @@
-# VPN 模块架构文档
+# m2m 模块架构文档
 
-FlowGate 的 VPN 功能基于 m2m（Clash.Meta）代理核心，通过 Android VpnService 的 TUN 接口实现全局或按应用的透明代理。
+FlowGate 的 m2m 功能基于 m2m（Clash.Meta）代理核心，通过 Android VpnService 的 TUN 接口实现全局或按应用的透明代理。
 
 ## 整体架构
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         用户操作 (VpnScreen)                         │
-│              开关 VPN / 选择候选 / 下载核心 / 配置管理                │
+│                         用户操作 (M2mScreen)                         │
+│              开关 m2m / 选择候选 / 下载核心 / 配置管理                │
 └────────────────────────────┬────────────────────────────────────────┘
                              │
                              v
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     VpnManager (状态中心)                             │
-│  StateFlow<VpnUiState> ── 候选解析 / 配置缓存 / 核心管理 / 设置持久化 │
+│                     M2mManager (状态中心)                             │
+│  StateFlow<M2mUiState> ── 候选解析 / 配置缓存 / 核心管理 / 设置持久化 │
 └────────────────────────────┬────────────────────────────────────────┘
                              │
                              v
 ┌─────────────────────────────────────────────────────────────────────┐
-│                   MfcaVpnService (Android VpnService)                │
+│                   MfcaM2mService (Android VpnService)                │
 │  生命周期管理 / 自动重试 / TUN 建立 / 前台通知                        │
 │                                                                     │
 │  ┌── prepareSelectedCandidate() ──┐                                 │
 │  │  M2mCoreManager.ensureCore  │ ← 下载/校验 .so 插件            │
-│  │  VpnConfigCacheManager         │ ← 下载/校验 YAML 配置           │
-│  │  VpnProfileManager             │ ← 构建运行时 profile            │
+│  │  M2mConfigCacheManager         │ ← 下载/校验 YAML 配置           │
+│  │  M2mProfileManager             │ ← 构建运行时 profile            │
 │  └────────────────────────────────┘                                 │
 │                                                                     │
 │  ┌── 启动顺序 ────────────────────────────────────────────────────┐ │
 │  │  1. M2mPluginCore.socketProtector = { fd -> protect(fd) }  │ │
 │  │  2. M2mProcessManager.start()   → JNI 加载 m2m .so      │ │
 │  │  3. VpnService.Builder.establish() → 创建 TUN 接口             │ │
-│  │  4. VpnBridgeProcessManager.start() → 启动 tun2socks 桥接进程  │ │
+│  │  4. M2mBridgeProcessManager.start() → 启动 tun2socks 桥接进程  │ │
 │  └────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────┘
                              │
@@ -85,33 +85,33 @@ Android 应用 → TUN 接口 → vpnbridge (tun2socks)
 
 ## 核心组件
 
-### MfcaVpnService
+### MfcaM2mService
 
-- **文件**: `app/src/main/java/info/loveyu/mfca/vpn/MfcaVpnService.kt`
-- **职责**: Android VpnService 实现，VPN 生命周期入口
+- **文件**: `app/src/main/java/info/loveyu/mfca/m2m/MfcaM2mService.kt`
+- **职责**: Android VpnService 实现，m2m 生命周期入口
 - **Intent 操作**:
-  - `ACTION_ENABLE` — 启用 VPN
+  - `ACTION_ENABLE` — 启用 m2m
   - `ACTION_REFRESH` — 刷新（支持 `forceRestart` 强制重启）
-  - `ACTION_DISABLE` — 停用 VPN
+  - `ACTION_DISABLE` — 停用 m2m
 - **TUN 参数**:
   - Gateway: `172.19.0.1/30`
   - Portal: `172.19.0.2`
   - MTU: `1500`
   - DNS: `1.1.1.1`, `8.8.8.8`
   - DNS 监听端口: `1053`（m2m DNS listener）
-  - IPv6: 可选启用（添加 `::/0` 路由，捕获 IPv6 流量到 VPN 隧道）
+  - IPv6: 可选启用（添加 `::/0` 路由，捕获 IPv6 流量到 m2m 隧道）
 - **自动重试**: 最多 3 次，间隔线性递增（5s × 次数）
 - **访问控制模式**:
   - `acceptAll` — 所有应用（排除自身）
   - `exclude` — 排除指定应用
   - `include` — 仅指定应用
 
-### VpnManager
+### M2mManager
 
-- **文件**: `app/src/main/java/info/loveyu/mfca/vpn/VpnManager.kt`
-- **职责**: VPN 子系统的状态中心，管理 UI 状态、候选解析、配置缓存调度
+- **文件**: `app/src/main/java/info/loveyu/mfca/m2m/M2mManager.kt`
+- **职责**: m2m 子系统的状态中心，管理 UI 状态、候选解析、配置缓存调度
 - **关键 API**:
-  - `state: StateFlow<VpnUiState>` — 响应式 UI 状态
+  - `state: StateFlow<M2mUiState>` — 响应式 UI 状态
   - `initialize(context, vpnConfigs, pluginUrl, downloadProxy)` — 初始化
   - `prepareSelectedCandidate(context)` — 准备运行时产物
   - `onTick(context)` — 定时刷新配置，返回是否需要重启
@@ -119,19 +119,19 @@ Android 应用 → TUN 接口 → vpnbridge (tun2socks)
   - `downloadCorePlugin(context)` / `deleteCorePlugin(context)` — 核心管理
   - `setDownloadProxyOverride(proxy)` — 下载代理覆盖
 - **候选解析**: 按选择历史（LRU）优先匹配可用候选，无历史时取第一个可用候选
-- **代理优先级**: VpnStateStore 覆盖 > 配置文件 `plugin.downloadProxy`
+- **代理优先级**: M2mStateStore 覆盖 > 配置文件 `plugin.downloadProxy`
 
 ### M2mProcessManager
 
-- **文件**: `app/src/main/java/info/loveyu/mfca/vpn/M2mProcessManager.kt`
+- **文件**: `app/src/main/java/info/loveyu/mfca/m2m/M2mProcessManager.kt`
 - **职责**: 管理进程内 m2m 核心的生命周期
 - **启动流程**: `System.load(.so)` → `setSocketProtector(true)` → `nativeStart(args)` → 等待代理就绪（TCP 连通性探测，15s 超时）
 - **守护线程**: 检测异常退出并回调通知
 - **日志**: stdout/stderr 分别写入 `m2m.stdout.log` / `m2m.stderr.log`
 
-### VpnBridgeProcessManager
+### M2mBridgeProcessManager
 
-- **文件**: `app/src/main/java/info/loveyu/mfca/vpn/VpnBridgeProcessManager.kt`
+- **文件**: `app/src/main/java/info/loveyu/mfca/m2m/M2mBridgeProcessManager.kt`
 - **职责**: 管理 vpnbridge 子进程（tun2socks 中继）
 - **TUN fd 传递**: 通过 Unix Domain Socket + `SCM_RIGHTS` 传递给子进程
 - **启动参数**: `--control-socket`, `--socks`, `--gateway`, `--portal`, `--dns`, `--udp-relay`
@@ -139,18 +139,18 @@ Android 应用 → TUN 接口 → vpnbridge (tun2socks)
 
 ### M2mCoreManager
 
-- **文件**: `app/src/main/java/info/loveyu/mfca/vpn/M2mCoreManager.kt`
+- **文件**: `app/src/main/java/info/loveyu/mfca/m2m/M2mCoreManager.kt`
 - **职责**: 管理 m2m .so 插件文件的下载、校验、缓存
 - **URL 变更检测**: 使用 `PluginManager.isInstalledFrom()` 对比 `.source_url` 标记文件
 - **下载代理**: 支持传入 `proxyAddress`，支持 HTTP/SOCKS5 代理
 
-### VpnProfileManager
+### M2mProfileManager
 
-- **文件**: `app/src/main/java/info/loveyu/mfca/vpn/VpnProfileManager.kt`
+- **文件**: `app/src/main/java/info/loveyu/mfca/m2m/M2mProfileManager.kt`
 - **职责**: 从缓存的原始配置构建运行时 YAML profile
 - **覆盖字段**:
   - `mixed-port` → 用户覆盖或默认 `17890`（由 mixed-port 统一处理 HTTP + SOCKS5）
-  - `external-controller` → 强制 `127.0.0.1:{随机端口}`（VPN 启动时自动探测可用端口）
+  - `external-controller` → 强制 `127.0.0.1:{随机端口}`（m2m 启动时自动探测可用端口）
   - `secret` → 配置中已有则保留，否则使用持久化的随机认证令牌
   - `allow-lan` → 强制 `false`
   - `bind-address` → 强制 `127.0.0.1`
@@ -168,18 +168,18 @@ Android 应用 → TUN 接口 → vpnbridge (tun2socks)
   - `port`、`socks-port`、`redir-port`、`tproxy-port`
   - `external-ui`（app 不需要 Web UI）
 
-### VpnConfigCacheManager
+### M2mConfigCacheManager
 
-- **文件**: `app/src/main/java/info/loveyu/mfca/vpn/VpnConfigCacheManager.kt`
+- **文件**: `app/src/main/java/info/loveyu/mfca/m2m/M2mConfigCacheManager.kt`
 - **职责**: 远程 YAML 配置的下载、缓存、刷新
 - **存储**: `vpn/config_cache/<name>.yaml` + `.meta.json`（SHA-256、时间戳）
 - **变更检测**: 比较下载前后 SHA-256，返回是否变更
-- **自动刷新**: 由 `VpnManager.onTick()` 驱动，按 `refreshIntervalMs` 调度
+- **自动刷新**: 由 `M2mManager.onTick()` 驱动，按 `refreshIntervalMs` 调度
 
-### VpnStateStore
+### M2mStateStore
 
-- **文件**: `app/src/main/java/info/loveyu/mfca/vpn/VpnStateStore.kt`
-- **职责**: VPN 用户偏好持久化（SharedPreferences）
+- **文件**: `app/src/main/java/info/loveyu/mfca/m2m/M2mStateStore.kt`
+- **职责**: m2m 用户偏好持久化（SharedPreferences）
 - **存储内容**:
   - 全局启用状态
   - 候选选择历史（有序列表，LRU）
@@ -191,18 +191,18 @@ Android 应用 → TUN 接口 → vpnbridge (tun2socks)
 
 ## 数据模型
 
-- **文件**: `app/src/main/java/info/loveyu/mfca/vpn/VpnModels.kt`
+- **文件**: `app/src/main/java/info/loveyu/mfca/m2m/VpnModels.kt`
 
 | 模型 | 说明 |
 |------|------|
-| `VpnRuntimeStatus` | 运行时状态枚举: disabled/idle/preparing/prepared/starting/running/stopping/error |
-| `VpnCoreState` | 核心插件状态: isReady/path/pluginVersion |
-| `VpnConfigCacheState` | 配置缓存状态: isCached/lastUpdatedMs/nextRefreshMs |
-| `VpnCandidateState` | 候选完整状态: config + 访问控制 + 核心 + 缓存 + 可用性 |
-| `PreparedVpnArtifacts` | 运行时产物: candidate + coreFilePath + profileFilePath + localProxyPort + apiPort + apiSecret + udpRelay + dnsHijack |
-| `VpnUiState` | UI 完整状态: isEnabled + runtimeStatus + candidates + coreState |
-| `VpnRuleMode` | 规则模式: rule/global/direct |
-| `VpnLogLevel` | 日志级别: debug/info/warning/error/silent |
+| `M2mRuntimeStatus` | 运行时状态枚举: disabled/idle/preparing/prepared/starting/running/stopping/error |
+| `M2mCoreState` | 核心插件状态: isReady/path/pluginVersion |
+| `M2mConfigCacheState` | 配置缓存状态: isCached/lastUpdatedMs/nextRefreshMs |
+| `M2mCandidateState` | 候选完整状态: config + 访问控制 + 核心 + 缓存 + 可用性 |
+| `PreparedM2mArtifacts` | 运行时产物: candidate + coreFilePath + profileFilePath + localProxyPort + apiPort + apiSecret + udpRelay + dnsHijack |
+| `M2mUiState` | UI 完整状态: isEnabled + runtimeStatus + candidates + coreState |
+| `M2mRuleMode` | 规则模式: rule/global/direct |
+| `M2mLogLevel` | 日志级别: debug/info/warning/error/silent |
 
 ## 插件系统
 
@@ -232,16 +232,16 @@ Android 应用 → TUN 接口 → vpnbridge (tun2socks)
 
 ### Socket Protector 机制
 
-VPN include 模式下，m2m 的出站连接如果不加保护，会被路由回 TUN 接口形成路由环路。解决方案：
+m2m include 模式下，m2m 的出站连接如果不加保护，会被路由回 TUN 接口形成路由环路。解决方案：
 
-1. **Kotlin 侧**: `M2mPluginCore.socketProtector` 存储一个 `SocketProtector` 函数引用，由 `MfcaVpnService` 设置为 `{ fd -> protect(fd) }`
+1. **Kotlin 侧**: `M2mPluginCore.socketProtector` 存储一个 `SocketProtector` 函数引用，由 `MfcaM2mService` 设置为 `{ fd -> protect(fd) }`
 2. **Go 侧**: `nativeSetSocketProtector(true)` 将 `dialer.DefaultSocketHook` 设置为回调函数
 3. **调用链**: Go 的每次出站 socket 创建 → `DefaultSocketHook(fd)` → C 层 `m2m_protect_socket(fd)` → JNI `AttachCurrentThread` → `M2mPluginCore.notifyMarkSocket(fd)` → `VpnService.protect(fd)`
-4. **效果**: 被标记的 socket 绑定到物理网络接口，不经过 VPN TUN
+4. **效果**: 被标记的 socket 绑定到物理网络接口，不经过 m2m TUN
 
 ## vpnbridge (tun2socks)
 
-- **源码**: `app/src/main/go/vpnbridge/`
+- **源码**: `app/src/main/c/hev-socks5-tunnel/`
 - **编译**: Go 编译为 `libvpnbridge.so`，作为子进程执行
 - **职责**: TUN 接口到 SOCKS5 代理的数据中继
 - **工作流程**:
@@ -260,36 +260,36 @@ VPN include 模式下，m2m 的出站连接如果不加保护，会被路由回 
 
 ## UI 层
 
-### VpnScreen
+### M2mScreen
 
-- **文件**: `app/src/main/java/info/loveyu/mfca/ui/VpnScreen.kt`
+- **文件**: `app/src/main/java/info/loveyu/mfca/ui/M2mScreen.kt`
 - **内容**:
-  - 运行时状态卡片: VPN 开关、状态信息、进度条、状态芯片、操作按钮
+  - 运行时状态卡片: m2m 开关、状态信息、进度条、状态芯片、操作按钮
   - 核心插件管理: 下载/重下载/删除核心
   - 下载代理设置: ModalBottomSheet 设置代理覆盖
   - 候选卡片列表: 可用性状态、配置缓存管理、选择/应用/设置按钮
 
-### VpnAppSelectActivity
+### M2mAppSelectActivity
 
-- **文件**: `app/src/main/java/info/loveyu/mfca/vpn/VpnAppSelectActivity.kt`
+- **文件**: `app/src/main/java/info/loveyu/mfca/m2m/M2mAppSelectActivity.kt`
 - **职责**: 应用过滤设置界面
 - **功能**: 搜索应用、全选/取消/反选、剪贴板导入导出、显示/隐藏系统应用
 
-### VpnCandidateSettingsActivity
+### M2mCandidateSettingsActivity
 
-- **文件**: `app/src/main/java/info/loveyu/mfca/vpn/VpnCandidateSettingsActivity.kt`
+- **文件**: `app/src/main/java/info/loveyu/mfca/m2m/M2mCandidateSettingsActivity.kt`
 - **职责**: 每个候选的高级设置
 - **功能**: 端口覆盖 (1024-65535)、规则模式 (rule/global/direct)、日志级别 (debug-silent)、UDP 中继开关、IPv6 泄漏防护开关、DNS 劫持开关
 
-### VpnLogActivity
+### M2mLogActivity
 
-- **文件**: `app/src/main/java/info/loveyu/mfca/vpn/VpnLogActivity.kt`
+- **文件**: `app/src/main/java/info/loveyu/mfca/m2m/M2mLogActivity.kt`
 - **职责**: 实时 m2m 日志查看
 - **功能**: 每秒轮询日志文件、单行复制、复制全部
 
 ## 配置
 
-### YAML 配置 (VpnInputConfig)
+### YAML 配置 (M2mInputConfig)
 
 ```yaml
 plugin:
@@ -327,11 +327,11 @@ inputs:
 通过 UI 设置的覆盖保存在 SharedPreferences，优先级高于配置文件：
 
 - **端口覆盖** (`mixed-port`): 1024-65535，留空使用默认 17890（强制覆盖，替代独立的 `port`/`socks-port`）
-- **External Controller**: VPN 启动时自动探测随机可用端口，强制绑定 `127.0.0.1`，仅允许本机访问。认证令牌首次生成后持久化
+- **External Controller**: m2m 启动时自动探测随机可用端口，强制绑定 `127.0.0.1`，仅允许本机访问。认证令牌首次生成后持久化
 - **规则模式**: rule / global / direct
 - **日志级别**: debug / info / warning / error / silent
 - **UDP 中继**: 开启后非 DNS 的 UDP 流量通过 SOCKS5 转发（需代理支持 UDP），关闭后丢弃非 DNS UDP 防止流量泄漏
-- **IPv6 泄漏防护**: 开启后添加 `::/0` 路由到 VPN，捕获 IPv6 流量并丢弃，防止 IPv6 流量绕过代理
+- **IPv6 泄漏防护**: 开启后添加 `::/0` 路由到 m2m，捕获 IPv6 流量并丢弃，防止 IPv6 流量绕过代理
 - **DNS 劫持**: 开启后 vpnbridge 拦截 DNS 查询转发到 m2m 本地 DNS 监听，启用 fake-ip 模式使域名规则生效
 - **下载代理**: 覆盖 `plugin.downloadProxy`，适用于代理不可用时手动切换
 
@@ -364,16 +364,16 @@ inputs:
 ### M2mTestActivity
 
 - **文件**: `app/src/main/java/info/loveyu/mfca/test/M2mTestActivity.kt`
-- **测试内容**: 不含 VPN 的 m2m 代理完整链路测试
+- **测试内容**: 不含 m2m 的 m2m 代理完整链路测试
 - **步骤**: 下载插件 → 下载配置 → 启动代理 → 等待就绪 → HTTP 访问测试 → 清理
 
-### M2mVpnTestActivity
+### M2mFullTestActivity
 
-- **文件**: `app/src/main/java/info/loveyu/mfca/test/M2mVpnTestActivity.kt`
-- **测试内容**: VPN 完整链路测试（含 include/exclude 双模式）
-- **步骤**: VPN 授权 → 下载插件/配置 → 启动代理+VPN(exclude) → 访问测试 → 切换 include 模式 → 直连测试 → 清理
+- **文件**: `app/src/main/java/info/loveyu/mfca/test/M2mFullTestActivity.kt`
+- **测试内容**: m2m 完整链路测试（含 include/exclude 双模式）
+- **步骤**: m2m 授权 → 下载插件/配置 → 启动代理+m2m(exclude) → 访问测试 → 切换 include 模式 → 直连测试 → 清理
 
-### M2mVpnTestService
+### M2mFullTestService
 
-- **文件**: `app/src/main/java/info/loveyu/mfca/test/M2mVpnTestService.kt`
-- **职责**: 测试用 VPN Service，独立于生产 MfcaVpnService，通过静态回调报告事件
+- **文件**: `app/src/main/java/info/loveyu/mfca/test/M2mFullTestService.kt`
+- **职责**: 测试用 m2m Service，独立于生产 MfcaM2mService，通过静态回调报告事件

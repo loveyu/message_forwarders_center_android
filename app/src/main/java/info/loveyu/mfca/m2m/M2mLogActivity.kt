@@ -1,4 +1,4 @@
-package info.loveyu.mfca.vpn
+package info.loveyu.mfca.m2m
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -57,7 +57,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-class VpnLogActivity : ComponentActivity() {
+class M2mLogActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -65,7 +65,7 @@ class VpnLogActivity : ComponentActivity() {
     }
 
     companion object {
-        fun intent(context: Context): Intent = Intent(context, VpnLogActivity::class.java)
+        fun intent(context: Context): Intent = Intent(context, M2mLogActivity::class.java)
 
         fun exportDiagnostics(context: Context): String {
             val extDir = File(context.getExternalFilesDir(null), "vpn_debug").apply { mkdirs() }
@@ -163,13 +163,13 @@ private fun VpnLogScreen(onBack: () -> Unit) {
                 withContext(Dispatchers.IO) {
                     when (source) {
                         LogSource.M2M -> M2mProcessManager.getLastLogFiles()
-                        LogSource.BRIDGE -> VpnBridgeProcessManager.getLastLogFiles()
+                        LogSource.BRIDGE -> M2mBridgeProcessManager.getLastLogFiles()
                     }
                 }
             isRunning =
                 when (source) {
                     LogSource.M2M -> M2mProcessManager.isRunning()
-                    LogSource.BRIDGE -> VpnBridgeProcessManager.isRunning()
+                    LogSource.BRIDGE -> M2mBridgeProcessManager.isRunning()
                 }
             hasEverStarted = logFiles != null
             if (logFiles != null) {
@@ -224,7 +224,7 @@ private fun VpnLogScreen(onBack: () -> Unit) {
                             }
                             val text = lines.joinToString("\n") { it.text }
                             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            cm.setPrimaryClip(ClipData.newPlainText("vpn_logs", text))
+                            cm.setPrimaryClip(ClipData.newPlainText("m2m_logs", text))
                             Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
                         },
                     ) {
@@ -259,7 +259,7 @@ private fun VpnLogScreen(onBack: () -> Unit) {
                                             val logFiles =
                                                 when (source) {
                                                     LogSource.M2M -> M2mProcessManager.getLastLogFiles()
-                                                    LogSource.BRIDGE -> VpnBridgeProcessManager.getLastLogFiles()
+                                                    LogSource.BRIDGE -> M2mBridgeProcessManager.getLastLogFiles()
                                                 }
                                             if (logFiles != null) {
                                                 logFiles.first.writeText("")
@@ -273,7 +273,7 @@ private fun VpnLogScreen(onBack: () -> Unit) {
                                 text = { Text(stringResource(R.string.vpn_export_diagnostics)) },
                                 onClick = {
                                     showOverflowMenu = false
-                                    val msg = VpnLogActivity.exportDiagnostics(context)
+                                    val msg = M2mLogActivity.exportDiagnostics(context)
                                     Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                                 },
                             )
@@ -317,7 +317,7 @@ private fun VpnLogScreen(onBack: () -> Unit) {
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = if (!hasEverStarted) "VPN 尚未启动过" else "日志为空",
+                    text = if (!hasEverStarted) "m2m 尚未启动过" else "日志为空",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

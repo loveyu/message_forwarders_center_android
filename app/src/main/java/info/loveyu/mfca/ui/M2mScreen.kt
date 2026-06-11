@@ -52,20 +52,20 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.R
-import info.loveyu.mfca.vpn.MfcaVpnService
-import info.loveyu.mfca.vpn.VpnAppSelectActivity
-import info.loveyu.mfca.vpn.VpnCandidateSettingsActivity
-import info.loveyu.mfca.vpn.VpnLogActivity
-import info.loveyu.mfca.vpn.VpnManager
-import info.loveyu.mfca.vpn.VpnRuntimeStatus
+import info.loveyu.mfca.m2m.MfcaM2mService
+import info.loveyu.mfca.m2m.M2mAppSelectActivity
+import info.loveyu.mfca.m2m.M2mCandidateSettingsActivity
+import info.loveyu.mfca.m2m.M2mLogActivity
+import info.loveyu.mfca.m2m.M2mManager
+import info.loveyu.mfca.m2m.M2mRuntimeStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun VpnScreen(contentPadding: PaddingValues) {
+fun M2mScreen(contentPadding: PaddingValues) {
     val context = LocalContext.current
-    val uiState by VpnManager.state.collectAsState()
+    val uiState by M2mManager.state.collectAsState()
     val scope = rememberCoroutineScope()
     var workingConfigCandidateName by remember { mutableStateOf<String?>(null) }
     var coreActionWorking by remember { mutableStateOf(false) }
@@ -77,9 +77,9 @@ fun VpnScreen(contentPadding: PaddingValues) {
     val vpnPermissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
-                ContextCompat.startForegroundService(context, MfcaVpnService.enableIntent(context))
+                ContextCompat.startForegroundService(context, MfcaM2mService.enableIntent(context))
             } else {
-                VpnManager.updateRuntimeStatus(VpnRuntimeStatus.error, context.getString(R.string.vpn_permission_denied))
+                M2mManager.updateRuntimeStatus(M2mRuntimeStatus.error, context.getString(R.string.vpn_permission_denied))
             }
         }
 
@@ -98,7 +98,7 @@ fun VpnScreen(contentPadding: PaddingValues) {
                         .padding(18.dp),
                 ) {
                     val runningName = uiState.runningCandidateName
-                    if (uiState.runtimeStatus == VpnRuntimeStatus.running && runningName != null) {
+                    if (uiState.runtimeStatus == M2mRuntimeStatus.running && runningName != null) {
                         Row(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
@@ -111,8 +111,8 @@ fun VpnScreen(contentPadding: PaddingValues) {
                             Switch(
                                 checked = true,
                                 onCheckedChange = {
-                                    VpnManager.setEnabled(false)
-                                    context.startService(MfcaVpnService.disableIntent(context))
+                                    M2mManager.setEnabled(false)
+                                    context.startService(MfcaM2mService.disableIntent(context))
                                 },
                             )
                         }
@@ -136,12 +136,12 @@ fun VpnScreen(contentPadding: PaddingValues) {
                                         } else {
                                             ContextCompat.startForegroundService(
                                                 context,
-                                                MfcaVpnService.enableIntent(context),
+                                                MfcaM2mService.enableIntent(context),
                                             )
                                         }
                                     } else {
-                                        VpnManager.setEnabled(false)
-                                        context.startService(MfcaVpnService.disableIntent(context))
+                                        M2mManager.setEnabled(false)
+                                        context.startService(MfcaM2mService.disableIntent(context))
                                     }
                                 },
                             )
@@ -215,7 +215,7 @@ fun VpnScreen(contentPadding: PaddingValues) {
                             onClick = {
                                 ContextCompat.startForegroundService(
                                     context,
-                                    MfcaVpnService.refreshIntent(context, forceRestart = true),
+                                    MfcaM2mService.refreshIntent(context, forceRestart = true),
                                 )
                             },
                         ) {
@@ -229,7 +229,7 @@ fun VpnScreen(contentPadding: PaddingValues) {
                                 ),
                             )
                         }
-                        OutlinedButton(onClick = { context.startActivity(VpnLogActivity.intent(context)) }) {
+                        OutlinedButton(onClick = { context.startActivity(M2mLogActivity.intent(context)) }) {
                             Text(stringResource(R.string.vpn_view_log))
                         }
 
@@ -269,12 +269,12 @@ fun VpnScreen(contentPadding: PaddingValues) {
                                             coreActionError = null
                                             scope.launch {
                                                 val result = withContext(Dispatchers.IO) {
-                                                    VpnManager.downloadCorePlugin(context)
+                                                    M2mManager.downloadCorePlugin(context)
                                                 }
                                                 result.onFailure { e ->
                                                     coreActionError = e.message ?: e.toString()
                                                 }
-                                                VpnManager.refresh()
+                                                M2mManager.refresh()
                                                 coreActionWorking = false
                                             }
                                         },
@@ -290,12 +290,12 @@ fun VpnScreen(contentPadding: PaddingValues) {
                                             coreActionError = null
                                             scope.launch {
                                                 val result = withContext(Dispatchers.IO) {
-                                                    VpnManager.deleteCorePlugin(context)
+                                                    M2mManager.deleteCorePlugin(context)
                                                 }
                                                 result.onFailure { e ->
                                                     coreActionError = e.message ?: e.toString()
                                                 }
-                                                VpnManager.refresh()
+                                                M2mManager.refresh()
                                                 coreActionWorking = false
                                             }
                                         },
@@ -426,11 +426,11 @@ fun VpnScreen(contentPadding: PaddingValues) {
                         Button(
                             enabled = candidate.isAvailable && !uiState.isBusy,
                             onClick = {
-                                VpnManager.selectCandidate(candidate.config.name)
+                                M2mManager.selectCandidate(candidate.config.name)
                                 if (uiState.isEnabled) {
                                     ContextCompat.startForegroundService(
                                         context,
-                                        MfcaVpnService.refreshIntent(context, forceRestart = true),
+                                        MfcaM2mService.refreshIntent(context, forceRestart = true),
                                     )
                                 }
                             },
@@ -474,13 +474,13 @@ fun VpnScreen(contentPadding: PaddingValues) {
                                         configActionErrorCandidateName = null
                                         scope.launch {
                                             val result = withContext(Dispatchers.IO) {
-                                                VpnManager.downloadConfig(context, candidate.config.name)
+                                                M2mManager.downloadConfig(context, candidate.config.name)
                                             }
                                             result.onFailure { e ->
                                                 configActionError = e.message ?: e.toString()
                                                 configActionErrorCandidateName = candidate.config.name
                                             }
-                                            VpnManager.refresh()
+                                            M2mManager.refresh()
                                             workingConfigCandidateName = null
                                         }
                                     },
@@ -493,9 +493,9 @@ fun VpnScreen(contentPadding: PaddingValues) {
                                             showMenu = false
                                             scope.launch {
                                                 withContext(Dispatchers.IO) {
-                                                    VpnManager.deleteConfigCache(context, candidate.config.name)
+                                                    M2mManager.deleteConfigCache(context, candidate.config.name)
                                                 }
-                                                VpnManager.refresh()
+                                                M2mManager.refresh()
                                             }
                                         },
                                         enabled = !isWorking && !uiState.isBusy,
@@ -505,21 +505,21 @@ fun VpnScreen(contentPadding: PaddingValues) {
                                     text = { Text(stringResource(R.string.vpn_view_log)) },
                                     onClick = {
                                         showMenu = false
-                                        context.startActivity(VpnLogActivity.intent(context))
+                                        context.startActivity(M2mLogActivity.intent(context))
                                     },
                                 )
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.vpn_edit_apps)) },
                                     onClick = {
                                         showMenu = false
-                                        context.startActivity(VpnAppSelectActivity.intent(context, candidate.config.name))
+                                        context.startActivity(M2mAppSelectActivity.intent(context, candidate.config.name))
                                     },
                                 )
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.vpn_settings)) },
                                     onClick = {
                                         showMenu = false
-                                        context.startActivity(VpnCandidateSettingsActivity.intent(context, candidate.config.name))
+                                        context.startActivity(M2mCandidateSettingsActivity.intent(context, candidate.config.name))
                                     },
                                 )
                             }
@@ -563,7 +563,7 @@ fun VpnScreen(contentPadding: PaddingValues) {
                     }
                     Button(
                         onClick = {
-                            VpnManager.setDownloadProxyOverride(downloadProxyText.trim().takeIf { it.isNotBlank() })
+                            M2mManager.setDownloadProxyOverride(downloadProxyText.trim().takeIf { it.isNotBlank() })
                             showDownloadProxySheet = false
                         },
                     ) {
@@ -576,17 +576,17 @@ fun VpnScreen(contentPadding: PaddingValues) {
 }
 
 @Composable
-private fun runtimeStatusLabel(status: VpnRuntimeStatus): String {
+private fun runtimeStatusLabel(status: M2mRuntimeStatus): String {
     return stringResource(
         when (status) {
-            VpnRuntimeStatus.disabled -> R.string.vpn_status_disabled
-            VpnRuntimeStatus.idle -> R.string.vpn_status_idle
-            VpnRuntimeStatus.preparing -> R.string.vpn_status_preparing
-            VpnRuntimeStatus.prepared -> R.string.vpn_status_prepared
-            VpnRuntimeStatus.starting -> R.string.vpn_status_starting
-            VpnRuntimeStatus.running -> R.string.vpn_status_running
-            VpnRuntimeStatus.stopping -> R.string.vpn_status_stopping
-            VpnRuntimeStatus.error -> R.string.vpn_status_error
+            M2mRuntimeStatus.disabled -> R.string.vpn_status_disabled
+            M2mRuntimeStatus.idle -> R.string.vpn_status_idle
+            M2mRuntimeStatus.preparing -> R.string.vpn_status_preparing
+            M2mRuntimeStatus.prepared -> R.string.vpn_status_prepared
+            M2mRuntimeStatus.starting -> R.string.vpn_status_starting
+            M2mRuntimeStatus.running -> R.string.vpn_status_running
+            M2mRuntimeStatus.stopping -> R.string.vpn_status_stopping
+            M2mRuntimeStatus.error -> R.string.vpn_status_error
         },
     )
 }

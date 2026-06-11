@@ -1,4 +1,4 @@
-package info.loveyu.mfca.vpn
+package info.loveyu.mfca.m2m
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

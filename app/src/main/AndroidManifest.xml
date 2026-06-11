@@ -17,7 +17,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- 远程消息推送类型前台服务权限（Android 14+，无时间限制，适用于 MQTT/WebSocket/TCP 长连接） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
-    <!-- VPN 前台服务类型权限（Android 14+） -->
+    <!-- m2m 前台服务类型权限（Android 14+） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- 添加开机自启动权限 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -33,7 +33,7 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
     <!-- 管理所有文件权限（Android 11+需要，用于 sdcard:// 路径写入） -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
-    <!-- VPN 应用过滤需要枚举已安装应用 -->
+    <!-- m2m 应用过滤需要枚举已安装应用 -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
      <application
@@ -100,17 +100,17 @@
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".vpn.VpnAppSelectActivity"
+            android:name=".m2m.M2mAppSelectActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".vpn.VpnCandidateSettingsActivity"
+            android:name=".m2m.M2mCandidateSettingsActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".vpn.VpnLogActivity"
+            android:name=".m2m.M2mLogActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
@@ -135,12 +135,12 @@
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".test.M2mVpnTestActivity"
+            android:name=".test.M2mFullTestActivity"
             android:exported="true"
             android:theme="@style/Theme.FlowGate" />
 
         <service
-            android:name=".test.M2mVpnTestService"
+            android:name=".test.M2mFullTestService"
             android:exported="false"
             android:foregroundServiceType="specialUse"
             android:permission="android.permission.BIND_VPN_SERVICE">
@@ -168,7 +168,7 @@
             android:foregroundServiceType="remoteMessaging" />
 
         <service
-            android:name=".vpn.MfcaVpnService"
+            android:name=".m2m.MfcaM2mService"
             android:exported="false"
             android:foregroundServiceType="specialUse"
             android:permission="android.permission.BIND_VPN_SERVICE">

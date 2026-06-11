@@ -130,7 +130,7 @@ L链路数 I输入数 O输出数
 - `ACCESS_BACKGROUND_LOCATION` - 后台定位权限（Android 10+ 后台获取 WiFi SSID/BSSID）
 - `FOREGROUND_SERVICE` - 前台服务
 - `FOREGROUND_SERVICE_REMOTE_MESSAGING` - 远程消息前台服务类型（Android 14+，适用于 MQTT/WebSocket/TCP 长连接）
-- `FOREGROUND_SERVICE_SPECIAL_USE` - VPN 前台服务类型（Android 14+，用于内置 VPN 运行时）
+- `FOREGROUND_SERVICE_SPECIAL_USE` - VPN 前台服务类型（Android 14+，用于内置 m2m 运行时）
 - `WAKE_LOCK` - 唤醒锁（保持 CPU 在熄屏后运行）
 - `RECEIVE_BOOT_COMPLETED` - 开机自启动
 - `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` - 电池优化豁免
@@ -139,14 +139,14 @@ L链路数 I输入数 O输出数
 - `READ_EXTERNAL_STORAGE` - 读取外部存储（Android 12 及以下）
 - `WRITE_EXTERNAL_STORAGE` - 写入外部存储（Android 10 及以下）
 - `MANAGE_EXTERNAL_STORAGE` - 管理所有文件（Android 11+，用于 sdcard:// 路径写入）
-- `QUERY_ALL_PACKAGES` - 枚举已安装应用，用于每个 VPN 的包含/排除应用过滤
+- `QUERY_ALL_PACKAGES` - 枚举已安装应用，用于每个 m2m 的包含/排除应用过滤
 
-## VPN 输入（当前为骨架阶段）
+## m2m 输入
 
-- 在 `inputs.vpn` 下定义 VPN 候选
+- 在 `inputs.m2m` 下定义 m2m 候选
 - 每个候选包含远程 `configUrl` 作为 m2m 配置文件；m2m 核心以 `libm2m_plugin.so` 形式从应用私有 PluginManager 目录加载
-- `when` / `deny` 继续控制候选可用性，同一网络工况下可以存在多个可用 VPN 候选
-- 通过 `accessControlMode` + `packages` 为每个 VPN 单独设置应用包含/排除列表
+- `when` / `deny` 继续控制候选可用性，同一网络工况下可以存在多个可用 m2m 候选
+- 通过 `accessControlMode` + `packages` 为每个 m2m 单独设置应用包含/排除列表
 - 设置 `pluginUrl` 可在启动时下载当前 ABI 对应的 `libm2m_plugin.so`，也可以先通过 PluginManager 手动安装
 
 ## 构建

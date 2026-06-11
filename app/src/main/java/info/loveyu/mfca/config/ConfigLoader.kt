@@ -180,12 +180,12 @@ object ConfigLoader {
         }
     }
 
-    private fun parseM2mInputs(m2m: Any?): List<VpnInputConfig> {
+    private fun parseM2mInputs(m2m: Any?): List<M2mInputConfig> {
         if (m2m == null) return emptyList()
 
         return (m2m as List<*>).mapNotNull { input ->
             (input as? Map<String, Any>)?.let { map ->
-                VpnInputConfig(
+                M2mInputConfig(
                     name = map["name"] as? String ?: return@mapNotNull null,
                     configUrl = map["configUrl"] as? String ?: return@mapNotNull null,
                     refreshIntervalMs = (map["refreshInterval"] as? String)
@@ -195,7 +195,7 @@ object ConfigLoader {
                     whenCondition = map["when"] as? String,
                     deny = map["deny"] as? String,
                     enabled = map["enabled"] as? Boolean ?: true,
-                    accessControlMode = parseVpnAccessControlMode(map["accessControlMode"] as? String),
+                    accessControlMode = parseM2mAccessControlMode(map["accessControlMode"] as? String),
                     packages = (map["packages"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
                 )
             }
@@ -219,11 +219,11 @@ object ConfigLoader {
         }
     }
 
-    private fun parseVpnAccessControlMode(mode: String?): VpnAccessControlMode {
+    private fun parseM2mAccessControlMode(mode: String?): M2mAccessControlMode {
         return when (mode?.lowercase()) {
-            "include" -> VpnAccessControlMode.include
-            "exclude" -> VpnAccessControlMode.exclude
-            else -> VpnAccessControlMode.acceptAll
+            "include" -> M2mAccessControlMode.include
+            "exclude" -> M2mAccessControlMode.exclude
+            else -> M2mAccessControlMode.acceptAll
         }
     }
 

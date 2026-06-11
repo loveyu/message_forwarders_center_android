@@ -12,8 +12,8 @@ import info.loveyu.mfca.InputMethodFloatingActivity
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
 import info.loveyu.mfca.StatusFloatingActivity
-import info.loveyu.mfca.vpn.VpnManager
-import info.loveyu.mfca.vpn.VpnRuntimeStatus
+import info.loveyu.mfca.m2m.M2mManager
+import info.loveyu.mfca.m2m.M2mRuntimeStatus
 
 internal class ForwardServiceNotificationDelegate(
     private val service: ForwardService
@@ -125,7 +125,7 @@ internal class ForwardServiceNotificationDelegate(
                 if (!ForwardService.isForwardingEnabled) append(" | 暂停转发")
                 if (ForwardService.isWakeLockEnabled) append(" | W锁")
                 if (ForwardService.isWifiLockEnabled) append(" | WiFi锁")
-                if (VpnManager.state.value.runtimeStatus == VpnRuntimeStatus.running) append(" | VPN")
+                if (M2mManager.state.value.runtimeStatus == M2mRuntimeStatus.running) append(" | m2m")
             }
         } else {
             "已停止"

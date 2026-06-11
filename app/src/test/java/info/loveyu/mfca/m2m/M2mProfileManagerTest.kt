@@ -1,10 +1,10 @@
-package info.loveyu.mfca.vpn
+package info.loveyu.mfca.m2m
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class VpnProfileManagerTest {
+class M2mProfileManagerTest {
     @Test
     fun buildRuntimeProfileContent_injectsLocalMixedPortAndDisablesTun() {
         val source =
@@ -15,7 +15,7 @@ class VpnProfileManagerTest {
               stack: mixed
             """.trimIndent()
 
-        val content = VpnProfileManager.buildRuntimeProfileContent(source, 17890, 9090, "testsecret")
+        val content = M2mProfileManager.buildRuntimeProfileContent(source, 17890, 9090, "testsecret")
 
         assertTrue(content.contains("mixed-port: 17890"))
         assertTrue(content.contains("allow-lan: false"))
@@ -34,7 +34,7 @@ class VpnProfileManagerTest {
               enable: true
             """.trimIndent()
 
-        val content = VpnProfileManager.buildRuntimeProfileContent(source, 17890, 9091, "secret1")
+        val content = M2mProfileManager.buildRuntimeProfileContent(source, 17890, 9091, "secret1")
 
         assertTrue("dns.enable should be true", content.contains("enable: true"))
         assertTrue("dns.listen should be injected", content.contains("127.0.0.1:1053"))
@@ -54,7 +54,7 @@ class VpnProfileManagerTest {
               enable: true
             """.trimIndent()
 
-        val content = VpnProfileManager.buildRuntimeProfileContent(source, 17890, 9092, "secret2")
+        val content = M2mProfileManager.buildRuntimeProfileContent(source, 17890, 9092, "secret2")
 
         assertTrue("dns.listen should be overridden", content.contains("127.0.0.1:1053"))
         assertTrue("dns.enhanced-mode should be fake-ip", content.contains("enhanced-mode: fake-ip"))
@@ -72,7 +72,7 @@ class VpnProfileManagerTest {
               enable: true
             """.trimIndent()
 
-        val content = VpnProfileManager.buildRuntimeProfileContent(source, 17890, 9093, "autosecret")
+        val content = M2mProfileManager.buildRuntimeProfileContent(source, 17890, 9093, "autosecret")
 
         assertTrue("should keep config secret", content.contains("secret: myconfigsecret"))
         assertEquals("auto secret should not appear", -1, content.indexOf("autosecret"))
@@ -90,7 +90,7 @@ class VpnProfileManagerTest {
               enable: true
             """.trimIndent()
 
-        val content = VpnProfileManager.buildRuntimeProfileContent(source, 17890, 9094, "s")
+        val content = M2mProfileManager.buildRuntimeProfileContent(source, 17890, 9094, "s")
 
         assertEquals("port should be removed", -1, content.indexOf("port: 7890"))
         assertEquals("socks-port should be removed", -1, content.indexOf("socks-port: 7891"))

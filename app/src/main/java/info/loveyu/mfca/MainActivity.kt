@@ -45,12 +45,12 @@ import info.loveyu.mfca.ui.MainScreen
 import info.loveyu.mfca.ui.MainTopBar
 import info.loveyu.mfca.ui.NotifyHistoryContent
 import info.loveyu.mfca.ui.NotifyHistoryTopBar
-import info.loveyu.mfca.ui.VpnScreen
+import info.loveyu.mfca.ui.M2mScreen
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import info.loveyu.mfca.util.AppStatusManager
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
-import info.loveyu.mfca.vpn.VpnManager
+import info.loveyu.mfca.m2m.M2mManager
 import kotlinx.coroutines.launch
 
 enum class BottomTab(
@@ -229,7 +229,7 @@ private fun MainContent(
     var highlightNotifyId by remember { mutableStateOf<Int?>(null) }
     var refreshTrigger by remember { mutableIntStateOf(0) }
     var lastTabClickTime by remember { mutableStateOf(0L) }
-    val vpnUiState by VpnManager.state.collectAsState()
+    val vpnUiState by M2mManager.state.collectAsState()
     val tabs = remember(vpnUiState.hasVpnConfig) {
         buildList {
             add(BottomTab.HOME)
@@ -359,7 +359,7 @@ private fun MainContent(
                 }
             )
 
-            BottomTab.VPN -> VpnScreen(contentPadding = innerPadding)
+            BottomTab.VPN -> M2mScreen(contentPadding = innerPadding)
         }
     }
 }

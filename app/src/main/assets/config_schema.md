@@ -166,11 +166,11 @@ m2m inputs backed by a remote m2m config and a m2m JNI plugin
 
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|:----:|--------|------|
-| `name` | string | ✓ |  | Unique VPN candidate name |
+| `name` | string | ✓ |  | Unique m2m candidate name |
 | `configUrl` | string | ✓ |  | Remote m2m config URL |
 | `refreshInterval` | duration |  | `0` | Auto-refresh interval for the config (e.g. '1h', '24h'); omit or set to '0' to disable |
-| `enabled` | boolean |  | `true` | Whether this VPN candidate is enabled by default |
-| `accessControlMode` | enum |  | `acceptAll` | App access control mode for this VPN profile `acceptAll` / `include` / `exclude` |
+| `enabled` | boolean |  | `true` | Whether this m2m candidate is enabled by default |
+| `accessControlMode` | enum |  | `acceptAll` | App access control mode for this m2m profile `acceptAll` / `include` / `exclude` |
 | `packages` | list[string] |  |  | Package names for include/exclude access control |
 | `when` | string |  |  | Enable condition |
 | `deny` | string |  |  | Disable condition |

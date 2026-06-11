@@ -25,8 +25,8 @@ import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.NetworkChecker
 import info.loveyu.mfca.util.Preferences
-import info.loveyu.mfca.vpn.MfcaVpnService
-import info.loveyu.mfca.vpn.VpnManager
+import info.loveyu.mfca.m2m.MfcaM2mService
+import info.loveyu.mfca.m2m.M2mManager
 import androidx.core.content.ContextCompat
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -279,13 +279,13 @@ class ForwardService : Service() {
 
         // 1. Link 健康检查 + MQTT 心跳
         val nextLinkTickDelayMs = LinkManager.onTick()
-        val vpnConfigChanged = VpnManager.onTick(this)
-        VpnManager.refresh()
-        if (VpnManager.state.value.isEnabled) {
+        val vpnConfigChanged = M2mManager.onTick(this)
+        M2mManager.refresh()
+        if (M2mManager.state.value.isEnabled) {
             if (vpnConfigChanged) {
-                ContextCompat.startForegroundService(this, MfcaVpnService.refreshIntent(this, forceRestart = true))
+                ContextCompat.startForegroundService(this, MfcaM2mService.refreshIntent(this, forceRestart = true))
             } else {
-                MfcaVpnService.sync(this)
+                MfcaM2mService.sync(this)
             }
         }
 
@@ -647,7 +647,7 @@ class ForwardService : Service() {
 
         currentConfig = config
         legacyMode = false
-        VpnManager.initialize(this, config.inputs.m2m, config.plugin.m2mCore, config.plugin.downloadProxy)
+        M2mManager.initialize(this, config.inputs.m2m, config.plugin.m2mCore, config.plugin.downloadProxy)
 
         // Initialize components in order
         try {
@@ -738,7 +738,7 @@ class ForwardService : Service() {
         QueueManager.stopAll()
         LinkManager.disconnectAll()
         OutputManager.clear()
-        VpnManager.clear()
+        M2mManager.clear()
         releaseLocks()
         cancelEarlyTick()
         isRunning = false

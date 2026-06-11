@@ -1,4 +1,4 @@
-package info.loveyu.mfca.vpn
+package info.loveyu.mfca.m2m
 
 import android.content.Context
 import info.loveyu.mfca.util.LogManager
@@ -8,7 +8,7 @@ import org.snakeyaml.engine.v2.api.Load
 import org.snakeyaml.engine.v2.api.LoadSettings
 import java.io.File
 
-object VpnProfileManager {
+object M2mProfileManager {
     private val yamlLoad = Load(LoadSettings.builder().build())
     private val yamlDump = Dump(DumpSettings.builder().build())
 
@@ -19,8 +19,8 @@ object VpnProfileManager {
         localProxyPort: Int,
         apiPort: Int,
         apiSecret: String,
-        ruleMode: VpnRuleMode? = null,
-        logLevel: VpnLogLevel? = null,
+        ruleMode: M2mRuleMode? = null,
+        logLevel: M2mLogLevel? = null,
     ): Result<File> {
         return runCatching {
             val targetDir = File(context.filesDir, "vpn/profiles")
@@ -37,12 +37,12 @@ object VpnProfileManager {
         localProxyPort: Int,
         apiPort: Int,
         apiSecret: String,
-        ruleMode: VpnRuleMode? = null,
-        logLevel: VpnLogLevel? = null,
+        ruleMode: M2mRuleMode? = null,
+        logLevel: M2mLogLevel? = null,
     ): String {
         val root =
             yamlLoad.loadFromString(source) as? Map<*, *>
-                ?: throw IllegalStateException("VPN profile must be a YAML mapping")
+                ?: throw IllegalStateException("m2m profile must be a YAML mapping")
         val normalized = LinkedHashMap<String, Any?>()
         root.forEach { (key, value) ->
             if (key != null) {
@@ -92,7 +92,7 @@ object VpnProfileManager {
                 }
             } ?: linkedMapOf<String, Any?>()
         dns["enable"] = true
-        dns["listen"] = "127.0.0.1:${MfcaVpnService.M2M_DNS_PORT}"
+        dns["listen"] = "127.0.0.1:${MfcaM2mService.M2M_DNS_PORT}"
         dns["enhanced-mode"] = "fake-ip"
         if (!dns.containsKey("fake-ip-range")) {
             dns["fake-ip-range"] = "28.0.0.1/8"

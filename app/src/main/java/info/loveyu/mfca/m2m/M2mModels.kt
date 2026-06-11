@@ -1,15 +1,15 @@
-package info.loveyu.mfca.vpn
+package info.loveyu.mfca.m2m
 
-import info.loveyu.mfca.config.VpnAccessControlMode
-import info.loveyu.mfca.config.VpnInputConfig
+import info.loveyu.mfca.config.M2mAccessControlMode
+import info.loveyu.mfca.config.M2mInputConfig
 
-enum class VpnRuleMode {
+enum class M2mRuleMode {
     rule,
     global,
     direct,
 }
 
-enum class VpnLogLevel {
+enum class M2mLogLevel {
     debug,
     info,
     warning,
@@ -17,7 +17,7 @@ enum class VpnLogLevel {
     silent,
 }
 
-enum class VpnRuntimeStatus {
+enum class M2mRuntimeStatus {
     disabled,
     idle,
     preparing,
@@ -28,32 +28,32 @@ enum class VpnRuntimeStatus {
     error,
 }
 
-data class VpnCoreState(
+data class M2mCoreState(
     val isReady: Boolean = false,
     val path: String? = null,
     val pluginVersion: String? = null,
 )
 
-data class VpnConfigCacheState(
+data class M2mConfigCacheState(
     val isCached: Boolean = false,
     val lastUpdatedMs: Long? = null,
     val nextRefreshMs: Long? = null,
     val filePath: String? = null,
 )
 
-data class VpnCandidateState(
-    val config: VpnInputConfig,
-    val effectiveAccessControlMode: VpnAccessControlMode,
+data class M2mCandidateState(
+    val config: M2mInputConfig,
+    val effectiveAccessControlMode: M2mAccessControlMode,
     val effectivePackages: List<String>,
-    val coreState: VpnCoreState,
-    val configCacheState: VpnConfigCacheState,
+    val coreState: M2mCoreState,
+    val configCacheState: M2mConfigCacheState,
     val isAvailable: Boolean,
     val availabilityReason: String? = null,
     val isSelected: Boolean = false,
 )
 
-data class PreparedVpnArtifacts(
-    val candidate: VpnInputConfig,
+data class PreparedM2mArtifacts(
+    val candidate: M2mInputConfig,
     val coreFilePath: String,
     val profileFilePath: String,
     val localProxyPort: Int,
@@ -61,23 +61,23 @@ data class PreparedVpnArtifacts(
     val apiSecret: String,
     val udpRelay: Boolean = false,
     val dnsHijack: Boolean = true,
-    val logLevel: VpnLogLevel? = null,
+    val logLevel: M2mLogLevel? = null,
     val ipv6: Boolean = false,
 )
 
-data class VpnUiState(
+data class M2mUiState(
     val hasVpnConfig: Boolean = false,
     val isEnabled: Boolean = false,
-    val runtimeStatus: VpnRuntimeStatus = VpnRuntimeStatus.disabled,
+    val runtimeStatus: M2mRuntimeStatus = M2mRuntimeStatus.disabled,
     val statusMessage: String = "",
     val activeCandidateName: String? = null,
     val runningCandidateName: String? = null,
     val isRuntimeOutOfSync: Boolean = false,
-    val coreState: VpnCoreState = VpnCoreState(),
+    val coreState: M2mCoreState = M2mCoreState(),
     val m2mCoreUrl: String = "",
     val downloadProxy: String = "",
-    val candidates: List<VpnCandidateState> = emptyList(),
+    val candidates: List<M2mCandidateState> = emptyList(),
 ) {
     val isBusy: Boolean
-        get() = runtimeStatus in setOf(VpnRuntimeStatus.preparing, VpnRuntimeStatus.starting, VpnRuntimeStatus.stopping)
+        get() = runtimeStatus in setOf(M2mRuntimeStatus.preparing, M2mRuntimeStatus.starting, M2mRuntimeStatus.stopping)
 }

@@ -118,9 +118,7 @@ val buildVpnBridgeBinaries =
                 val targets =
                     listOf(
                         Triple("arm64-v8a", "aarch64-linux-android33-clang", ""),
-                        Triple("armeabi-v7a", "armv7a-linux-androideabi33-clang", "-mfpu=neon"),
                         Triple("x86_64", "x86_64-linux-android33-clang", ""),
-                        Triple("x86", "i686-linux-android33-clang", ""),
                     )
                 for ((abi, triple, extraFlags) in targets) {
                     val cc = "\$NDK_BIN/$triple"
@@ -168,7 +166,7 @@ val buildVpnBridgeBinaries =
 
 val udp2rawVersion = (project.findProperty("udp2rawVersion") as String?) ?: "v2026.05.31-android.1"
 val udp2rawJniLibDir = layout.buildDirectory.dir("generated/jniLibs/udp2raw")
-val udp2rawAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+val udp2rawAbis = listOf("arm64-v8a", "x86_64")
 
 val prepareUdp2RawLibraries =
     tasks.register<Exec>("prepareUdp2RawLibraries") {

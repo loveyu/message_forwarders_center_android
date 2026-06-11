@@ -1,4 +1,4 @@
-package info.loveyu.mfca.vpn
+package info.loveyu.mfca.m2m
 
 import android.content.Context
 import android.content.Intent
@@ -40,20 +40,20 @@ import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.R
 import info.loveyu.mfca.ui.theme.MfcaTheme
 
-class VpnCandidateSettingsActivity : ComponentActivity() {
+class M2mCandidateSettingsActivity : ComponentActivity() {
 
     companion object {
         private const val EXTRA_CANDIDATE_NAME = "candidate_name"
 
         fun intent(context: Context, candidateName: String): Intent =
-            Intent(context, VpnCandidateSettingsActivity::class.java)
+            Intent(context, M2mCandidateSettingsActivity::class.java)
                 .putExtra(EXTRA_CANDIDATE_NAME, candidateName)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val candidateName = intent.getStringExtra(EXTRA_CANDIDATE_NAME) ?: run { finish(); return }
-        val store = VpnStateStore(this)
+        val store = M2mStateStore(this)
 
         setContent {
             MfcaTheme {
@@ -66,12 +66,12 @@ class VpnCandidateSettingsActivity : ComponentActivity() {
                     initialIpv6 = store.getIpv6(candidateName),
                     initialDnsHijack = store.getDnsHijack(candidateName),
                     onSave = { port, ruleMode, logLevel, udpRelay, ipv6, dnsHijack ->
-                        VpnManager.setOverridePort(candidateName, port)
-                        VpnManager.setOverrideRuleMode(candidateName, ruleMode)
-                        VpnManager.setOverrideLogLevel(candidateName, logLevel)
-                        VpnManager.setUdpRelay(candidateName, udpRelay)
-                        VpnManager.setIpv6(candidateName, ipv6)
-                        VpnManager.setDnsHijack(candidateName, dnsHijack)
+                        M2mManager.setOverridePort(candidateName, port)
+                        M2mManager.setOverrideRuleMode(candidateName, ruleMode)
+                        M2mManager.setOverrideLogLevel(candidateName, logLevel)
+                        M2mManager.setUdpRelay(candidateName, udpRelay)
+                        M2mManager.setIpv6(candidateName, ipv6)
+                        M2mManager.setDnsHijack(candidateName, dnsHijack)
                         finish()
                     },
                     onBack = { finish() },
@@ -86,12 +86,12 @@ class VpnCandidateSettingsActivity : ComponentActivity() {
 private fun VpnCandidateSettingsScreen(
     candidateName: String,
     initialPort: Int?,
-    initialRuleMode: VpnRuleMode?,
-    initialLogLevel: VpnLogLevel?,
+    initialRuleMode: M2mRuleMode?,
+    initialLogLevel: M2mLogLevel?,
     initialUdpRelay: Boolean,
     initialIpv6: Boolean,
     initialDnsHijack: Boolean,
-    onSave: (Int?, VpnRuleMode?, VpnLogLevel?, Boolean, Boolean, Boolean) -> Unit,
+    onSave: (Int?, M2mRuleMode?, M2mLogLevel?, Boolean, Boolean, Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     var portText by remember { mutableStateOf(initialPort?.toString() ?: "") }
@@ -171,16 +171,16 @@ private fun VpnCandidateSettingsScreen(
             OverrideDropdown(
                 label = stringResource(R.string.vpn_rule_mode),
                 selected = ruleMode?.name,
-                options = VpnRuleMode.entries.map { it.name },
-                onSelect = { selected -> ruleMode = VpnRuleMode.entries.firstOrNull { it.name == selected } },
+                options = M2mRuleMode.entries.map { it.name },
+                onSelect = { selected -> ruleMode = M2mRuleMode.entries.firstOrNull { it.name == selected } },
             )
 
             // Log level dropdown
             OverrideDropdown(
                 label = stringResource(R.string.vpn_log_level),
                 selected = logLevel?.name,
-                options = VpnLogLevel.entries.map { it.name },
-                onSelect = { selected -> logLevel = VpnLogLevel.entries.firstOrNull { it.name == selected } },
+                options = M2mLogLevel.entries.map { it.name },
+                onSelect = { selected -> logLevel = M2mLogLevel.entries.firstOrNull { it.name == selected } },
             )
 
             // UDP relay toggle

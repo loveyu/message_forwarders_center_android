@@ -1,11 +1,11 @@
-package info.loveyu.mfca.vpn
+package info.loveyu.mfca.m2m
 
 import android.content.Context
-import info.loveyu.mfca.config.VpnAccessControlMode
+import info.loveyu.mfca.config.M2mAccessControlMode
 import org.json.JSONArray
 import java.util.UUID
 
-class VpnStateStore(context: Context) {
+class M2mStateStore(context: Context) {
     private val preferences = context.getSharedPreferences("vpn_state_store", Context.MODE_PRIVATE)
 
     fun isGlobalEnabled(defaultValue: Boolean = false): Boolean {
@@ -42,12 +42,12 @@ class VpnStateStore(context: Context) {
         preferences.edit().putString(KEY_SELECTION_HISTORY, JSONArray(values.toList()).toString()).apply()
     }
 
-    fun getAccessControlMode(candidateName: String, defaultValue: VpnAccessControlMode): VpnAccessControlMode {
+    fun getAccessControlMode(candidateName: String, defaultValue: M2mAccessControlMode): M2mAccessControlMode {
         val value = preferences.getString(modeKey(candidateName), null) ?: return defaultValue
         return when (value) {
-            VpnAccessControlMode.include.name -> VpnAccessControlMode.include
-            VpnAccessControlMode.exclude.name -> VpnAccessControlMode.exclude
-            else -> VpnAccessControlMode.acceptAll
+            M2mAccessControlMode.include.name -> M2mAccessControlMode.include
+            M2mAccessControlMode.exclude.name -> M2mAccessControlMode.exclude
+            else -> M2mAccessControlMode.acceptAll
         }
     }
 
@@ -66,7 +66,7 @@ class VpnStateStore(context: Context) {
         }.getOrDefault(defaultValue)
     }
 
-    fun setAccessControl(candidateName: String, mode: VpnAccessControlMode, packages: List<String>) {
+    fun setAccessControl(candidateName: String, mode: M2mAccessControlMode, packages: List<String>) {
         preferences.edit()
             .putString(modeKey(candidateName), mode.name)
             .putString(packagesKey(candidateName), JSONArray(packages.distinct()).toString())
@@ -84,23 +84,23 @@ class VpnStateStore(context: Context) {
         editor.apply()
     }
 
-    fun getRuleMode(candidateName: String): VpnRuleMode? {
+    fun getRuleMode(candidateName: String): M2mRuleMode? {
         val raw = preferences.getString(ruleModeKey(candidateName), null) ?: return null
-        return VpnRuleMode.entries.firstOrNull { it.name == raw }
+        return M2mRuleMode.entries.firstOrNull { it.name == raw }
     }
 
-    fun setRuleMode(candidateName: String, mode: VpnRuleMode?) {
+    fun setRuleMode(candidateName: String, mode: M2mRuleMode?) {
         val editor = preferences.edit()
         if (mode == null) editor.remove(ruleModeKey(candidateName)) else editor.putString(ruleModeKey(candidateName), mode.name)
         editor.apply()
     }
 
-    fun getLogLevel(candidateName: String): VpnLogLevel? {
+    fun getLogLevel(candidateName: String): M2mLogLevel? {
         val raw = preferences.getString(logLevelKey(candidateName), null) ?: return null
-        return VpnLogLevel.entries.firstOrNull { it.name == raw }
+        return M2mLogLevel.entries.firstOrNull { it.name == raw }
     }
 
-    fun setLogLevel(candidateName: String, level: VpnLogLevel?) {
+    fun setLogLevel(candidateName: String, level: M2mLogLevel?) {
         val editor = preferences.edit()
         if (level == null) editor.remove(logLevelKey(candidateName)) else editor.putString(logLevelKey(candidateName), level.name)
         editor.apply()

@@ -76,13 +76,13 @@ private fun TestHubScreen(onBack: () -> Unit) {
                 title = stringResource(R.string.test_m2m_title),
                 description = stringResource(R.string.test_m2m_description),
                 icon = Icons.Default.Language,
-                action = { ctx -> ctx.startActivity(Intent(ctx, M2mTestActivity::class.java)) },
+                action = { ctx -> ctx.startActivity(Intent(ctx, M2mFullTestActivity::class.java)) },
             ),
             TestModule(
                 title = stringResource(R.string.test_m2m_vpn_title),
                 description = stringResource(R.string.test_m2m_vpn_description),
                 icon = Icons.Default.VpnLock,
-                action = { ctx -> ctx.startActivity(Intent(ctx, M2mVpnTestActivity::class.java)) },
+                action = { ctx -> ctx.startActivity(Intent(ctx, M2mFullTestActivity::class.java)) },
             ),
         )
 

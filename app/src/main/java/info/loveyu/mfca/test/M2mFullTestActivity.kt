@@ -87,7 +87,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
-class M2mVpnTestActivity : ComponentActivity() {
+class M2mFullTestActivity : ComponentActivity() {
 
     companion object {
         const val PREFS_NAME = "m2m_test_prefs"
@@ -109,9 +109,9 @@ class M2mVpnTestActivity : ComponentActivity() {
 
 // -- Step model --
 
-private enum class VpnStepStatus { IDLE, RUNNING, SUCCESS, FAILED }
+private enum class M2mFullStepStatus { IDLE, RUNNING, SUCCESS, FAILED }
 
-private data class VpnTestStep(val label: String, var status: VpnStepStatus = VpnStepStatus.IDLE)
+private data class M2mFullTestStep(val label: String, var status: M2mFullStepStatus = M2mFullStepStatus.IDLE)
 
 // -- Settings bottom sheet --
 
@@ -188,31 +188,31 @@ private fun M2mVpnTestScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val prefs = remember {
-        context.getSharedPreferences(M2mVpnTestActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        context.getSharedPreferences(M2mFullTestActivity.PREFS_NAME, Context.MODE_PRIVATE)
     }
     val scope = rememberCoroutineScope()
 
     var coreUrl by remember {
-        mutableStateOf(prefs.getString(M2mVpnTestActivity.PREF_CORE_URL, "") ?: "")
+        mutableStateOf(prefs.getString(M2mFullTestActivity.PREF_CORE_URL, "") ?: "")
     }
     var proxyUrl by remember {
-        mutableStateOf(prefs.getString(M2mVpnTestActivity.PREF_PROXY_URL, "") ?: "")
+        mutableStateOf(prefs.getString(M2mFullTestActivity.PREF_PROXY_URL, "") ?: "")
     }
     var configUrl by remember {
-        mutableStateOf(prefs.getString(M2mVpnTestActivity.PREF_CONFIG_URL, "") ?: "")
+        mutableStateOf(prefs.getString(M2mFullTestActivity.PREF_CONFIG_URL, "") ?: "")
     }
     var mixedPort by remember {
         mutableStateOf(
             prefs.getString(
-                M2mVpnTestActivity.PREF_MIXED_PORT,
-                M2mVpnTestActivity.DEFAULT_MIXED_PORT.toString(),
-            ) ?: M2mVpnTestActivity.DEFAULT_MIXED_PORT.toString()
+                M2mFullTestActivity.PREF_MIXED_PORT,
+                M2mFullTestActivity.DEFAULT_MIXED_PORT.toString(),
+            ) ?: M2mFullTestActivity.DEFAULT_MIXED_PORT.toString()
         )
     }
     var testUrl by remember {
         mutableStateOf(
-            prefs.getString(M2mVpnTestActivity.PREF_TEST_URL, M2mVpnTestActivity.DEFAULT_TEST_URL)
-                ?: M2mVpnTestActivity.DEFAULT_TEST_URL
+            prefs.getString(M2mFullTestActivity.PREF_TEST_URL, M2mFullTestActivity.DEFAULT_TEST_URL)
+                ?: M2mFullTestActivity.DEFAULT_TEST_URL
         )
     }
     var showSettings by remember { mutableStateOf(false) }
@@ -223,16 +223,16 @@ private fun M2mVpnTestScreen(onBack: () -> Unit) {
     val logs = remember { mutableStateListOf<String>() }
     val steps = remember {
         mutableStateListOf(
-            VpnTestStep("请求 VPN 权限"),
-            VpnTestStep("下载 / 验证核心插件"),
-            VpnTestStep("下载配置文件"),
-            VpnTestStep("修改混合端口"),
-            VpnTestStep("启动代理 + VPN（排除本应用）"),
-            VpnTestStep("等待 VPN 就绪"),
-            VpnTestStep("通过代理访问测试（验证全链路）"),
-            VpnTestStep("重建 VPN（仅本应用）"),
-            VpnTestStep("通过 VPN 直接访问"),
-            VpnTestStep("清理资源"),
+            M2mFullTestStep("请求 m2m 权限"),
+            M2mFullTestStep("下载 / 验证核心插件"),
+            M2mFullTestStep("下载配置文件"),
+            M2mFullTestStep("修改混合端口"),
+            M2mFullTestStep("启动代理 + m2m（排除本应用）"),
+            M2mFullTestStep("等待 m2m 就绪"),
+            M2mFullTestStep("通过代理访问测试（验证全链路）"),
+            M2mFullTestStep("重建 m2m（仅本应用）"),
+            M2mFullTestStep("通过 m2m 直接访问"),
+            M2mFullTestStep("清理资源"),
         )
     }
     val logListState = rememberLazyListState()
@@ -240,11 +240,11 @@ private fun M2mVpnTestScreen(onBack: () -> Unit) {
 
     val activeStepIndex by remember {
         derivedStateOf {
-            val running = steps.indexOfFirst { it.status == VpnStepStatus.RUNNING }
+            val running = steps.indexOfFirst { it.status == M2mFullStepStatus.RUNNING }
             if (running >= 0) return@derivedStateOf running
-            val failed = steps.indexOfFirst { it.status == VpnStepStatus.FAILED }
+            val failed = steps.indexOfFirst { it.status == M2mFullStepStatus.FAILED }
             if (failed >= 0) return@derivedStateOf failed
-            val lastSuccess = steps.indexOfLast { it.status == VpnStepStatus.SUCCESS }
+            val lastSuccess = steps.indexOfLast { it.status == M2mFullStepStatus.SUCCESS }
             if (lastSuccess >= 0) lastSuccess + 1 else 0
         }
     }
@@ -263,25 +263,25 @@ private fun M2mVpnTestScreen(onBack: () -> Unit) {
         logs.add(text)
     }
 
-    fun setStep(idx: Int, status: VpnStepStatus) {
+    fun setStep(idx: Int, status: M2mFullStepStatus) {
         steps[idx] = steps[idx].copy(status = status)
-        val done = steps.count { it.status == VpnStepStatus.SUCCESS }
+        val done = steps.count { it.status == M2mFullStepStatus.SUCCESS }
         overallProgress = done.toFloat() / steps.size
     }
 
     fun resetAll() {
-        steps.forEachIndexed { i, _ -> steps[i] = steps[i].copy(status = VpnStepStatus.IDLE) }
+        steps.forEachIndexed { i, _ -> steps[i] = steps[i].copy(status = M2mFullStepStatus.IDLE) }
         logs.clear()
         overallProgress = 0f
     }
 
     fun saveSettings() {
         prefs.edit()
-            .putString(M2mVpnTestActivity.PREF_CORE_URL, coreUrl)
-            .putString(M2mVpnTestActivity.PREF_PROXY_URL, proxyUrl)
-            .putString(M2mVpnTestActivity.PREF_CONFIG_URL, configUrl)
-            .putString(M2mVpnTestActivity.PREF_MIXED_PORT, mixedPort)
-            .putString(M2mVpnTestActivity.PREF_TEST_URL, testUrl)
+            .putString(M2mFullTestActivity.PREF_CORE_URL, coreUrl)
+            .putString(M2mFullTestActivity.PREF_PROXY_URL, proxyUrl)
+            .putString(M2mFullTestActivity.PREF_CONFIG_URL, configUrl)
+            .putString(M2mFullTestActivity.PREF_MIXED_PORT, mixedPort)
+            .putString(M2mFullTestActivity.PREF_TEST_URL, testUrl)
             .apply()
     }
 
@@ -289,9 +289,9 @@ private fun M2mVpnTestScreen(onBack: () -> Unit) {
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            addLog("VPN 权限已授予")
+            addLog("m2m 权限已授予")
         } else {
-            addLog("VPN 权限被拒绝")
+            addLog("m2m 权限被拒绝")
         }
     }
 
@@ -337,8 +337,8 @@ private fun M2mVpnTestScreen(onBack: () -> Unit) {
                     coreUrl = coreUrl,
                     proxyUrl = proxyUrl.ifBlank { null },
                     configUrl = configUrl,
-                    mixedPort = mixedPort.toIntOrNull() ?: M2mVpnTestActivity.DEFAULT_MIXED_PORT,
-                    testUrl = testUrl.ifBlank { M2mVpnTestActivity.DEFAULT_TEST_URL },
+                    mixedPort = mixedPort.toIntOrNull() ?: M2mFullTestActivity.DEFAULT_MIXED_PORT,
+                    testUrl = testUrl.ifBlank { M2mFullTestActivity.DEFAULT_TEST_URL },
                     addLog = { addLog(it) },
                     setStep = { i, s -> setStep(i, s) },
                 )
@@ -349,8 +349,8 @@ private fun M2mVpnTestScreen(onBack: () -> Unit) {
             } finally {
                 stopVpnService(context)
                 steps.forEachIndexed { i, step ->
-                    if (step.status == VpnStepStatus.RUNNING) {
-                        steps[i] = step.copy(status = VpnStepStatus.IDLE)
+                    if (step.status == M2mFullStepStatus.RUNNING) {
+                        steps[i] = step.copy(status = M2mFullStepStatus.IDLE)
                     }
                 }
                 isRunning = false
@@ -500,19 +500,19 @@ private fun M2mVpnTestScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun VpnStepRow(step: VpnTestStep) {
+private fun VpnStepRow(step: M2mFullTestStep) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         when (step.status) {
-            VpnStepStatus.IDLE ->
+            M2mFullStepStatus.IDLE ->
                 Box(
                     Modifier.size(12.dp)
                         .background(Color.Gray.copy(alpha = 0.4f), CircleShape)
                 )
-            VpnStepStatus.RUNNING ->
+            M2mFullStepStatus.RUNNING ->
                 CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
-            VpnStepStatus.SUCCESS ->
+            M2mFullStepStatus.SUCCESS ->
                 Box(Modifier.size(12.dp).background(Color(0xFF4CAF50), CircleShape))
-            VpnStepStatus.FAILED ->
+            M2mFullStepStatus.FAILED ->
                 Box(
                     Modifier.size(12.dp)
                         .background(MaterialTheme.colorScheme.error, CircleShape)
@@ -524,7 +524,7 @@ private fun VpnStepRow(step: VpnTestStep) {
             style = MaterialTheme.typography.bodySmall,
             color =
                 when (step.status) {
-                    VpnStepStatus.FAILED -> MaterialTheme.colorScheme.error
+                    M2mFullStepStatus.FAILED -> MaterialTheme.colorScheme.error
                     else -> MaterialTheme.colorScheme.onSurface
                 },
         )
@@ -541,18 +541,18 @@ private suspend fun runVpnTest(
     mixedPort: Int,
     testUrl: String,
     addLog: (String) -> Unit,
-    setStep: (Int, VpnStepStatus) -> Unit,
+    setStep: (Int, M2mFullStepStatus) -> Unit,
 ) {
     val workDir = File(context.filesDir, "m2m_vpn_test").apply { mkdirs() }
     var vpnStarted = false
 
     try {
         // -- Step 0: VPN permission (already handled before this call) --
-        setStep(0, VpnStepStatus.SUCCESS)
-        addLog("VPN 权限已就绪")
+        setStep(0, M2mFullStepStatus.SUCCESS)
+        addLog("m2m 权限已就绪")
 
         // -- Step 1: Download / verify plugin --
-        setStep(1, VpnStepStatus.RUNNING)
+        setStep(1, M2mFullStepStatus.RUNNING)
         val soPath: String =
             try {
                 withContext(Dispatchers.IO) {
@@ -574,13 +574,13 @@ private suspend fun runVpnTest(
                 throw e
             } catch (e: Exception) {
                 addLog("核心插件获取失败: ${e.message}")
-                setStep(1, VpnStepStatus.FAILED)
+                setStep(1, M2mFullStepStatus.FAILED)
                 return
             }
-        setStep(1, VpnStepStatus.SUCCESS)
+        setStep(1, M2mFullStepStatus.SUCCESS)
 
         // -- Step 2: Download config file --
-        setStep(2, VpnStepStatus.RUNNING)
+        setStep(2, M2mFullStepStatus.RUNNING)
         val configFile =
             try {
                 withContext(Dispatchers.IO) {
@@ -590,13 +590,13 @@ private suspend fun runVpnTest(
                 throw e
             } catch (e: Exception) {
                 addLog("配置文件获取失败: ${e.message}")
-                setStep(2, VpnStepStatus.FAILED)
+                setStep(2, M2mFullStepStatus.FAILED)
                 return
             }
-        setStep(2, VpnStepStatus.SUCCESS)
+        setStep(2, M2mFullStepStatus.SUCCESS)
 
         // -- Step 3: Override mixed port --
-        setStep(3, VpnStepStatus.RUNNING)
+        setStep(3, M2mFullStepStatus.RUNNING)
         try {
             withContext(Dispatchers.IO) {
                 val original = configFile.readText()
@@ -608,35 +608,35 @@ private suspend fun runVpnTest(
             throw e
         } catch (e: Exception) {
             addLog("修改混合端口失败: ${e.message}")
-            setStep(3, VpnStepStatus.FAILED)
+            setStep(3, M2mFullStepStatus.FAILED)
             return
         }
-        setStep(3, VpnStepStatus.SUCCESS)
+        setStep(3, M2mFullStepStatus.SUCCESS)
 
         // -- Step 4: Start VPN service (exclude self) --
-        setStep(4, VpnStepStatus.RUNNING)
+        setStep(4, M2mFullStepStatus.RUNNING)
         try {
             startVpnService(context, soPath, configFile.absolutePath, mixedPort, includeSelf = false)
             vpnStarted = true
-            addLog("VPN 服务已启动（排除本应用模式）")
+            addLog("m2m 服务已启动（排除本应用模式）")
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            addLog("VPN 服务启动失败: ${e.message}")
-            setStep(4, VpnStepStatus.FAILED)
+            addLog("m2m 服务启动失败: ${e.message}")
+            setStep(4, M2mFullStepStatus.FAILED)
             return
         }
-        setStep(4, VpnStepStatus.SUCCESS)
+        setStep(4, M2mFullStepStatus.SUCCESS)
 
         // -- Step 5: Wait for VPN ready --
-        setStep(5, VpnStepStatus.RUNNING)
+        setStep(5, M2mFullStepStatus.RUNNING)
         try {
             val vpnReady = CompletableDeferred<Unit>()
-            M2mVpnTestService.callback = { event ->
+            M2mFullTestService.callback = { event ->
                 when (event) {
-                    is M2mVpnTestService.Event.Log -> addLog(event.message)
-                    is M2mVpnTestService.Event.Ready -> vpnReady.complete(Unit)
-                    is M2mVpnTestService.Event.Error -> {
+                    is M2mFullTestService.Event.Log -> addLog(event.message)
+                    is M2mFullTestService.Event.Ready -> vpnReady.complete(Unit)
+                    is M2mFullTestService.Event.Error -> {
                         if (!vpnReady.isCompleted) {
                             vpnReady.completeExceptionally(Exception(event.message))
                         }
@@ -647,14 +647,14 @@ private suspend fun runVpnTest(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            addLog("VPN 就绪失败: ${e.message}")
-            setStep(5, VpnStepStatus.FAILED)
+            addLog("m2m 就绪失败: ${e.message}")
+            setStep(5, M2mFullStepStatus.FAILED)
             return
         }
-        setStep(5, VpnStepStatus.SUCCESS)
+        setStep(5, M2mFullStepStatus.SUCCESS)
 
         // -- Step 6: Test access through proxy (verify full pipeline) --
-        setStep(6, VpnStepStatus.RUNNING)
+        setStep(6, M2mFullStepStatus.RUNNING)
         try {
             withContext(Dispatchers.IO) {
                 addLog("通过代理访问: $testUrl")
@@ -665,7 +665,7 @@ private suspend fun runVpnTest(
                         connectTimeoutMs = 10_000L,
                         readTimeoutMs = 15_000L,
                         proxy = proxy,
-                        tag = "VPN_TEST",
+                        tag = "M2M_FULL_TEST",
                     ),
                 )
                 try {
@@ -686,27 +686,27 @@ private suspend fun runVpnTest(
             throw e
         } catch (e: Exception) {
             addLog("代理访问测试失败: ${e.message}")
-            setStep(6, VpnStepStatus.FAILED)
+            setStep(6, M2mFullStepStatus.FAILED)
             return
         }
-        setStep(6, VpnStepStatus.SUCCESS)
+        setStep(6, M2mFullStepStatus.SUCCESS)
 
         // -- Step 7: Rebuild VPN (include self only) --
-        setStep(7, VpnStepStatus.RUNNING)
+        setStep(7, M2mFullStepStatus.RUNNING)
         try {
             stopVpnService(context)
             vpnStarted = false
-            addLog("已停止排除模式 VPN，正在重建（仅本应用模式）…")
+            addLog("已停止排除模式 m2m，正在重建（仅本应用模式）…")
             delay(1000)
             startVpnService(context, soPath, configFile.absolutePath, mixedPort, includeSelf = true)
             vpnStarted = true
-            addLog("VPN 服务已启动（仅本应用模式）")
+            addLog("m2m 服务已启动（仅本应用模式）")
             val vpnReady2 = CompletableDeferred<Unit>()
-            M2mVpnTestService.callback = { event ->
+            M2mFullTestService.callback = { event ->
                 when (event) {
-                    is M2mVpnTestService.Event.Log -> addLog(event.message)
-                    is M2mVpnTestService.Event.Ready -> vpnReady2.complete(Unit)
-                    is M2mVpnTestService.Event.Error -> {
+                    is M2mFullTestService.Event.Log -> addLog(event.message)
+                    is M2mFullTestService.Event.Ready -> vpnReady2.complete(Unit)
+                    is M2mFullTestService.Event.Error -> {
                         if (!vpnReady2.isCompleted) {
                             vpnReady2.completeExceptionally(Exception(event.message))
                         }
@@ -717,23 +717,23 @@ private suspend fun runVpnTest(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            addLog("VPN 重建失败: ${e.message}")
-            setStep(7, VpnStepStatus.FAILED)
+            addLog("m2m 重建失败: ${e.message}")
+            setStep(7, M2mFullStepStatus.FAILED)
             return
         }
-        setStep(7, VpnStepStatus.SUCCESS)
+        setStep(7, M2mFullStepStatus.SUCCESS)
 
         // -- Step 8: Test direct access through VPN --
-        setStep(8, VpnStepStatus.RUNNING)
+        setStep(8, M2mFullStepStatus.RUNNING)
         try {
             withContext(Dispatchers.IO) {
-                addLog("通过 VPN 直接访问: $testUrl")
+                addLog("通过 m2m 直接访问: $testUrl")
                 val response = HttpDownloader.openResponse(
                     testUrl,
                     HttpDownloader.Config(
                         connectTimeoutMs = 10_000L,
                         readTimeoutMs = 15_000L,
-                        tag = "VPN_TEST",
+                        tag = "M2M_FULL_TEST",
                     ),
                 )
                 try {
@@ -745,7 +745,7 @@ private suspend fun runVpnTest(
                     if (bodyPreview.isNotBlank()) addLog("内容预览: $bodyPreview")
                     if (code !in 200..399) error("非成功状态码: $code")
                     if (body.isBlank()) error("响应体为空")
-                    addLog("VPN 直接访问测试通过")
+                    addLog("m2m 直接访问测试通过")
                 } finally {
                     response.close()
                 }
@@ -760,20 +760,20 @@ private suspend fun runVpnTest(
                 msg.contains("Connection refused", ignoreCase = true) -> "连接被拒绝"
                 else -> msg
             }
-            addLog("VPN 直接访问失败: $reason")
-            setStep(8, VpnStepStatus.FAILED)
+            addLog("m2m 直接访问失败: $reason")
+            setStep(8, M2mFullStepStatus.FAILED)
             return
         }
-        setStep(8, VpnStepStatus.SUCCESS)
+        setStep(8, M2mFullStepStatus.SUCCESS)
     } finally {
         // -- Step 9: Cleanup (always runs) --
         if (vpnStarted) {
-            setStep(9, VpnStepStatus.RUNNING)
+            setStep(9, M2mFullStepStatus.RUNNING)
             stopVpnService(context)
-            addLog("VPN 已停止，资源已清理")
-            setStep(9, VpnStepStatus.SUCCESS)
+            addLog("m2m 已停止，资源已清理")
+            setStep(9, M2mFullStepStatus.SUCCESS)
         } else {
-            setStep(9, VpnStepStatus.SUCCESS)
+            setStep(9, M2mFullStepStatus.SUCCESS)
         }
     }
 }
@@ -785,20 +785,20 @@ private fun startVpnService(
     mixedPort: Int,
     includeSelf: Boolean,
 ) {
-    val intent = Intent(context, M2mVpnTestService::class.java).apply {
-        action = M2mVpnTestService.ACTION_START
-        putExtra(M2mVpnTestService.EXTRA_PLUGIN_PATH, pluginPath)
-        putExtra(M2mVpnTestService.EXTRA_CONFIG_PATH, configPath)
-        putExtra(M2mVpnTestService.EXTRA_MIXED_PORT, mixedPort)
-        putExtra(M2mVpnTestService.EXTRA_INCLUDE_SELF, includeSelf)
+    val intent = Intent(context, M2mFullTestService::class.java).apply {
+        action = M2mFullTestService.ACTION_START
+        putExtra(M2mFullTestService.EXTRA_PLUGIN_PATH, pluginPath)
+        putExtra(M2mFullTestService.EXTRA_CONFIG_PATH, configPath)
+        putExtra(M2mFullTestService.EXTRA_MIXED_PORT, mixedPort)
+        putExtra(M2mFullTestService.EXTRA_INCLUDE_SELF, includeSelf)
     }
     ContextCompat.startForegroundService(context, intent)
 }
 
 private fun stopVpnService(context: Context) {
-    val intent = Intent(context, M2mVpnTestService::class.java).apply {
-        action = M2mVpnTestService.ACTION_STOP
+    val intent = Intent(context, M2mFullTestService::class.java).apply {
+        action = M2mFullTestService.ACTION_STOP
     }
     ContextCompat.startForegroundService(context, intent)
-    M2mVpnTestService.callback = null
+    M2mFullTestService.callback = null
 }

@@ -1,4 +1,4 @@
-package info.loveyu.mfca.vpn
+package info.loveyu.mfca.m2m
 
 import android.content.Context
 import android.net.LocalServerSocket
@@ -15,7 +15,7 @@ import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
-object VpnBridgeProcessManager {
+object M2mBridgeProcessManager {
     data class RunningProcess(
         val candidateName: String,
         val process: Process,
@@ -45,7 +45,7 @@ object VpnBridgeProcessManager {
 
     fun start(
         context: Context,
-        artifacts: PreparedVpnArtifacts,
+        artifacts: PreparedM2mArtifacts,
         tunInterface: ParcelFileDescriptor,
         onUnexpectedExit: (exitCode: Int, tail: String) -> Unit,
     ): Result<RunningProcess> {
@@ -196,9 +196,9 @@ object VpnBridgeProcessManager {
                 writer.newLine()
                 writer.flush()
                 if (isStderr) {
-                    Log.w("VPNB", l)
+                    Log.w("M2MB", l)
                 } else {
-                    Log.i("VPNB", l)
+                    Log.i("M2MB", l)
                 }
             }
             writer.close()
@@ -237,11 +237,11 @@ object VpnBridgeProcessManager {
 
     private fun sanitize(value: String): String = value.replace(Regex("[^a-zA-Z0-9._-]"), "_")
 
-    private fun writeConfigFile(workDir: File, artifacts: PreparedVpnArtifacts): File {
+    private fun writeConfigFile(workDir: File, artifacts: PreparedM2mArtifacts): File {
         val config = buildString {
             appendLine("tunnel:")
-            appendLine("  mtu: ${MfcaVpnService.TUN_MTU}")
-            appendLine("  ipv4: '${MfcaVpnService.TUN_GATEWAY}'")
+            appendLine("  mtu: ${MfcaM2mService.TUN_MTU}")
+            appendLine("  ipv4: '${MfcaM2mService.TUN_GATEWAY}'")
             appendLine("socks5:")
             appendLine("  port: ${artifacts.localProxyPort}")
             appendLine("  address: '127.0.0.1'")
@@ -250,19 +250,19 @@ object VpnBridgeProcessManager {
             }
             if (artifacts.dnsHijack) {
                 appendLine("mapdns:")
-                appendLine("  address: '${MfcaVpnService.TUN_DNS_PRIMARY}'")
+                appendLine("  address: '${MfcaM2mService.TUN_DNS_PRIMARY}'")
                 appendLine("  port: 53")
-                appendLine("  network: '${MfcaVpnService.MAPDNS_NETWORK}'")
-                appendLine("  netmask: '${MfcaVpnService.MAPDNS_NETMASK}'")
-                appendLine("  cache-size: ${MfcaVpnService.MAPDNS_CACHE_SIZE}")
+                appendLine("  network: '${MfcaM2mService.MAPDNS_NETWORK}'")
+                appendLine("  netmask: '${MfcaM2mService.MAPDNS_NETMASK}'")
+                appendLine("  cache-size: ${MfcaM2mService.MAPDNS_CACHE_SIZE}")
             }
             appendLine("misc:")
             val bridgeLogLevel = when (artifacts.logLevel) {
-                VpnLogLevel.debug -> "debug"
-                VpnLogLevel.info -> "info"
-                VpnLogLevel.warning -> "warn"
-                VpnLogLevel.error -> "error"
-                VpnLogLevel.silent -> "off"
+                M2mLogLevel.debug -> "debug"
+                M2mLogLevel.info -> "info"
+                M2mLogLevel.warning -> "warn"
+                M2mLogLevel.error -> "error"
+                M2mLogLevel.silent -> "off"
                 null -> "warn"
             }
             appendLine("  log-level: '$bridgeLogLevel'")

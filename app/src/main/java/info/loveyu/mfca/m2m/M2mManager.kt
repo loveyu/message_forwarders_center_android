@@ -1,8 +1,8 @@
-package info.loveyu.mfca.vpn
+package info.loveyu.mfca.m2m
 
 import android.content.Context
-import info.loveyu.mfca.config.VpnAccessControlMode
-import info.loveyu.mfca.config.VpnInputConfig
+import info.loveyu.mfca.config.M2mAccessControlMode
+import info.loveyu.mfca.config.M2mInputConfig
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.NetworkChecker
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -10,15 +10,15 @@ import java.net.ServerSocket
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-object VpnManager {
+object M2mManager {
     private const val LOCAL_PROXY_PORT = 17890
 
-    private val stateFlow = MutableStateFlow(VpnUiState())
-    val state: StateFlow<VpnUiState> = stateFlow.asStateFlow()
+    private val stateFlow = MutableStateFlow(M2mUiState())
+    val state: StateFlow<M2mUiState> = stateFlow.asStateFlow()
 
     @Volatile private var appContext: Context? = null
-    @Volatile private var store: VpnStateStore? = null
-    @Volatile private var configs: List<VpnInputConfig> = emptyList()
+    @Volatile private var store: M2mStateStore? = null
+    @Volatile private var configs: List<M2mInputConfig> = emptyList()
     @Volatile private var m2mCoreUrl: String? = null
     @Volatile private var configDownloadProxy: String? = null
 
@@ -27,9 +27,9 @@ object VpnManager {
         return override ?: configDownloadProxy
     }
 
-    fun initialize(context: Context, vpnConfigs: List<VpnInputConfig>, pluginUrl: String? = null, downloadProxy: String? = null) {
+    fun initialize(context: Context, vpnConfigs: List<M2mInputConfig>, pluginUrl: String? = null, downloadProxy: String? = null) {
         appContext = context.applicationContext
-        store = VpnStateStore(context.applicationContext)
+        store = M2mStateStore(context.applicationContext)
         configs = vpnConfigs
         m2mCoreUrl = pluginUrl
         configDownloadProxy = downloadProxy
@@ -40,10 +40,10 @@ object VpnManager {
         configs = emptyList()
         m2mCoreUrl = null
         updateState(
-            VpnUiState(
+            M2mUiState(
                 hasVpnConfig = false,
                 isEnabled = false,
-                runtimeStatus = VpnRuntimeStatus.disabled,
+                runtimeStatus = M2mRuntimeStatus.disabled,
                 statusMessage = "",
                 activeCandidateName = null,
                 candidates = emptyList(),
@@ -58,8 +58,8 @@ object VpnManager {
     fun setEnabled(enabled: Boolean) {
         store?.setGlobalEnabled(enabled)
         rebuildState(
-            runtimeStatus = if (enabled) VpnRuntimeStatus.idle else VpnRuntimeStatus.disabled,
-            statusMessage = if (enabled) "VPN 已启用，等待启动核心" else "VPN is disabled",
+            runtimeStatus = if (enabled) M2mRuntimeStatus.idle else M2mRuntimeStatus.disabled,
+            statusMessage = if (enabled) "m2m 已启用，等待启动核心" else "m2m is disabled",
             runningCandidateName = if (enabled) stateFlow.value.runningCandidateName else null,
         )
     }
@@ -69,7 +69,7 @@ object VpnManager {
         rebuildState()
     }
 
-    fun updateAccessControl(name: String, mode: VpnAccessControlMode, packages: List<String>) {
+    fun updateAccessControl(name: String, mode: M2mAccessControlMode, packages: List<String>) {
         store?.setAccessControl(name, mode, packages)
         rebuildState()
     }
@@ -80,15 +80,15 @@ object VpnManager {
         store?.setLocalPort(candidateName, port)
     }
 
-    fun getOverrideRuleMode(candidateName: String): VpnRuleMode? = store?.getRuleMode(candidateName)
+    fun getOverrideRuleMode(candidateName: String): M2mRuleMode? = store?.getRuleMode(candidateName)
 
-    fun setOverrideRuleMode(candidateName: String, mode: VpnRuleMode?) {
+    fun setOverrideRuleMode(candidateName: String, mode: M2mRuleMode?) {
         store?.setRuleMode(candidateName, mode)
     }
 
-    fun getOverrideLogLevel(candidateName: String): VpnLogLevel? = store?.getLogLevel(candidateName)
+    fun getOverrideLogLevel(candidateName: String): M2mLogLevel? = store?.getLogLevel(candidateName)
 
-    fun setOverrideLogLevel(candidateName: String, level: VpnLogLevel?) {
+    fun setOverrideLogLevel(candidateName: String, level: M2mLogLevel?) {
         store?.setLogLevel(candidateName, level)
     }
 
@@ -117,18 +117,18 @@ object VpnManager {
         rebuildState()
     }
 
-    fun getSelectedCandidate(): VpnCandidateState? {
+    fun getSelectedCandidate(): M2mCandidateState? {
         return stateFlow.value.candidates.firstOrNull { it.isSelected && it.isAvailable }
     }
 
-    fun downloadConfig(context: Context, candidateName: String): Result<VpnConfigCacheState> {
+    fun downloadConfig(context: Context, candidateName: String): Result<M2mConfigCacheState> {
         val config =
             configs.firstOrNull { it.name == candidateName }
-                ?: return Result.failure(IllegalArgumentException("Unknown VPN candidate: $candidateName"))
+                ?: return Result.failure(IllegalArgumentException("Unknown m2m candidate: $candidateName"))
         LogManager.logInfo("VPN", "Downloading config for $candidateName: ${config.configUrl}")
-        return VpnConfigCacheManager.downloadConfig(context, config).map {
+        return M2mConfigCacheManager.downloadConfig(context, config).map {
             rebuildState()
-            VpnConfigCacheManager.inspect(context, config)
+            M2mConfigCacheManager.inspect(context, config)
         }
     }
 
@@ -143,13 +143,13 @@ object VpnManager {
         rebuildState()
     }
 
-    fun deleteConfigCache(context: Context, candidateName: String): Result<VpnConfigCacheState> {
+    fun deleteConfigCache(context: Context, candidateName: String): Result<M2mConfigCacheState> {
         val config =
             configs.firstOrNull { it.name == candidateName }
-                ?: return Result.failure(IllegalArgumentException("Unknown VPN candidate: $candidateName"))
-        return VpnConfigCacheManager.deleteCache(context, candidateName).map {
+                ?: return Result.failure(IllegalArgumentException("Unknown m2m candidate: $candidateName"))
+        return M2mConfigCacheManager.deleteCache(context, candidateName).map {
             rebuildState()
-            VpnConfigCacheManager.inspect(context, config)
+            M2mConfigCacheManager.inspect(context, config)
         }
     }
 
@@ -162,11 +162,11 @@ object VpnManager {
         var runningConfigChanged = false
         configs.forEach { config ->
             if (config.refreshIntervalMs <= 0) return@forEach
-            val cacheState = VpnConfigCacheManager.inspect(context, config)
+            val cacheState = M2mConfigCacheManager.inspect(context, config)
             val nextRefreshMs = cacheState.nextRefreshMs ?: return@forEach
             if (now < nextRefreshMs) return@forEach
             LogManager.logInfo("VPN", "Auto-refreshing config for ${config.name}")
-            VpnConfigCacheManager.downloadConfig(context, config)
+            M2mConfigCacheManager.downloadConfig(context, config)
                 .onSuccess { changed ->
                     rebuildState()
                     if (changed && stateFlow.value.runningCandidateName == config.name) {
@@ -187,25 +187,25 @@ object VpnManager {
         return runningConfigChanged
     }
 
-    fun prepareSelectedCandidate(context: Context): Result<PreparedVpnArtifacts> {
+    fun prepareSelectedCandidate(context: Context): Result<PreparedM2mArtifacts> {
         val selected = getSelectedCandidate()
-            ?: return Result.failure(IllegalStateException("No available VPN candidate selected"))
+            ?: return Result.failure(IllegalStateException("No available m2m candidate selected"))
         LogManager.logInfo("VPN", "Preparing VPN candidate ${selected.config.name}")
-        updateRuntimeStatus(VpnRuntimeStatus.preparing, "Preparing ${selected.config.name}")
+        updateRuntimeStatus(M2mRuntimeStatus.preparing, "Preparing ${selected.config.name}")
 
         // Step 1: Ensure config is cached (auto-download if needed)
         val cachedSource =
-            VpnConfigCacheManager.getCachedSourceFile(context, selected.config.name)
+            M2mConfigCacheManager.getCachedSourceFile(context, selected.config.name)
                 ?: run {
-                    updateRuntimeStatus(VpnRuntimeStatus.preparing, "Downloading config for ${selected.config.name}")
+                    updateRuntimeStatus(M2mRuntimeStatus.preparing, "Downloading config for ${selected.config.name}")
                     LogManager.logInfo("VPN", "Config not cached, auto-downloading for ${selected.config.name}")
-                    VpnConfigCacheManager.downloadConfig(context, selected.config)
+                    M2mConfigCacheManager.downloadConfig(context, selected.config)
                         .getOrNull()
-                        ?.let { VpnConfigCacheManager.getCachedSourceFile(context, selected.config.name) }
+                        ?.let { M2mConfigCacheManager.getCachedSourceFile(context, selected.config.name) }
                 }
         if (cachedSource == null) {
             LogManager.logError("VPN", "Failed to download config for ${selected.config.name}")
-            updateRuntimeStatus(VpnRuntimeStatus.error, "Failed to download config for ${selected.config.name}")
+            updateRuntimeStatus(M2mRuntimeStatus.error, "Failed to download config for ${selected.config.name}")
             return Result.failure(IllegalStateException("Failed to download config for ${selected.config.name}"))
         }
 
@@ -221,7 +221,7 @@ object VpnManager {
             val apiPort = ServerSocket(0).use { it.localPort }
             val apiSecret = store?.getOrCreateApiSecret() ?: ""
             LogManager.logDebug("VPN", "Effective settings for ${selected.config.name}: port=$effectivePort, apiPort=$apiPort, ruleMode=$effectiveRuleMode, logLevel=$effectiveLogLevel, udpRelay=$effectiveUdpRelay, dnsHijack=$effectiveDnsHijack")
-            val profileFile = VpnProfileManager.buildRuntimeProfile(
+            val profileFile = M2mProfileManager.buildRuntimeProfile(
                 context,
                 selected.config.name,
                 cachedSource.readText(),
@@ -232,7 +232,7 @@ object VpnManager {
                 effectiveLogLevel,
             ).getOrThrow()
             LogManager.logInfo("VPN", "Prepared VPN profile for ${selected.config.name}: ${profileFile.absolutePath}")
-            PreparedVpnArtifacts(
+            PreparedM2mArtifacts(
                 candidate = selected.config,
                 coreFilePath = coreFile.absolutePath,
                 profileFilePath = profileFile.absolutePath,
@@ -245,23 +245,23 @@ object VpnManager {
                 ipv6 = effectiveIpv6,
             )
         }.onSuccess {
-            updateRuntimeStatus(VpnRuntimeStatus.prepared, "Prepared ${it.candidate.name}")
+            updateRuntimeStatus(M2mRuntimeStatus.prepared, "Prepared ${it.candidate.name}")
         }.onFailure { error ->
             LogManager.logError("VPN", "Failed to prepare VPN artifacts: ${error.message}")
-            updateRuntimeStatus(VpnRuntimeStatus.error, error.message ?: "Failed to prepare VPN")
+            updateRuntimeStatus(M2mRuntimeStatus.error, error.message ?: "Failed to prepare m2m")
         }
     }
 
     fun markRunning(candidateName: String, message: String) {
         store?.pushSelection(candidateName)
         rebuildState(
-            runtimeStatus = VpnRuntimeStatus.running,
+            runtimeStatus = M2mRuntimeStatus.running,
             statusMessage = message,
             runningCandidateName = candidateName,
         )
     }
 
-    fun clearRunningCandidate(status: VpnRuntimeStatus, message: String) {
+    fun clearRunningCandidate(status: M2mRuntimeStatus, message: String) {
         rebuildState(
             runtimeStatus = status,
             statusMessage = message,
@@ -269,7 +269,7 @@ object VpnManager {
         )
     }
 
-    fun updateRuntimeStatus(status: VpnRuntimeStatus, message: String) {
+    fun updateRuntimeStatus(status: M2mRuntimeStatus, message: String) {
         rebuildState(
             runtimeStatus = status,
             statusMessage = message,
@@ -278,7 +278,7 @@ object VpnManager {
     }
 
     private fun rebuildState(
-        runtimeStatus: VpnRuntimeStatus = stateFlow.value.runtimeStatus,
+        runtimeStatus: M2mRuntimeStatus = stateFlow.value.runtimeStatus,
         statusMessage: String = stateFlow.value.statusMessage,
         runningCandidateName: String? = stateFlow.value.runningCandidateName,
     ) {
@@ -295,8 +295,8 @@ object VpnManager {
                 NetworkChecker.getEnableReason(context, config.whenCondition, config.deny)
             }
             val coreState = M2mCoreManager.inspectCore(context)
-            val configCacheState = VpnConfigCacheManager.inspect(context, config)
-            VpnCandidateState(
+            val configCacheState = M2mConfigCacheManager.inspect(context, config)
+            M2mCandidateState(
                 config = config,
                 effectiveAccessControlMode = effectiveMode,
                 effectivePackages = effectivePackages,
@@ -313,17 +313,17 @@ object VpnManager {
         val activeName = resolveActiveCandidateName(candidates, selectionHistory)
         val globalCoreState = M2mCoreManager.inspectCore(context)
         val normalizedRuntimeStatus = when {
-            !enabled -> VpnRuntimeStatus.disabled
-            runtimeStatus == VpnRuntimeStatus.disabled -> VpnRuntimeStatus.idle
+            !enabled -> M2mRuntimeStatus.disabled
+            runtimeStatus == M2mRuntimeStatus.disabled -> M2mRuntimeStatus.idle
             else -> runtimeStatus
         }
         val normalizedMessage = when {
-            !enabled -> "VPN is disabled"
-            statusMessage.isBlank() && normalizedRuntimeStatus == VpnRuntimeStatus.idle -> "VPN 已启用，等待启动核心"
+            !enabled -> "m2m is disabled"
+            statusMessage.isBlank() && normalizedRuntimeStatus == M2mRuntimeStatus.idle -> "m2m 已启用，等待启动核心"
             else -> statusMessage
         }
         updateState(
-            VpnUiState(
+            M2mUiState(
                 hasVpnConfig = configs.isNotEmpty(),
                 isEnabled = enabled,
                 runtimeStatus = normalizedRuntimeStatus,
@@ -341,12 +341,12 @@ object VpnManager {
         )
     }
 
-    private fun updateState(next: VpnUiState) {
+    private fun updateState(next: M2mUiState) {
         stateFlow.value = next
     }
 
     private fun resolveActiveCandidateName(
-        candidates: List<VpnCandidateState>,
+        candidates: List<M2mCandidateState>,
         selectionHistory: List<String>,
     ): String? {
         val availableNames = candidates.filter { it.isAvailable }.map { it.config.name }.toSet()

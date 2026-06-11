@@ -125,7 +125,7 @@ Example: `L3 I2 O4 | Pause Forward | WLock`
 - `ACCESS_BACKGROUND_LOCATION` - Background location (Android 10+ for background WiFi SSID/BSSID)
 - `FOREGROUND_SERVICE` - Foreground service
 - `FOREGROUND_SERVICE_REMOTE_MESSAGING` - Remote messaging foreground service type (Android 14+, for MQTT/WebSocket/TCP long connections)
-- `FOREGROUND_SERVICE_SPECIAL_USE` - VPN foreground service type (Android 14+, for the built-in VPN runtime)
+- `FOREGROUND_SERVICE_SPECIAL_USE` - VPN foreground service type (Android 14+, for the built-in m2m runtime)
 - `WAKE_LOCK` - Wake lock (keep CPU running with screen off)
 - `RECEIVE_BOOT_COMPLETED` - Boot auto-start
 - `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` - Battery optimization exemption
@@ -134,15 +134,15 @@ Example: `L3 I2 O4 | Pause Forward | WLock`
 - `READ_EXTERNAL_STORAGE` - Read external storage (Android 12 and below)
 - `WRITE_EXTERNAL_STORAGE` - Write external storage (Android 10 and below)
 - `MANAGE_EXTERNAL_STORAGE` - Manage all files (Android 11+, for sdcard:// path writes)
-- `QUERY_ALL_PACKAGES` - Enumerate installed apps for per-VPN include/exclude filtering
+- `QUERY_ALL_PACKAGES` - Enumerate installed apps for per-m2m include/exclude filtering
 
-## VPN Input (scaffold)
+## m2m Input
 
-- Add VPN profiles under `inputs.vpn`
+- Add m2m profiles under `inputs.m2m`
 - Each profile uses a remote `configUrl` for the m2m config; the m2m core is loaded as `libm2m_plugin.so` from the app private PluginManager directory
-- `when` / `deny` still control candidate availability, and multiple VPN profiles can coexist under the same network condition
+- `when` / `deny` still control candidate availability, and multiple m2m profiles can coexist under the same network condition
 - Per-profile `accessControlMode` + `packages` define include/exclude app filters
-- Set `pluginUrl` to let startup download the ABI-specific `libm2m_plugin.so`, or install it manually through PluginManager before starting VPN
+- Set `pluginUrl` to let startup download the ABI-specific `libm2m_plugin.so`, or install it manually through PluginManager before starting m2m
 
 ## Build
 

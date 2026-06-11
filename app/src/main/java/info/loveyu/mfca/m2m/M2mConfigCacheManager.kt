@@ -1,14 +1,14 @@
-package info.loveyu.mfca.vpn
+package info.loveyu.mfca.m2m
 
 import android.content.Context
-import info.loveyu.mfca.config.VpnInputConfig
+import info.loveyu.mfca.config.M2mInputConfig
 import info.loveyu.mfca.util.HttpDownloader
 import info.loveyu.mfca.util.LogManager
 import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
 
-object VpnConfigCacheManager {
+object M2mConfigCacheManager {
 
     fun cancelDownload() {
         HttpDownloader.cancel("vpn_config")
@@ -19,7 +19,7 @@ object VpnConfigCacheManager {
         val contentHash: String,
     )
 
-    fun inspect(context: Context, config: VpnInputConfig): VpnConfigCacheState {
+    fun inspect(context: Context, config: M2mInputConfig): M2mConfigCacheState {
         val source = sourceFile(context, config.name)
         val meta = loadMeta(context, config.name)
         val nextRefreshMs =
@@ -28,7 +28,7 @@ object VpnConfigCacheManager {
             } else {
                 null
             }
-        return VpnConfigCacheState(
+        return M2mConfigCacheState(
             isCached = source.exists() && meta != null,
             lastUpdatedMs = meta?.lastUpdatedMs,
             nextRefreshMs = nextRefreshMs,
@@ -40,7 +40,7 @@ object VpnConfigCacheManager {
      * Downloads the remote config and caches it.
      * Returns true if the content changed (or was newly downloaded), false if unchanged.
      */
-    fun downloadConfig(context: Context, config: VpnInputConfig): Result<Boolean> {
+    fun downloadConfig(context: Context, config: M2mInputConfig): Result<Boolean> {
         return runCatching {
             require(
                 config.configUrl.startsWith("http://") ||

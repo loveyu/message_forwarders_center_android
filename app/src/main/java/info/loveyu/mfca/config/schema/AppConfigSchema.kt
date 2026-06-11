@@ -169,7 +169,7 @@ object AppConfigSchema {
             ) {
                 string("name") {
                     required()
-                    description = "Unique VPN candidate name"
+                    description = "Unique m2m candidate name"
                 }
                 string("configUrl") {
                     required()
@@ -180,11 +180,11 @@ object AppConfigSchema {
                     default = "0"
                 }
                 boolean("enabled") {
-                    description = "Whether this VPN candidate is enabled by default"
+                    description = "Whether this m2m candidate is enabled by default"
                     default = true
                 }
                 enum("accessControlMode", listOf("acceptAll", "include", "exclude")) {
-                    description = "App access control mode for this VPN profile"
+                    description = "App access control mode for this m2m profile"
                     default = "acceptAll"
                 }
                 stringList("packages") {

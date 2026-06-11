@@ -596,7 +596,7 @@ fun SettingsScreenContent(
                                     color = MaterialTheme.colorScheme.error
                                 )
                                 Text(
-                                    text = "清空内存日志、应用日志文件、VPN 进程日志",
+                                    text = "清空内存日志、应用日志文件、m2m 进程日志",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -621,7 +621,7 @@ fun SettingsScreenContent(
                             AlertDialog(
                                 onDismissRequest = { showClearLogsDialog = false },
                                 title = { Text("确认清空日志") },
-                                text = { Text("将清空内存中的日志缓冲、所有日志文件（包括应用日志和 VPN 进程日志）。此操作不可撤销。") },
+                                text = { Text("将清空内存中的日志缓冲、所有日志文件（包括应用日志和 m2m 进程日志）。此操作不可撤销。") },
                                 confirmButton = {
                                     TextButton(
                                         onClick = {

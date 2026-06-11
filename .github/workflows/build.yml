@@ -2,10 +2,7 @@ name: Build APK
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  FLOWGATE_GO_TOOLCHAIN_DIR: ${{ github.workspace }}/.ci-cache/tools/go/1.24.1
   FLOWGATE_ANDROID_NDK_DIR: ${{ github.workspace }}/.ci-cache/tools/android-ndk/r27c
-  GOMODCACHE: ${{ github.workspace }}/.ci-cache/go-mod
-  GOCACHE: ${{ github.workspace }}/.ci-cache/go-build
 
 on:
   push:
@@ -98,23 +95,12 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
 
-    - name: Cache VPN bridge toolchains and Go caches
+    - name: Cache Android NDK
       uses: actions/cache@v5
       with:
         path: |
-          ${{ env.FLOWGATE_GO_TOOLCHAIN_DIR }}
           ${{ env.FLOWGATE_ANDROID_NDK_DIR }}
-          ${{ env.GOMODCACHE }}
-          ${{ env.GOCACHE }}
-        key: ${{ runner.os }}-vpn-bridge-tools-go1.24.1-ndkr27c-${{ hashFiles('app/src/main/go/vpnbridge/go.mod', 'app/src/main/go/vpnbridge/go.sum', 'app/build.gradle.kts') }}
-        restore-keys: |
-          ${{ runner.os }}-vpn-bridge-tools-go1.24.1-ndkr27c-
-
-    - name: Cache VPN bridge binaries
-      uses: actions/cache@v5
-      with:
-        path: app/build/generated/assets/vpnbridge
-        key: ${{ runner.os }}-vpn-bridge-binaries-${{ hashFiles('app/src/main/go/vpnbridge/**', 'app/build.gradle.kts') }}
+        key: ${{ runner.os }}-ndkr27c-${{ hashFiles('app/build.gradle.kts') }}
 
     - name: Make gradlew executable
       run: chmod +x gradlew
@@ -193,23 +179,12 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
 
-    - name: Cache VPN bridge toolchains and Go caches
+    - name: Cache Android NDK
       uses: actions/cache@v5
       with:
         path: |
-          ${{ env.FLOWGATE_GO_TOOLCHAIN_DIR }}
           ${{ env.FLOWGATE_ANDROID_NDK_DIR }}
-          ${{ env.GOMODCACHE }}
-          ${{ env.GOCACHE }}
-        key: ${{ runner.os }}-vpn-bridge-tools-go1.24.1-ndkr27c-${{ hashFiles('app/src/main/go/vpnbridge/go.mod', 'app/src/main/go/vpnbridge/go.sum', 'app/build.gradle.kts') }}
-        restore-keys: |
-          ${{ runner.os }}-vpn-bridge-tools-go1.24.1-ndkr27c-
-
-    - name: Cache VPN bridge binaries
-      uses: actions/cache@v5
-      with:
-        path: app/build/generated/assets/vpnbridge
-        key: ${{ runner.os }}-vpn-bridge-binaries-${{ hashFiles('app/src/main/go/vpnbridge/**', 'app/build.gradle.kts') }}
+        key: ${{ runner.os }}-ndkr27c-${{ hashFiles('app/build.gradle.kts') }}
 
     - name: Make gradlew executable
       run: chmod +x gradlew

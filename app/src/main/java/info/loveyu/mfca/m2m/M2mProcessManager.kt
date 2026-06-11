@@ -1,4 +1,4 @@
-package info.loveyu.mfca.vpn
+package info.loveyu.mfca.m2m
 
 import android.content.Context
 import info.loveyu.mfca.plugin.M2mPluginCore
@@ -35,7 +35,7 @@ object M2mProcessManager {
 
     fun start(
         context: Context,
-        artifacts: PreparedVpnArtifacts,
+        artifacts: PreparedM2mArtifacts,
         onUnexpectedExit: (exitCode: Int, tail: String) -> Unit,
     ): Result<RunningCore> {
         return runCatching {

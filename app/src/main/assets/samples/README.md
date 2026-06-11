@@ -25,7 +25,7 @@
 | `17_fail_queue.yaml` | 失败队列重试（onFailureQueue）- 输出失败后异步重试 |
 | `18_output_format.yaml` | 输出格式化 - 每个输出独立格式化 data/header，不影响 pipeline |
 | `19_call_resource.yaml` | Call 资源 - 在 pipeline 中调用外部 HTTP 服务并注入结果 |
-| `20_vpn_input.yaml` | VPN 输入 - 远程 m2m 配置、核心地址、候选切换、应用过滤 |
+| `20_m2m_input.yaml` | m2m 输入 - 远程 m2m 配置、核心地址、候选切换、应用过滤 |
 | `99_full_demo.yaml` | 完整演示 - 将多个模块组合的演示配置 |
 
 ## 链接配置说明

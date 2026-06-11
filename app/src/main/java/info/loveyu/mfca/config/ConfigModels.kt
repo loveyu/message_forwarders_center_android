@@ -109,7 +109,7 @@ data class InputsConfig(
     val http: List<HttpInputConfig> = emptyList(),
     val link: List<LinkInputConfig> = emptyList(),
     val udp2raw: List<Udp2RawInputConfig> = emptyList(),
-    val m2m: List<VpnInputConfig> = emptyList()
+    val m2m: List<M2mInputConfig> = emptyList()
 )
 
 data class HttpInputConfig(
@@ -174,14 +174,14 @@ enum class LinkRole {
     consumer, producer
 }
 
-data class VpnInputConfig(
+data class M2mInputConfig(
     val name: String,
     val configUrl: String,
     val refreshIntervalMs: Long = 0L,
     val whenCondition: String? = null,
     val deny: String? = null,
     val enabled: Boolean = true,
-    val accessControlMode: VpnAccessControlMode = VpnAccessControlMode.acceptAll,
+    val accessControlMode: M2mAccessControlMode = M2mAccessControlMode.acceptAll,
     val packages: List<String> = emptyList(),
 )
 
@@ -194,7 +194,7 @@ data class Udp2RawInputConfig(
     val deny: String? = null,
 )
 
-enum class VpnAccessControlMode {
+enum class M2mAccessControlMode {
     acceptAll, include, exclude
 }
 

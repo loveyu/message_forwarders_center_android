@@ -1,4 +1,4 @@
-package info.loveyu.mfca.vpn
+package info.loveyu.mfca.m2m
 
 import android.content.Context
 import info.loveyu.mfca.plugin.PluginManager
@@ -8,9 +8,9 @@ import java.io.File
 object M2mCoreManager {
     private const val PLUGIN_NAME = "m2m"
 
-    fun inspectCore(context: Context): VpnCoreState {
+    fun inspectCore(context: Context): M2mCoreState {
         val plugin = PluginManager.getInstalledPath(context, PLUGIN_NAME)
-        return VpnCoreState(
+        return M2mCoreState(
             isReady = plugin.exists() && plugin.length() > 0,
             path = plugin.absolutePath.takeIf { plugin.exists() && plugin.length() > 0 },
             pluginVersion = null,
