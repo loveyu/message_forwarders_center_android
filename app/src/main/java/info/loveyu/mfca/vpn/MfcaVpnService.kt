@@ -23,6 +23,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.net.HttpURLConnection
+import java.net.URL
 
 class MfcaVpnService : VpnService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -169,6 +171,7 @@ class MfcaVpnService : VpnService() {
             return
         }
         LogManager.logDebug("VPN", "Mihomo core started: ${runningCore.candidateName}")
+        applyMihomoLogLevel(artifacts.apiPort, artifacts.apiSecret, artifacts.logLevel)
 
         val tun = establishTun(selected, artifacts) ?: run {
             MihomoProcessManager.stop()
@@ -309,6 +312,36 @@ class MfcaVpnService : VpnService() {
         }
         retryJob?.cancel()
         retryJob = null
+    }
+
+    private fun applyMihomoLogLevel(apiPort: Int, apiSecret: String?, logLevel: VpnLogLevel?) {
+        if (logLevel == null) return
+        serviceScope.launch {
+            try {
+                val url = URL("http://127.0.0.1:$apiPort/configs")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "PATCH"
+                conn.doOutput = true
+                conn.connectTimeout = 2000
+                conn.readTimeout = 2000
+                conn.setRequestProperty("Content-Type", "application/json")
+                if (!apiSecret.isNullOrBlank()) {
+                    conn.setRequestProperty("Authorization", "Bearer $apiSecret")
+                }
+                val body = """{"log-level": "${logLevel.name}"}"""
+                conn.outputStream.write(body.toByteArray())
+                val code = conn.responseCode
+                if (code in 200..299) {
+                    LogManager.logDebug("VPN", "Applied log-level via API: ${logLevel.name}")
+                } else {
+                    val error = conn.errorStream?.bufferedReader()?.readText() ?: ""
+                    LogManager.logWarn("VPN", "Failed to apply log-level via API: HTTP $code $error")
+                }
+                conn.disconnect()
+            } catch (e: Exception) {
+                LogManager.logWarn("VPN", "Failed to apply log-level via API: ${e.message}")
+            }
+        }
     }
 
     private fun nextRuntimeSessionId(): Long {

@@ -502,6 +502,13 @@ fun VpnScreen(contentPadding: PaddingValues) {
                                     )
                                 }
                                 DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.vpn_view_log)) },
+                                    onClick = {
+                                        showMenu = false
+                                        context.startActivity(VpnLogActivity.intent(context))
+                                    },
+                                )
+                                DropdownMenuItem(
                                     text = { Text(stringResource(R.string.vpn_edit_apps)) },
                                     onClick = {
                                         showMenu = false

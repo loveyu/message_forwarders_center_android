@@ -5,8 +5,13 @@ import android.net.LocalServerSocket
 import android.net.LocalSocket
 import android.os.ParcelFileDescriptor
 import android.system.Os
+import android.util.Log
 import info.loveyu.mfca.util.LogManager
+import java.io.BufferedReader
+import java.io.BufferedWriter
 import java.io.File
+import java.io.FileWriter
+import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -23,6 +28,11 @@ object VpnBridgeProcessManager {
     )
 
     @Volatile private var runningProcess: RunningProcess? = null
+    @Volatile private var lastLogFiles: Pair<File, File>? = null
+
+    fun getLastLogFiles(): Pair<File, File>? = lastLogFiles
+
+    fun isRunning(): Boolean = current() != null
 
     fun current(): RunningProcess? {
         val current = runningProcess ?: return null
@@ -51,6 +61,7 @@ object VpnBridgeProcessManager {
             }
             val stdoutLog = File(logDir, "bridge.stdout.log").apply { writeText("") }
             val stderrLog = File(logDir, "bridge.stderr.log").apply { writeText("") }
+            lastLogFiles = Pair(stdoutLog, stderrLog)
             val controlName = "mfca_vpn_${UUID.randomUUID().toString().replace("-", "")}"
             val controlServer = LocalServerSocket(controlName)
             LogManager.logInfo(
@@ -68,12 +79,18 @@ object VpnBridgeProcessManager {
             LogManager.logDebug("VPN", "Bridge command: ${command.joinToString(" ")}")
             val process = ProcessBuilder(command)
                 .directory(workDir)
-                .redirectOutput(ProcessBuilder.Redirect.appendTo(stdoutLog))
-                .redirectError(ProcessBuilder.Redirect.appendTo(stderrLog))
                 .apply {
                     environment()["HOME"] = workDir.absolutePath
                 }
                 .start()
+
+            val candidateTag = sanitize(artifacts.candidate.name)
+            Thread({
+                pumpStream(process.inputStream, stdoutLog, false)
+            }, "bridge-out-$candidateTag").apply { isDaemon = true; start() }
+            Thread({
+                pumpStream(process.errorStream, stderrLog, true)
+            }, "bridge-err-$candidateTag").apply { isDaemon = true; start() }
 
             // Accept with timeout: close the server socket to unblock accept() if needed
             val acceptResult = acceptWithTimeout(controlServer, 10_000L)
@@ -166,6 +183,29 @@ object VpnBridgeProcessManager {
             current.process.waitFor(1500, TimeUnit.MILLISECONDS)
         }
         return current.candidateName
+    }
+
+    private fun pumpStream(input: java.io.InputStream, logFile: File, isStderr: Boolean) {
+        try {
+            val reader = BufferedReader(input.reader())
+            val writer = BufferedWriter(FileWriter(logFile, true))
+            var line: String?
+            while (reader.readLine().also { line = it } != null) {
+                val l = line!!
+                writer.write(l)
+                writer.newLine()
+                writer.flush()
+                if (isStderr) {
+                    Log.w("VPNB", l)
+                } else {
+                    Log.i("VPNB", l)
+                }
+            }
+            writer.close()
+            reader.close()
+        } catch (_: IOException) {
+            // Stream closed when process exits
+        }
     }
 
     private fun ensureBridgeBinary(context: Context): File {
