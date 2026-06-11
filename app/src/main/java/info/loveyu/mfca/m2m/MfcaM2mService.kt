@@ -9,7 +9,6 @@ import android.content.pm.ServiceInfo
 import android.os.ParcelFileDescriptor
 import android.net.VpnService
 import android.os.Build
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
@@ -40,7 +39,7 @@ class MfcaM2mService : VpnService() {
         LogManager.logInfo("VPN", "MfcaM2mService onStartCommand: action=$action, forceRestart=$forceRestart, startId=$startId")
         when (action) {
             ACTION_ENABLE -> {
-                startVpnForeground("Preparing m2m")
+                startVpnForeground()
                 serviceScope.launch {
                     M2mManager.setEnabled(true)
                     syncRuntime(forceRestart = forceRestart, isRetry = false)
@@ -48,14 +47,14 @@ class MfcaM2mService : VpnService() {
             }
 
             ACTION_REFRESH -> {
-                startVpnForeground(M2mManager.state.value.statusMessage.ifBlank { "Refreshing m2m" })
+                startVpnForeground()
                 serviceScope.launch {
                     syncRuntime(forceRestart = forceRestart, isRetry = false)
                 }
             }
 
             ACTION_DISABLE -> {
-                startVpnForeground("Stopping m2m")
+                startVpnForeground()
                 serviceScope.launch {
                     stopRuntime(disableVpn = true, stopService = true)
                 }
@@ -66,8 +65,8 @@ class MfcaM2mService : VpnService() {
         return START_STICKY
     }
 
-    private fun startVpnForeground(content: String) {
-        val notification = buildNotification(content)
+    private fun startVpnForeground() {
+        val notification = buildNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 ForwardService.NOTIFICATION_ID,
@@ -114,7 +113,7 @@ class MfcaM2mService : VpnService() {
             LogManager.logWarn("VPN", "VPN permission required, launching prepare intent")
             resetRuntimeSession()
             M2mManager.clearRunningCandidate(M2mRuntimeStatus.error, getString(R.string.vpn_permission_required))
-            updateNotification(M2mManager.state.value.statusMessage)
+            updateNotification()
             return
         }
 
@@ -133,7 +132,7 @@ class MfcaM2mService : VpnService() {
             M2mProcessManager.stop()
             M2mManager.setEnabled(false)
             M2mManager.clearRunningCandidate(M2mRuntimeStatus.error, "当前没有可用候选")
-            updateNotification(M2mManager.state.value.statusMessage)
+            updateNotification()
             return
         }
 
@@ -143,14 +142,14 @@ class MfcaM2mService : VpnService() {
             val message = "m2m 运行中: ${selected.config.name}"
             LogManager.logInfo("VPN", "Candidate ${selected.config.name} already running, skipping sync")
             M2mManager.markRunning(selected.config.name, message)
-            updateNotification(message)
+            updateNotification()
             return
         }
 
         if (current != null || currentBridge != null || tunInterface != null) {
             LogManager.logInfo("VPN", "Stopping previous runtime (${current?.candidateName}) before starting ${selected.config.name}")
             M2mManager.updateRuntimeStatus(M2mRuntimeStatus.stopping, "Stopping ${selected.config.name}")
-            updateNotification(M2mManager.state.value.statusMessage)
+            updateNotification()
             stopRuntime(disableVpn = false, stopService = false)
         }
 
@@ -161,7 +160,7 @@ class MfcaM2mService : VpnService() {
         if (cachedFile == null) {
             LogManager.logInfo("VPN", "Config not cached for ${selected.config.name}, downloading from ${selected.config.configUrl}")
             M2mManager.updateRuntimeStatus(M2mRuntimeStatus.preparing, "Downloading config for ${selected.config.name}")
-            updateNotification(M2mManager.state.value.statusMessage)
+            updateNotification()
             M2mConfigCacheManager.downloadConfig(this, selected.config).onFailure { error ->
                 LogManager.logError("VPN", "Config download failed for ${selected.config.name}: ${error.message}")
                 handleRuntimeFailure(
@@ -185,7 +184,7 @@ class MfcaM2mService : VpnService() {
         }
 
         M2mManager.updateRuntimeStatus(M2mRuntimeStatus.starting, "Starting ${artifacts.candidate.name}")
-        updateNotification(M2mManager.state.value.statusMessage)
+        updateNotification()
         LogManager.logDebug("VPN", "Artifacts: port=${artifacts.localProxyPort}, apiPort=${artifacts.apiPort}, udpRelay=${artifacts.udpRelay}, dnsHijack=${artifacts.dnsHijack}, core=${artifacts.coreFilePath}, profile=${artifacts.profileFilePath}")
 
         // Enable socket protection so m2m outbound connections bypass VPN tunnel
@@ -213,7 +212,7 @@ class MfcaM2mService : VpnService() {
             return
         }
         LogManager.logDebug("VPN", "m2m core started: ${runningCore.candidateName}")
-        applyM2mLogLevel(artifacts.apiPort, artifacts.apiSecret, artifacts.logLevel)
+        setPendingLogLevel(artifacts.apiPort, artifacts.apiSecret, artifacts.logLevel)
 
         val tun = establishTun(selected, artifacts) ?: run {
             M2mProcessManager.stop()
@@ -258,7 +257,7 @@ class MfcaM2mService : VpnService() {
         retryAttempts = 0
         val message = "m2m 运行中: ${runningBridge.candidateName}"
         M2mManager.markRunning(runningCore.candidateName, message)
-        updateNotification(message)
+        updateNotification()
         LogManager.logInfo("VPN", "VPN runtime started for ${runningCore.candidateName}")
     }
 
@@ -275,7 +274,7 @@ class MfcaM2mService : VpnService() {
                 M2mRuntimeStatus.preparing,
                 "Downloading config for ${candidate.config.name}",
             )
-            updateNotification(M2mManager.state.value.statusMessage)
+            updateNotification()
 
             val result = M2mConfigCacheManager.downloadConfig(this, candidate.config)
             result.onSuccess { M2mManager.selectCandidate(candidate.config.name) }
@@ -291,6 +290,7 @@ class MfcaM2mService : VpnService() {
         LogManager.logInfo("VPN", "Stopping runtime: candidate=$runningName, disableVpn=$disableVpn, stopService=$stopService")
         cancelPendingRetry("runtime stopping")
         resetRuntimeSession()
+        clearPendingLogLevel()
         M2mConfigCacheManager.cancelDownload()
         M2mCoreManager.cancelDownload()
         M2mPluginCore.socketProtector = null
@@ -311,7 +311,7 @@ class MfcaM2mService : VpnService() {
             stopForeground(STOP_FOREGROUND_DETACH)
             stopSelf()
         } else {
-            updateNotification(M2mManager.state.value.statusMessage)
+            updateNotification()
         }
     }
 
@@ -338,7 +338,7 @@ class MfcaM2mService : VpnService() {
         LogManager.logInfo("VPN", "Skip VPN retry for $candidateName: $retryReason")
         M2mManager.setEnabled(false)
         M2mManager.clearRunningCandidate(M2mRuntimeStatus.error, message)
-        updateNotification(message)
+        updateNotification()
     }
 
     private fun nextRetryReason(candidateName: String, sessionId: Long): String? {
@@ -368,7 +368,7 @@ class MfcaM2mService : VpnService() {
         val retryMessage = getString(R.string.vpn_retrying, candidateName, retryAttempts, MAX_RETRY_ATTEMPTS)
         LogManager.logWarn("VPN", "$message. $retryMessage")
         M2mManager.clearRunningCandidate(M2mRuntimeStatus.error, retryMessage)
-        updateNotification(retryMessage)
+        updateNotification()
         retryJob = serviceScope.launch {
             delay(RETRY_DELAY_MS * retryAttempts)
             val state = M2mManager.state.value
@@ -389,50 +389,110 @@ class MfcaM2mService : VpnService() {
         retryJob = null
     }
 
-    private fun applyM2mLogLevel(apiPort: Int, apiSecret: String?, logLevel: M2mLogLevel?) {
-        if (logLevel == null) return
-        serviceScope.launch {
-            val maxAttempts = 5
-            val delayMs = 1000L
-            var lastError: String? = null
-            for (attempt in 1..maxAttempts) {
-                try {
-                    val url = URL("http://127.0.0.1:$apiPort/configs")
-                    val conn = url.openConnection() as HttpURLConnection
-                    conn.requestMethod = "PATCH"
-                    conn.doOutput = true
-                    conn.connectTimeout = 2000
-                    conn.readTimeout = 2000
-                    conn.setRequestProperty("Content-Type", "application/json")
-                    if (!apiSecret.isNullOrBlank()) {
-                        conn.setRequestProperty("Authorization", "Bearer $apiSecret")
+    companion object {
+        @Volatile private var pendingApiPort: Int = 0
+        @Volatile private var pendingApiSecret: String? = null
+        @Volatile private var pendingLogLevel: M2mLogLevel? = null
+
+        fun setPendingLogLevel(apiPort: Int, apiSecret: String?, logLevel: M2mLogLevel?) {
+            pendingApiPort = apiPort
+            pendingApiSecret = apiSecret
+            pendingLogLevel = logLevel
+        }
+
+        fun clearPendingLogLevel() {
+            pendingApiPort = 0
+            pendingApiSecret = null
+            pendingLogLevel = null
+        }
+
+        fun tryApplyPendingLogLevel() {
+            val port = pendingApiPort
+            val secret = pendingApiSecret
+            val level = pendingLogLevel ?: return
+            if (port == 0) return
+            clearPendingLogLevel()
+            CoroutineScope(Dispatchers.IO).launch {
+                val maxAttempts = 5
+                val delayMs = 1000L
+                var lastError: String? = null
+                for (attempt in 1..maxAttempts) {
+                    try {
+                        val url = URL("http://127.0.0.1:$port/configs")
+                        val conn = url.openConnection() as HttpURLConnection
+                        conn.requestMethod = "PATCH"
+                        conn.doOutput = true
+                        conn.connectTimeout = 2000
+                        conn.readTimeout = 2000
+                        conn.setRequestProperty("Content-Type", "application/json")
+                        if (!secret.isNullOrBlank()) {
+                            conn.setRequestProperty("Authorization", "Bearer $secret")
+                        }
+                        val body = """{"log-level": "${level.name}"}"""
+                        conn.outputStream.write(body.toByteArray())
+                        val code = conn.responseCode
+                        conn.disconnect()
+                        if (code in 200..299) {
+                            LogManager.logDebug("VPN", "Applied log-level via API: ${level.name}")
+                            return@launch
+                        }
+                        lastError = "HTTP $code"
+                        if (code != 502) {
+                            val error = conn.errorStream?.bufferedReader()?.readText() ?: ""
+                            LogManager.logWarn("VPN", "Failed to apply log-level via API: $lastError $error")
+                            return@launch
+                        }
+                    } catch (e: Exception) {
+                        lastError = e.message
+                        if (attempt < maxAttempts) {
+                            delay(delayMs)
+                            continue
+                        }
                     }
-                    val body = """{"log-level": "${logLevel.name}"}"""
-                    conn.outputStream.write(body.toByteArray())
-                    val code = conn.responseCode
-                    conn.disconnect()
-                    if (code in 200..299) {
-                        LogManager.logDebug("VPN", "Applied log-level via API: ${logLevel.name}")
-                        return@launch
-                    }
-                    lastError = "HTTP $code"
-                    if (code != 502) {
-                        val error = conn.errorStream?.bufferedReader()?.readText() ?: ""
-                        LogManager.logWarn("VPN", "Failed to apply log-level via API: $lastError $error")
-                        return@launch
-                    }
-                } catch (e: Exception) {
-                    lastError = e.message
                     if (attempt < maxAttempts) {
                         delay(delayMs)
-                        continue
                     }
                 }
-                if (attempt < maxAttempts) {
-                    delay(delayMs)
-                }
+                LogManager.logWarn("VPN", "Failed to apply log-level after $maxAttempts attempts: $lastError")
             }
-            LogManager.logWarn("VPN", "Failed to apply log-level after $maxAttempts attempts: $lastError")
+        }
+
+        private const val MAX_RETRY_ATTEMPTS = 3
+        private const val RETRY_DELAY_MS = 5_000L
+        const val TUN_MTU = 1500
+        const val TUN_SUBNET_PREFIX = 30
+        const val TUN_GATEWAY = "172.19.0.1"
+        const val TUN_PORTAL = "172.19.0.2"
+        const val TUN_GATEWAY_CIDR = "$TUN_GATEWAY/$TUN_SUBNET_PREFIX"
+        const val TUN_DNS_PRIMARY = "1.1.1.1"
+        const val TUN_DNS_SECONDARY = "8.8.8.8"
+        const val NET_ANY = "0.0.0.0"
+        const val M2M_DNS_PORT = 1053
+        const val MAPDNS_NETWORK = "100.64.0.0"
+        const val MAPDNS_NETMASK = "255.192.0.0"
+        const val MAPDNS_CACHE_SIZE = 10000
+
+        const val ACTION_ENABLE = "info.loveyu.mfca.action.ENABLE_VPN"
+        const val ACTION_REFRESH = "info.loveyu.mfca.action.REFRESH_VPN"
+        const val ACTION_DISABLE = "info.loveyu.mfca.action.DISABLE_VPN"
+        private const val EXTRA_FORCE_RESTART = "force_restart"
+
+        fun enableIntent(context: Context): Intent = Intent(context, MfcaM2mService::class.java).apply {
+            action = ACTION_ENABLE
+        }
+
+        fun refreshIntent(context: Context, forceRestart: Boolean = false): Intent =
+            Intent(context, MfcaM2mService::class.java).apply {
+                action = ACTION_REFRESH
+                putExtra(EXTRA_FORCE_RESTART, forceRestart)
+            }
+
+        fun disableIntent(context: Context): Intent = Intent(context, MfcaM2mService::class.java).apply {
+            action = ACTION_DISABLE
+        }
+
+        fun sync(context: Context, forceRestart: Boolean = false) {
+            ContextCompat.startForegroundService(context, refreshIntent(context, forceRestart))
         }
     }
 
@@ -515,68 +575,31 @@ class MfcaM2mService : VpnService() {
         tunInterface = null
     }
 
-    private fun updateNotification(content: String) {
+    private fun updateNotification() {
         ForwardService.refreshNotification()
         if (!ForwardService.isServiceAlive()) {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.notify(ForwardService.NOTIFICATION_ID, buildNotification(content))
+            manager.notify(ForwardService.NOTIFICATION_ID, buildNotification())
         }
     }
 
-    private fun buildNotification(content: String): Notification {
-        return NotificationCompat.Builder(this, ForwardService.CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(getString(R.string.vpn_notification_title))
-            .setContentText(content)
+    private fun buildNotification(): Notification {
+        val contentIntent = PendingIntent.getActivity(
+            this,
+            ForwardService.NOTIFICATION_ID,
+            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        return Notification.Builder(this, ForwardService.CHANNEL_ID)
+            .setContentTitle(ForwardService.buildNotificationText())
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentIntent(contentIntent)
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .setOnlyAlertOnce(true)
             .setOngoing(true)
-            .setContentIntent(
-                PendingIntent.getActivity(
-                    this,
-                    ForwardService.NOTIFICATION_ID,
-                    Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                ),
-            )
+            .setShowWhen(false)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
             .build()
     }
 
-    companion object {
-        private const val MAX_RETRY_ATTEMPTS = 3
-        private const val RETRY_DELAY_MS = 5_000L
-        const val TUN_MTU = 1500
-        const val TUN_SUBNET_PREFIX = 30
-        const val TUN_GATEWAY = "172.19.0.1"
-        const val TUN_PORTAL = "172.19.0.2"
-        const val TUN_GATEWAY_CIDR = "$TUN_GATEWAY/$TUN_SUBNET_PREFIX"
-        const val TUN_DNS_PRIMARY = "1.1.1.1"
-        const val TUN_DNS_SECONDARY = "8.8.8.8"
-        const val NET_ANY = "0.0.0.0"
-        const val M2M_DNS_PORT = 1053
-        const val MAPDNS_NETWORK = "100.64.0.0"
-        const val MAPDNS_NETMASK = "255.192.0.0"
-        const val MAPDNS_CACHE_SIZE = 10000
-
-        const val ACTION_ENABLE = "info.loveyu.mfca.action.ENABLE_VPN"
-        const val ACTION_REFRESH = "info.loveyu.mfca.action.REFRESH_VPN"
-        const val ACTION_DISABLE = "info.loveyu.mfca.action.DISABLE_VPN"
-        private const val EXTRA_FORCE_RESTART = "force_restart"
-
-        fun enableIntent(context: Context): Intent = Intent(context, MfcaM2mService::class.java).apply {
-            action = ACTION_ENABLE
-        }
-
-        fun refreshIntent(context: Context, forceRestart: Boolean = false): Intent =
-            Intent(context, MfcaM2mService::class.java).apply {
-                action = ACTION_REFRESH
-                putExtra(EXTRA_FORCE_RESTART, forceRestart)
-            }
-
-        fun disableIntent(context: Context): Intent = Intent(context, MfcaM2mService::class.java).apply {
-            action = ACTION_DISABLE
-        }
-
-        fun sync(context: Context, forceRestart: Boolean = false) {
-            ContextCompat.startForegroundService(context, refreshIntent(context, forceRestart))
-        }
-    }
 }

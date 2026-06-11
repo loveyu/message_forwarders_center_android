@@ -12,8 +12,6 @@ import info.loveyu.mfca.InputMethodFloatingActivity
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
 import info.loveyu.mfca.StatusFloatingActivity
-import info.loveyu.mfca.m2m.M2mManager
-import info.loveyu.mfca.m2m.M2mRuntimeStatus
 
 internal class ForwardServiceNotificationDelegate(
     private val service: ForwardService
@@ -118,17 +116,6 @@ internal class ForwardServiceNotificationDelegate(
     }
 
     private fun buildStatsText(): String {
-        return if (ForwardService.isRunning) {
-            buildString {
-                append("L${ForwardService.linkCount} I${ForwardService.inputCount} O${ForwardService.outputCount}")
-                if (!ForwardService.isReceivingEnabled) append(" | 暂停接收")
-                if (!ForwardService.isForwardingEnabled) append(" | 暂停转发")
-                if (ForwardService.isWakeLockEnabled) append(" | W锁")
-                if (ForwardService.isWifiLockEnabled) append(" | WiFi锁")
-                if (M2mManager.state.value.runtimeStatus == M2mRuntimeStatus.running) append(" | m2m")
-            }
-        } else {
-            "已停止"
-        }
+        return ForwardService.buildNotificationText()
     }
 }

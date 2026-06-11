@@ -27,6 +27,7 @@ import info.loveyu.mfca.util.NetworkChecker
 import info.loveyu.mfca.util.Preferences
 import info.loveyu.mfca.m2m.MfcaM2mService
 import info.loveyu.mfca.m2m.M2mManager
+import info.loveyu.mfca.m2m.M2mRuntimeStatus
 import androidx.core.content.ContextCompat
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -127,6 +128,29 @@ class ForwardService : Service() {
 
         fun refreshNotification() {
             serviceInstance?.updateNotification()
+        }
+
+        fun buildNotificationText(): String {
+            val m2mState = M2mManager.state.value
+            if (isRunning) {
+                return buildString {
+                    append("L${linkCount} I${inputCount} O${outputCount}")
+                    if (!isReceivingEnabled) append(" | 暂停接收")
+                    if (!isForwardingEnabled) append(" | 暂停转发")
+                    if (isWakeLockEnabled) append(" | W锁")
+                    if (isWifiLockEnabled) append(" | WiFi锁")
+                    when (m2mState.runtimeStatus) {
+                        M2mRuntimeStatus.running -> append(" | m2m")
+                        M2mRuntimeStatus.disabled -> { }
+                        else -> if (m2mState.statusMessage.isNotBlank()) append(" | ${m2mState.statusMessage}")
+                    }
+                }
+            }
+            return if (m2mState.runtimeStatus != M2mRuntimeStatus.disabled && m2mState.statusMessage.isNotBlank()) {
+                m2mState.statusMessage
+            } else {
+                "已停止"
+            }
         }
 
         fun refreshStats() {
@@ -287,6 +311,7 @@ class ForwardService : Service() {
             } else {
                 MfcaM2mService.sync(this)
             }
+            MfcaM2mService.tryApplyPendingLogLevel()
         }
 
         // 2. Input 健康检查
