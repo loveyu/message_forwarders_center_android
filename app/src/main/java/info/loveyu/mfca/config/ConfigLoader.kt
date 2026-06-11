@@ -195,6 +195,7 @@ object ConfigLoader {
                     whenCondition = map["when"] as? String,
                     deny = map["deny"] as? String,
                     enabled = map["enabled"] as? Boolean ?: true,
+                    insecure = map["insecure"] as? Boolean ?: false,
                     accessControlMode = parseM2mAccessControlMode(map["accessControlMode"] as? String),
                     packages = (map["packages"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
                 )

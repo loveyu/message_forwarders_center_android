@@ -183,6 +183,10 @@ object AppConfigSchema {
                     description = "Whether this m2m candidate is enabled by default"
                     default = true
                 }
+                boolean("insecure") {
+                    description = "Skip TLS certificate verification for config download"
+                    default = false
+                }
                 enum("accessControlMode", listOf("acceptAll", "include", "exclude")) {
                     description = "App access control mode for this m2m profile"
                     default = "acceptAll"

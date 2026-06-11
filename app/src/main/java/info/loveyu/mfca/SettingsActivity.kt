@@ -69,6 +69,7 @@ import info.loveyu.mfca.util.IconCacheManager
 import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
+import info.loveyu.mfca.util.HttpDownloader
 import androidx.compose.material3.FilterChip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -425,6 +426,7 @@ fun SettingsScreenContent(
                                 onCheckedChange = { enabled ->
                                     insecureConfigDownload = enabled
                                     preferences.insecureConfigDownload = enabled
+                                    HttpDownloader.defaultInsecure = enabled
                                 }
                             )
                         }

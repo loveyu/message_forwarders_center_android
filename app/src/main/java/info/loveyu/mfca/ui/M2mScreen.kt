@@ -229,9 +229,6 @@ fun M2mScreen(contentPadding: PaddingValues) {
                                 ),
                             )
                         }
-                        OutlinedButton(onClick = { context.startActivity(M2mLogActivity.intent(context)) }) {
-                            Text(stringResource(R.string.vpn_view_log))
-                        }
 
                         Box(modifier = Modifier.weight(1f))
 
@@ -302,6 +299,13 @@ fun M2mScreen(contentPadding: PaddingValues) {
                                         enabled = !coreActionWorking && !uiState.isBusy,
                                     )
                                 }
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.vpn_view_log)) },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        context.startActivity(M2mLogActivity.intent(context))
+                                    },
+                                )
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.vpn_download_proxy)) },
                                     onClick = {
@@ -501,13 +505,6 @@ fun M2mScreen(contentPadding: PaddingValues) {
                                         enabled = !isWorking && !uiState.isBusy,
                                     )
                                 }
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.vpn_view_log)) },
-                                    onClick = {
-                                        showMenu = false
-                                        context.startActivity(M2mLogActivity.intent(context))
-                                    },
-                                )
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.vpn_edit_apps)) },
                                     onClick = {

@@ -181,6 +181,7 @@ data class M2mInputConfig(
     val whenCondition: String? = null,
     val deny: String? = null,
     val enabled: Boolean = true,
+    val insecure: Boolean = false,
     val accessControlMode: M2mAccessControlMode = M2mAccessControlMode.acceptAll,
     val packages: List<String> = emptyList(),
 )

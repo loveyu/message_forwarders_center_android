@@ -57,6 +57,7 @@ object M2mConfigCacheManager {
                     sslRetryCount = 2,
                     tag = "vpn_config",
                     userAgent = "FlowGate-Android",
+                    insecure = config.insecure,
                 ),
             )
             val newHash = sha256(content)

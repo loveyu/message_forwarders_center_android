@@ -33,12 +33,15 @@ object M2mManager {
         configs = vpnConfigs
         m2mCoreUrl = pluginUrl
         configDownloadProxy = downloadProxy
+        LogManager.logInfo("VPN", "M2mManager initialized: ${vpnConfigs.size} configs, pluginUrl=$pluginUrl, downloadProxy=$downloadProxy")
         rebuildState()
     }
 
     fun clear() {
+        val prevCount = configs.size
         configs = emptyList()
         m2mCoreUrl = null
+        LogManager.logInfo("VPN", "M2mManager cleared: removed $prevCount configs")
         updateState(
             M2mUiState(
                 hasVpnConfig = false,
@@ -52,11 +55,14 @@ object M2mManager {
     }
 
     fun refresh() {
+        LogManager.logDebug("VPN", "M2mManager refresh triggered")
         rebuildState()
     }
 
     fun setEnabled(enabled: Boolean) {
+        val prev = stateFlow.value.isEnabled
         store?.setGlobalEnabled(enabled)
+        LogManager.logInfo("VPN", "m2m ${if (enabled) "enabled" else "disabled"} (was: $prev)")
         rebuildState(
             runtimeStatus = if (enabled) M2mRuntimeStatus.idle else M2mRuntimeStatus.disabled,
             statusMessage = if (enabled) "m2m 已启用，等待启动核心" else "m2m is disabled",
@@ -65,6 +71,7 @@ object M2mManager {
     }
 
     fun selectCandidate(name: String) {
+        LogManager.logInfo("VPN", "Candidate selected: $name")
         store?.pushSelection(name)
         rebuildState()
     }
@@ -126,22 +133,27 @@ object M2mManager {
             configs.firstOrNull { it.name == candidateName }
                 ?: return Result.failure(IllegalArgumentException("Unknown m2m candidate: $candidateName"))
         LogManager.logInfo("VPN", "Downloading config for $candidateName: ${config.configUrl}")
-        return M2mConfigCacheManager.downloadConfig(context, config).map {
+        val result = M2mConfigCacheManager.downloadConfig(context, config)
+        result.onSuccess { LogManager.logInfo("VPN", "Config download succeeded for $candidateName") }
+            .onFailure { LogManager.logError("VPN", "Config download failed for $candidateName: ${it.message}") }
+        return result.map {
             rebuildState()
             M2mConfigCacheManager.inspect(context, config)
         }
     }
 
     fun deleteCorePlugin(context: Context): Result<Unit> = runCatching {
+        LogManager.logInfo("VPN", "Deleting m2m core plugin")
         M2mCoreManager.deleteCore(context)
         rebuildState()
-    }
+    }.onFailure { LogManager.logError("VPN", "Failed to delete m2m core plugin: ${it.message}") }
 
     fun downloadCorePlugin(context: Context): Result<Unit> = runCatching {
         val url = m2mCoreUrl ?: throw IllegalStateException("未配置 plugin.m2mCore 下载地址")
+        LogManager.logInfo("VPN", "Downloading m2m core plugin from $url")
         M2mCoreManager.downloadCore(context, url, effectiveDownloadProxy()).getOrThrow()
         rebuildState()
-    }
+    }.onFailure { LogManager.logError("VPN", "Failed to download m2m core plugin: ${it.message}") }
 
     fun deleteConfigCache(context: Context, candidateName: String): Result<M2mConfigCacheState> {
         val config =
@@ -199,8 +211,11 @@ object M2mManager {
                 ?: run {
                     updateRuntimeStatus(M2mRuntimeStatus.preparing, "Downloading config for ${selected.config.name}")
                     LogManager.logInfo("VPN", "Config not cached, auto-downloading for ${selected.config.name}")
-                    M2mConfigCacheManager.downloadConfig(context, selected.config)
-                        .getOrNull()
+                    val dlResult = M2mConfigCacheManager.downloadConfig(context, selected.config)
+                    dlResult.onFailure { e ->
+                        LogManager.logError("VPN", "Config download failed for ${selected.config.name}: ${e.message}")
+                    }
+                    dlResult.getOrNull()
                         ?.let { M2mConfigCacheManager.getCachedSourceFile(context, selected.config.name) }
                 }
         if (cachedSource == null) {
@@ -253,6 +268,7 @@ object M2mManager {
     }
 
     fun markRunning(candidateName: String, message: String) {
+        LogManager.logInfo("VPN", "Candidate $candidateName is now RUNNING: $message")
         store?.pushSelection(candidateName)
         rebuildState(
             runtimeStatus = M2mRuntimeStatus.running,
@@ -262,6 +278,8 @@ object M2mManager {
     }
 
     fun clearRunningCandidate(status: M2mRuntimeStatus, message: String) {
+        val prev = stateFlow.value.runningCandidateName
+        LogManager.logInfo("VPN", "Candidate $prev cleared ($status): $message")
         rebuildState(
             runtimeStatus = status,
             statusMessage = message,
@@ -270,6 +288,12 @@ object M2mManager {
     }
 
     fun updateRuntimeStatus(status: M2mRuntimeStatus, message: String) {
+        val prevStatus = stateFlow.value.runtimeStatus
+        if (prevStatus != status) {
+            LogManager.logInfo("VPN", "Runtime status: $prevStatus → $status — $message")
+        } else {
+            LogManager.logDebug("VPN", "Runtime status unchanged ($status): $message")
+        }
         rebuildState(
             runtimeStatus = status,
             statusMessage = message,
@@ -351,6 +375,10 @@ object M2mManager {
     ): String? {
         val availableNames = candidates.filter { it.isAvailable }.map { it.config.name }.toSet()
         selectionHistory.firstOrNull { it in availableNames }?.let { return it }
-        return candidates.firstOrNull { it.isAvailable }?.config?.name
+        val fallback = candidates.firstOrNull { it.isAvailable }?.config?.name
+        if (fallback == null) {
+            LogManager.logWarn("VPN", "No available candidate to resolve (candidates=${candidates.size}, available=${availableNames.size})")
+        }
+        return fallback
     }
 }

@@ -29,6 +29,9 @@ import okhttp3.Request
  */
 object HttpDownloader {
 
+    @Volatile
+    var defaultInsecure: Boolean = false
+
     data class Config(
         val connectTimeoutMs: Long = 15_000L,
         val readTimeoutMs: Long = 15_000L,
@@ -310,7 +313,8 @@ object HttpDownloader {
     // ── Internal ───────────────────────────────────────────────────
 
     private fun buildClient(config: Config): OkHttpClient {
-        val baseBuilder = if (config.insecure) {
+        val insecure = config.insecure || defaultInsecure
+        val baseBuilder = if (insecure) {
             LogManager.logWarn(config.tag, "SSL 证书校验已禁用 (insecure 模式)")
             val sslContext = SSLContext.getInstance("TLS").apply {
                 init(null, arrayOf(permissiveTrustManager), null)
