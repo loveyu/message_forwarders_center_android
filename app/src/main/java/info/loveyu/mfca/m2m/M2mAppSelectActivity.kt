@@ -52,6 +52,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
@@ -110,24 +111,41 @@ private fun M2mAppSelectScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    val store = remember { M2mStateStore(context) }
     var mode by remember { mutableStateOf(initialMode) }
-    var selectedPackages by remember { mutableStateOf(initialPackages.toMutableSet()) }
+    var selectedPackages by remember { mutableStateOf(initialPackages.toSet()) }
     var searchQuery by remember { mutableStateOf("") }
-    var showSystemApps by remember { mutableStateOf(false) }
+    var showSystemApps by remember { mutableStateOf(store.getShowSystemApps()) }
+    var sortMode by remember { mutableStateOf(store.getAppSortMode()) }
     var apps by remember { mutableStateOf<List<AppItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
     LaunchedEffect(showSystemApps) {
+        store.setShowSystemApps(showSystemApps)
         isLoading = true
         apps = withContext(Dispatchers.IO) { loadApps(context, showSystemApps) }
         isLoading = false
     }
 
+    LaunchedEffect(sortMode) {
+        store.setAppSortMode(sortMode)
+    }
+
+    val displayApps by remember {
+        derivedStateOf {
+            when (sortMode) {
+                "selected_first" -> apps.sortedByDescending { it.packageName in selectedPackages }
+                "unselected_first" -> apps.sortedBy { it.packageName in selectedPackages }
+                else -> apps
+            }
+        }
+    }
+
     val filteredApps =
-        remember(apps, searchQuery) {
+        remember(displayApps, searchQuery) {
             val q = searchQuery.trim()
-            if (q.isBlank()) apps
-            else apps.filter { it.label.contains(q, ignoreCase = true) || it.packageName.contains(q, ignoreCase = true) }
+            if (q.isBlank()) displayApps
+            else displayApps.filter { it.label.contains(q, ignoreCase = true) || it.packageName.contains(q, ignoreCase = true) }
         }
 
     var menuExpanded by remember { mutableStateOf(false) }
@@ -149,14 +167,14 @@ private fun M2mAppSelectScreen(
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.vpn_select_all)) },
                             onClick = {
-                                selectedPackages = filteredApps.map { it.packageName }.toMutableSet()
+                                selectedPackages = filteredApps.map { it.packageName }.toSet()
                                 menuExpanded = false
                             },
                         )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.vpn_select_none)) },
                             onClick = {
-                                selectedPackages = mutableSetOf()
+                                selectedPackages = emptySet()
                                 menuExpanded = false
                             },
                         )
@@ -165,8 +183,7 @@ private fun M2mAppSelectScreen(
                             onClick = {
                                 val allVisible = filteredApps.map { it.packageName }.toSet()
                                 selectedPackages =
-                                    (allVisible - selectedPackages.toSet() + (selectedPackages - allVisible))
-                                        .toMutableSet()
+                                    (allVisible - selectedPackages) + (selectedPackages - allVisible)
                                 menuExpanded = false
                             },
                         )
@@ -177,7 +194,7 @@ private fun M2mAppSelectScreen(
                                 val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                                 val text = cb?.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
                                 val imported = text.lines().map { it.trim() }.filter { it.isNotBlank() }
-                                selectedPackages = imported.toMutableSet()
+                                selectedPackages = imported.toSet()
                                 menuExpanded = false
                                 Toast.makeText(
                                     context,
@@ -198,6 +215,21 @@ private fun M2mAppSelectScreen(
                                     context.getString(R.string.vpn_exported_packages, selectedPackages.size),
                                     Toast.LENGTH_SHORT,
                                 ).show()
+                            },
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    stringResource(
+                                        if (sortMode == "selected_first") R.string.vpn_sort_unselected_first
+                                        else R.string.vpn_sort_selected_first
+                                    )
+                                )
+                            },
+                            onClick = {
+                                sortMode = if (sortMode == "selected_first") null else "selected_first"
+                                menuExpanded = false
                             },
                         )
                     }
@@ -288,10 +320,11 @@ private fun M2mAppSelectScreen(
                             Checkbox(
                                 checked = app.packageName in selectedPackages,
                                 onCheckedChange = { checked ->
-                                    selectedPackages =
-                                        selectedPackages.toMutableSet().apply {
-                                            if (checked) add(app.packageName) else remove(app.packageName)
-                                        }
+                                    selectedPackages = if (checked) {
+                                        selectedPackages + app.packageName
+                                    } else {
+                                        selectedPackages - app.packageName
+                                    }
                                 },
                             )
                         }

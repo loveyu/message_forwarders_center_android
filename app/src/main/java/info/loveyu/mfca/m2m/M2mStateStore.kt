@@ -106,6 +106,24 @@ class M2mStateStore(context: Context) {
         editor.apply()
     }
 
+    fun getShowSystemApps(defaultValue: Boolean = false): Boolean {
+        return preferences.getBoolean(KEY_SHOW_SYSTEM_APPS, defaultValue)
+    }
+
+    fun setShowSystemApps(enabled: Boolean) {
+        preferences.edit().putBoolean(KEY_SHOW_SYSTEM_APPS, enabled).apply()
+    }
+
+    fun getAppSortMode(): String? {
+        return preferences.getString(KEY_APP_SORT_MODE, null)
+    }
+
+    fun setAppSortMode(mode: String?) {
+        val editor = preferences.edit()
+        if (mode == null) editor.remove(KEY_APP_SORT_MODE) else editor.putString(KEY_APP_SORT_MODE, mode)
+        editor.apply()
+    }
+
     fun getDownloadProxy(): String? = preferences.getString(KEY_DOWNLOAD_PROXY, null)
 
     fun setDownloadProxy(proxy: String?) {
@@ -156,6 +174,8 @@ class M2mStateStore(context: Context) {
     companion object {
         private const val KEY_GLOBAL_ENABLED = "global_enabled"
         private const val KEY_SELECTION_HISTORY = "selection_history"
+        private const val KEY_SHOW_SYSTEM_APPS = "show_system_apps"
+        private const val KEY_APP_SORT_MODE = "app_sort_mode"
         private const val KEY_DOWNLOAD_PROXY = "download_proxy"
         private const val KEY_API_SECRET = "api_secret"
 

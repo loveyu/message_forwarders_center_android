@@ -147,6 +147,8 @@
     <string name="vpn_exported_packages">已导出 %1$d 个包名</string>
     <string name="vpn_show_system_apps">显示系统应用</string>
     <string name="vpn_selected_count">已选 %1$d / 共 %2$d 个应用</string>
+    <string name="vpn_sort_selected_first">优先选中</string>
+    <string name="vpn_sort_unselected_first">取消选中优先</string>
     <string name="vpn_settings">高级设置</string>
     <string name="vpn_download_proxy">下载代理</string>
     <string name="vpn_download_proxy_hint">留空使用默认代理，如 socks5://127.0.0.1:1080</string>
