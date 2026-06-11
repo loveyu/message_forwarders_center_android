@@ -12,8 +12,17 @@ import java.io.BufferedWriter
 import java.io.File
 import java.io.FileWriter
 import java.io.IOException
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+
+data class BridgeTrafficStats(
+    val txPackets: Long,
+    val txBytes: Long,
+    val rxPackets: Long,
+    val rxBytes: Long,
+)
 
 object M2mBridgeProcessManager {
     data class RunningProcess(
@@ -33,6 +42,40 @@ object M2mBridgeProcessManager {
     fun getLastLogFiles(): Pair<File, File>? = lastLogFiles
 
     fun isRunning(): Boolean = current() != null
+
+    /**
+     * Query bridge traffic stats via the control socket.
+     * Sends command byte 0x01 and reads back 4 × uint64_t:
+     * [tx_packets, tx_bytes, rx_packets, rx_bytes].
+     * Returns null if the bridge is not running or the query fails.
+     */
+    fun queryStats(): BridgeTrafficStats? {
+        val current = runningProcess ?: return null
+        if (!current.process.isAlive) return null
+        return try {
+            val os = current.controlSocket.outputStream
+            val input = current.controlSocket.inputStream
+            os.write(byteArrayOf(0x01))
+            os.flush()
+            val buf = ByteArray(32)
+            var offset = 0
+            while (offset < 32) {
+                val n = input.read(buf, offset, 32 - offset)
+                if (n < 0) throw IOException("Unexpected EOF reading stats")
+                offset += n
+            }
+            val bb = java.nio.ByteBuffer.wrap(buf).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            BridgeTrafficStats(
+                txPackets = bb.long,
+                txBytes = bb.long,
+                rxPackets = bb.long,
+                rxBytes = bb.long,
+            )
+        } catch (e: Exception) {
+            Log.w("VPN", "queryStats failed: ${e.message}")
+            null
+        }
+    }
 
     fun current(): RunningProcess? {
         val current = runningProcess ?: return null

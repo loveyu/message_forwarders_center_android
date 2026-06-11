@@ -23,10 +23,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.URL
+import java.nio.ByteOrder
 
 class MfcaM2mService : VpnService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -216,6 +218,7 @@ class MfcaM2mService : VpnService() {
         LogManager.logDebug("VPN", "m2m core started: ${runningCore.candidateName}")
         setPendingLogLevel(artifacts.apiPort, artifacts.apiSecret, artifacts.logLevel)
 
+        val ifacesBefore = snapshotInterfaceNames()
         val tun = establishTun(selected, artifacts) ?: run {
             M2mProcessManager.stop()
             handleRuntimeFailure(
@@ -226,10 +229,11 @@ class MfcaM2mService : VpnService() {
             return
         }
         tunInterface = tun
-        val ifaceName = findTunInterfaceName()
+        val ifaceName = findTunInterfaceName(ifacesBefore)
         LogManager.logInfo("VPN", "Established TUN for ${artifacts.candidate.name}, interface=$ifaceName")
         M2mManager.onTunEstablished(ifaceName)
-        LogManager.logDebug("VPN", "TUN fd=${tun.fd}, mtu=$TUN_MTU, gateway=$TUN_GATEWAY/$TUN_SUBNET_PREFIX, dns=$TUN_DNS_PRIMARY/$TUN_DNS_SECONDARY")
+        M2mManager.onApiReady(artifacts.apiPort, artifacts.apiSecret, serviceScope)
+        LogManager.logDebug("VPN", "TUN fd=${tun.fd}, mtu=$TUN_MTU, gateway=$TUN_GATEWAY/$TUN_SUBNET_PREFIX, dns=$TUN_DNS_PRIMARY/$TUN_DNS_SECONDARY, apiPort=${artifacts.apiPort}")
 
         val runningBridge = M2mBridgeProcessManager.start(
             context = this,
@@ -580,8 +584,24 @@ class MfcaM2mService : VpnService() {
         tunInterface = null
     }
 
-    private fun findTunInterfaceName(): String? {
-        return try {
+    private fun findTunInterfaceName(ifacesBefore: Set<String> = emptySet()): String? {
+        // Method 1: New interface from /proc/net/dev diff (works on all Android versions)
+        if (ifacesBefore.isNotEmpty()) {
+            try {
+                val ifacesAfter = snapshotInterfaceNames()
+                val newIfaces = ifacesAfter - ifacesBefore
+                if (newIfaces.isNotEmpty()) {
+                    val name = newIfaces.first()
+                    LogManager.logInfo("VPN", "TUN interface found via /proc/net/dev diff: $name")
+                    return name
+                }
+            } catch (e: Exception) {
+                LogManager.logDebug("VPN", "findTunInterfaceName diff failed: ${e.message}")
+            }
+        }
+
+        // Method 2: NetworkInterface API (works on Android <=13)
+        try {
             val interfaces = NetworkInterface.getNetworkInterfaces() ?: return null
             while (interfaces.hasMoreElements()) {
                 val iface = interfaces.nextElement()
@@ -589,15 +609,71 @@ class MfcaM2mService : VpnService() {
                 while (addrs.hasMoreElements()) {
                     val addr = addrs.nextElement()
                     if (addr is Inet4Address && addr.hostAddress == TUN_GATEWAY) {
+                        LogManager.logInfo("VPN", "TUN interface found via NetworkInterface API: ${iface.name}")
                         return iface.name
                     }
                 }
             }
-            null
         } catch (e: Exception) {
-            LogManager.logError("VPN", "Failed to find TUN interface: ${e.message}")
-            null
+            LogManager.logDebug("VPN", "findTunInterfaceName NetworkInterface failed: ${e.message}")
         }
+
+        // Method 3: Parse /proc/net/route for 172.19.0.0/30 (works on all Android versions)
+        try {
+            val targetNet = "172.19.0.0"
+            val targetPrefix = 30
+            var found: String? = null
+            File("/proc/net/route").useLines { lines ->
+                lines.drop(1).forEach { line ->
+                    if (found != null) return@forEach
+                    val parts = line.trim().split(Regex("\\s+"))
+                    if (parts.size >= 8) {
+                        val iface = parts[0]
+                        val destIp = routeHexToDotted(parts[1])
+                        val maskIp = routeHexToDotted(parts[7])
+                        val prefix = maskToPrefix(maskIp)
+                        if (destIp == targetNet && prefix == targetPrefix) {
+                            found = iface
+                        }
+                    }
+                }
+            }
+            if (found != null) {
+                LogManager.logInfo("VPN", "TUN interface found via /proc/net/route: $found")
+                return found
+            }
+        } catch (e: Exception) {
+            LogManager.logDebug("VPN", "findTunInterfaceName route failed: ${e.message}")
+        }
+
+        LogManager.logError("VPN", "Failed to find TUN interface using all methods")
+        return null
+    }
+
+    private fun snapshotInterfaceNames(): Set<String> {
+        return try {
+            File("/proc/net/dev").readLines().mapNotNull { line ->
+                val trimmed = line.trimStart()
+                val colonIdx = trimmed.indexOf(':')
+                if (colonIdx > 0) trimmed.substring(0, colonIdx) else null
+            }.toSet()
+        } catch (e: Exception) {
+            LogManager.logDebug("VPN", "snapshotInterfaceNames failed: ${e.message}")
+            emptySet()
+        }
+    }
+
+    private fun routeHexToDotted(hex: String): String {
+        val padded = hex.padStart(8, '0')
+        val bytes = (0..3).map { padded.substring(it * 2, it * 2 + 2).toInt(16) }
+        if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) {
+            return bytes.reversed().joinToString(".")
+        }
+        return bytes.joinToString(".")
+    }
+
+    private fun maskToPrefix(mask: String): Int {
+        return mask.split(".").sumOf { Integer.bitCount(it.toInt()) }
     }
 
     private fun updateNotification() {

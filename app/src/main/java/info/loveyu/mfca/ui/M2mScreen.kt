@@ -34,7 +34,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -60,8 +59,6 @@ import info.loveyu.mfca.m2m.M2mLogActivity
 import info.loveyu.mfca.m2m.M2mManager
 import info.loveyu.mfca.m2m.M2mRuntimeStatus
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -86,13 +83,6 @@ fun M2mScreen(contentPadding: PaddingValues) {
                 M2mManager.updateRuntimeStatus(M2mRuntimeStatus.error, context.getString(R.string.vpn_permission_denied))
             }
         }
-
-    LaunchedEffect(Unit) {
-        while (isActive) {
-            M2mManager.refreshTrafficStats()
-            delay(1000)
-        }
-    }
 
     LazyColumn(
         contentPadding = contentPadding,
