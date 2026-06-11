@@ -313,6 +313,9 @@ class ForwardService : Service() {
             }
             MfcaM2mService.tryApplyPendingLogLevel()
         }
+        if (LogManager.isDebugEnabled() && M2mManager.state.value.runtimeStatus == M2mRuntimeStatus.running) {
+            M2mManager.logTrafficStats()
+        }
 
         // 2. Input 健康检查
         InputManager.onTick()

@@ -65,6 +65,13 @@ data class PreparedM2mArtifacts(
     val ipv6: Boolean = false,
 )
 
+data class M2mTrafficStats(
+    val totalRxBytes: Long = 0,
+    val totalTxBytes: Long = 0,
+    val rxSpeed: Long = 0,
+    val txSpeed: Long = 0,
+)
+
 data class M2mUiState(
     val hasVpnConfig: Boolean = false,
     val isEnabled: Boolean = false,

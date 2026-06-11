@@ -24,6 +24,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.net.HttpURLConnection
+import java.net.Inet4Address
+import java.net.NetworkInterface
 import java.net.URL
 
 class MfcaM2mService : VpnService() {
@@ -224,7 +226,9 @@ class MfcaM2mService : VpnService() {
             return
         }
         tunInterface = tun
-        LogManager.logInfo("VPN", "Established TUN for ${artifacts.candidate.name}")
+        val ifaceName = findTunInterfaceName()
+        LogManager.logInfo("VPN", "Established TUN for ${artifacts.candidate.name}, interface=$ifaceName")
+        M2mManager.onTunEstablished(ifaceName)
         LogManager.logDebug("VPN", "TUN fd=${tun.fd}, mtu=$TUN_MTU, gateway=$TUN_GATEWAY/$TUN_SUBNET_PREFIX, dns=$TUN_DNS_PRIMARY/$TUN_DNS_SECONDARY")
 
         val runningBridge = M2mBridgeProcessManager.start(
@@ -290,6 +294,7 @@ class MfcaM2mService : VpnService() {
         LogManager.logInfo("VPN", "Stopping runtime: candidate=$runningName, disableVpn=$disableVpn, stopService=$stopService")
         cancelPendingRetry("runtime stopping")
         resetRuntimeSession()
+        M2mManager.onTunDestroyed()
         clearPendingLogLevel()
         M2mConfigCacheManager.cancelDownload()
         M2mCoreManager.cancelDownload()
@@ -573,6 +578,26 @@ class MfcaM2mService : VpnService() {
         }
         runCatching { tunInterface?.close() }
         tunInterface = null
+    }
+
+    private fun findTunInterfaceName(): String? {
+        return try {
+            val interfaces = NetworkInterface.getNetworkInterfaces() ?: return null
+            while (interfaces.hasMoreElements()) {
+                val iface = interfaces.nextElement()
+                val addrs = iface.inetAddresses ?: continue
+                while (addrs.hasMoreElements()) {
+                    val addr = addrs.nextElement()
+                    if (addr is Inet4Address && addr.hostAddress == TUN_GATEWAY) {
+                        return iface.name
+                    }
+                }
+            }
+            null
+        } catch (e: Exception) {
+            LogManager.logError("VPN", "Failed to find TUN interface: ${e.message}")
+            null
+        }
     }
 
     private fun updateNotification() {

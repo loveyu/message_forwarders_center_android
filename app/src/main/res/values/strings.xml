@@ -175,6 +175,13 @@
     <string name="more_options">更多选项</string>
     <string name="vpn_running_title_format">运行中：%1$s</string>
 
+    <!-- m2m 流量统计 -->
+    <string name="vpn_traffic_title">流量统计</string>
+    <string name="vpn_download_speed">下载速度</string>
+    <string name="vpn_upload_speed">上传速度</string>
+    <string name="vpn_total_download">累计下载：%1$s</string>
+    <string name="vpn_total_upload">累计上传：%1$s</string>
+
     <!-- 测试中心 -->
     <string name="test_hub_title">测试中心</string>
     <string name="test_hub_menu">测试</string>

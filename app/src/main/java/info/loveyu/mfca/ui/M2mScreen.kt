@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +60,8 @@ import info.loveyu.mfca.m2m.M2mLogActivity
 import info.loveyu.mfca.m2m.M2mManager
 import info.loveyu.mfca.m2m.M2mRuntimeStatus
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -66,6 +69,7 @@ import kotlinx.coroutines.withContext
 fun M2mScreen(contentPadding: PaddingValues) {
     val context = LocalContext.current
     val uiState by M2mManager.state.collectAsState()
+    val trafficStats by M2mManager.trafficStats.collectAsState()
     val scope = rememberCoroutineScope()
     var workingConfigCandidateName by remember { mutableStateOf<String?>(null) }
     var coreActionWorking by remember { mutableStateOf(false) }
@@ -82,6 +86,13 @@ fun M2mScreen(contentPadding: PaddingValues) {
                 M2mManager.updateRuntimeStatus(M2mRuntimeStatus.error, context.getString(R.string.vpn_permission_denied))
             }
         }
+
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            M2mManager.refreshTrafficStats()
+            delay(1000)
+        }
+    }
 
     LazyColumn(
         contentPadding = contentPadding,
@@ -315,6 +326,70 @@ fun M2mScreen(contentPadding: PaddingValues) {
                                     },
                                 )
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Traffic Card (only when VPN running) ──
+        if (uiState.runtimeStatus == M2mRuntimeStatus.running) {
+            item {
+                ElevatedCard {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(18.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.vpn_traffic_title),
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "↓ ${formatSpeed(trafficStats?.rxSpeed ?: 0L)}",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                Text(
+                                    text = stringResource(R.string.vpn_download_speed),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "↑ ${formatSpeed(trafficStats?.txSpeed ?: 0L)}",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                )
+                                Text(
+                                    text = stringResource(R.string.vpn_upload_speed),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        HorizontalDivider()
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.vpn_total_download, formatBytes(trafficStats?.totalRxBytes ?: 0L)),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                text = stringResource(R.string.vpn_total_upload, formatBytes(trafficStats?.totalTxBytes ?: 0L)),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
@@ -586,4 +661,22 @@ private fun runtimeStatusLabel(status: M2mRuntimeStatus): String {
             M2mRuntimeStatus.error -> R.string.vpn_status_error
         },
     )
+}
+
+private fun formatSpeed(bytesPerSec: Long): String {
+    return when {
+        bytesPerSec < 1024 -> "$bytesPerSec B/s"
+        bytesPerSec < 1024 * 1024 -> String.format("%.1f KB/s", bytesPerSec / 1024.0)
+        bytesPerSec < 1024 * 1024 * 1024 -> String.format("%.1f MB/s", bytesPerSec / (1024.0 * 1024))
+        else -> String.format("%.1f GB/s", bytesPerSec / (1024.0 * 1024 * 1024))
+    }
+}
+
+private fun formatBytes(bytes: Long): String {
+    return when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> String.format("%.1f KB", bytes / 1024.0)
+        bytes < 1024 * 1024 * 1024 -> String.format("%.1f MB", bytes / (1024.0 * 1024))
+        else -> String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024))
+    }
 }
