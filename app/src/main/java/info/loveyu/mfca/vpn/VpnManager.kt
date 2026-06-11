@@ -215,7 +215,8 @@ object VpnManager {
             val effectivePort = store?.getLocalPort(selected.config.name) ?: LOCAL_PROXY_PORT
             val effectiveRuleMode = store?.getRuleMode(selected.config.name)
             val effectiveLogLevel = store?.getLogLevel(selected.config.name)
-            val effectiveUdpRelay = store?.getUdpRelay(selected.config.name) ?: true
+            val effectiveUdpRelay = store?.getUdpRelay(selected.config.name) ?: false
+            val effectiveIpv6 = store?.getIpv6(selected.config.name) ?: false
             val effectiveDnsHijack = store?.getDnsHijack(selected.config.name) ?: true
             val apiPort = ServerSocket(0).use { it.localPort }
             val apiSecret = store?.getOrCreateApiSecret() ?: ""
@@ -240,6 +241,8 @@ object VpnManager {
                 apiSecret = apiSecret,
                 udpRelay = effectiveUdpRelay,
                 dnsHijack = effectiveDnsHijack,
+                logLevel = effectiveLogLevel,
+                ipv6 = effectiveIpv6,
             )
         }.onSuccess {
             updateRuntimeStatus(VpnRuntimeStatus.prepared, "Prepared ${it.candidate.name}")

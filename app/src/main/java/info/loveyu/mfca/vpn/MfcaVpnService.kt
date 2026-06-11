@@ -170,7 +170,7 @@ class MfcaVpnService : VpnService() {
         }
         LogManager.logDebug("VPN", "Mihomo core started: ${runningCore.candidateName}")
 
-        val tun = establishTun(selected) ?: run {
+        val tun = establishTun(selected, artifacts) ?: run {
             MihomoProcessManager.stop()
             handleRuntimeFailure(
                 candidateName = artifacts.candidate.name,
@@ -321,7 +321,7 @@ class MfcaVpnService : VpnService() {
         runtimeSessionId = 0L
     }
 
-    private fun establishTun(candidate: info.loveyu.mfca.vpn.VpnCandidateState): ParcelFileDescriptor? {
+    private fun establishTun(candidate: info.loveyu.mfca.vpn.VpnCandidateState, artifacts: PreparedVpnArtifacts): ParcelFileDescriptor? {
         val builder = Builder()
             .setBlocking(false)
             .setMtu(TUN_MTU)
@@ -331,8 +331,7 @@ class MfcaVpnService : VpnService() {
             .addDnsServer(TUN_DNS_PRIMARY)
             .addDnsServer(TUN_DNS_SECONDARY)
 
-        val vpnStateStore = VpnStateStore(this)
-        if (vpnStateStore.getIpv6(candidate.config.name)) {
+        if (artifacts.ipv6) {
             builder.addRoute("::", 0)
         }
 

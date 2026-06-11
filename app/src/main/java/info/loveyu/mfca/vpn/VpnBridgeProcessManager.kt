@@ -217,7 +217,15 @@ object VpnBridgeProcessManager {
                 appendLine("  cache-size: ${MfcaVpnService.MAPDNS_CACHE_SIZE}")
             }
             appendLine("misc:")
-            appendLine("  log-level: 'warn'")
+            val bridgeLogLevel = when (artifacts.logLevel) {
+                VpnLogLevel.debug -> "debug"
+                VpnLogLevel.info -> "info"
+                VpnLogLevel.warning -> "warn"
+                VpnLogLevel.error -> "error"
+                VpnLogLevel.silent -> "off"
+                null -> "warn"
+            }
+            appendLine("  log-level: '$bridgeLogLevel'")
         }
         val configFile = File(workDir, "config.yml")
         configFile.writeText(config)

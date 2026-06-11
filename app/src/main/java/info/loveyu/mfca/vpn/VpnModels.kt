@@ -59,8 +59,10 @@ data class PreparedVpnArtifacts(
     val localProxyPort: Int,
     val apiPort: Int,
     val apiSecret: String,
-    val udpRelay: Boolean = true,
+    val udpRelay: Boolean = false,
     val dnsHijack: Boolean = true,
+    val logLevel: VpnLogLevel? = null,
+    val ipv6: Boolean = false,
 )
 
 data class VpnUiState(
