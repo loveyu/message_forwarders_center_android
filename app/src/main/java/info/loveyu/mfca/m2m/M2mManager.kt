@@ -1,27 +1,22 @@
 package info.loveyu.mfca.m2m
 
 import android.content.Context
-import android.util.Log
 import info.loveyu.mfca.config.M2mAccessControlMode
 import info.loveyu.mfca.config.M2mInputConfig
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.NetworkChecker
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import java.io.File
-import java.net.HttpURLConnection
 import java.net.ServerSocket
-import java.net.URL
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import org.json.JSONObject
 
 object M2mManager {
     private const val LOCAL_PROXY_PORT = 17890
+
+    private val trafficCollector = M2mTrafficStatsCollector()
+
+    val trafficStats: StateFlow<M2mTrafficStats?> get() = trafficCollector.trafficStats
 
     private val stateFlow = MutableStateFlow(M2mUiState())
     val state: StateFlow<M2mUiState> = stateFlow.asStateFlow()
@@ -32,17 +27,8 @@ object M2mManager {
     @Volatile private var m2mCoreUrl: String? = null
     @Volatile private var configDownloadProxy: String? = null
 
-    @Volatile private var tunInterfaceName: String? = null
     @Volatile private var apiPort: Int = 0
     @Volatile private var apiSecret: String = ""
-    private var baselineRxBytes: Long = 0L
-    private var baselineTxBytes: Long = 0L
-    private var prevRxBytes: Long = 0L
-    private var prevTxBytes: Long = 0L
-    private var prevTimestampMs: Long = 0L
-    private var trafficPollJob: Job? = null
-    private val trafficStatsFlow = MutableStateFlow<M2mTrafficStats?>(null)
-    val trafficStats: StateFlow<M2mTrafficStats?> = trafficStatsFlow.asStateFlow()
 
     private fun effectiveDownloadProxy(): String? {
         val override = store?.getDownloadProxy()?.trim()?.takeIf { it.isNotBlank() }
@@ -77,176 +63,33 @@ object M2mManager {
     }
 
     fun onTunEstablished(ifaceName: String?) {
-        tunInterfaceName = ifaceName
-        val pair = ifaceName?.let { readTrafficFromProcNetDev(it) }
-        if (pair != null) {
-            baselineRxBytes = pair.first
-            baselineTxBytes = pair.second
-            LogManager.logInfo("VPN", "TUN established: $ifaceName, baseline rx=${formatBytes(baselineRxBytes)} tx=${formatBytes(baselineTxBytes)}")
-        } else {
-            baselineRxBytes = 0L
-            baselineTxBytes = 0L
-            LogManager.logDebug("VPN", "TUN established: $ifaceName, /proc/net/dev not readable (expected on API 34+), bridge stats will be used")
-        }
-        prevRxBytes = baselineRxBytes
-        prevTxBytes = baselineTxBytes
-        prevTimestampMs = System.currentTimeMillis()
-        trafficStatsFlow.value = null
+        trafficCollector.onTunEstablished(ifaceName)
     }
 
     fun onApiReady(port: Int, secret: String, scope: CoroutineScope) {
         apiPort = port
         apiSecret = secret
-        LogManager.logInfo("VPN", "API ready for traffic stats: port=$port")
-        stopTrafficPolling()
-        trafficPollJob = scope.launch {
-            while (isActive) {
-                refreshTrafficStats()
-                delay(1000)
-            }
-        }
-    }
-
-    fun stopTrafficPolling() {
-        trafficPollJob?.cancel()
-        trafficPollJob = null
+        trafficCollector.apiPort = port
+        trafficCollector.apiSecret = secret
+        trafficCollector.onApiReady(port, secret, scope)
     }
 
     fun onTunDestroyed() {
-        stopTrafficPolling()
-        tunInterfaceName = null
+        trafficCollector.onTunDestroyed()
         apiPort = 0
         apiSecret = ""
-        baselineRxBytes = 0L
-        baselineTxBytes = 0L
-        prevRxBytes = 0L
-        prevTxBytes = 0L
-        prevTimestampMs = 0L
-        trafficStatsFlow.value = null
     }
 
-    private fun fetchTrafficFromApi(): Pair<Long, Long>? {
-        val port = apiPort
-        if (port == 0) return null
-        return try {
-            val url = URL("http://127.0.0.1:$port/connections")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.connectTimeout = 2000
-            conn.readTimeout = 2000
-            if (apiSecret.isNotBlank()) {
-                conn.setRequestProperty("Authorization", "Bearer $apiSecret")
-            }
-            val body = conn.inputStream.bufferedReader().use { it.readText() }
-            conn.disconnect()
-            val json = JSONObject(body)
-            val down = json.optLong("downloadTotal", -1)
-            val up = json.optLong("uploadTotal", -1)
-            if (down >= 0 && up >= 0) Pair(down, up) else null
-        } catch (e: Exception) {
-            Log.w("VPN", "API traffic fetch failed: ${e.message}")
-            null
-        }
+    fun stopTrafficPolling() {
+        trafficCollector.stopTrafficPolling()
     }
 
     fun refreshTrafficStats() {
-        val now = System.currentTimeMillis()
-
-        // 1. vpnbridge C-layer traffic counters (TUN-level, most accurate)
-        val bridgeStats = M2mBridgeProcessManager.queryStats()
-        if (bridgeStats != null) {
-            /*
-             * bridge txBytes = bytes written TO TUN (upload: app → proxy)
-             * bridge rxBytes = bytes read FROM TUN (download: proxy → app)
-             */
-            computeTrafficStats(bridgeStats.rxBytes, bridgeStats.txBytes, now)
-            return
-        }
-
-        // 2. Clash.Meta REST API /connections (proxy-level fallback)
-        val apiPair = fetchTrafficFromApi()
-        if (apiPair != null) {
-            /*
-             * API downloadTotal = bytes through proxy (download)
-             * API uploadTotal   = bytes through proxy (upload)
-             */
-            computeTrafficStats(apiPair.first, apiPair.second, now)
-            return
-        }
-
-        // 3. /proc/net/dev (kernel-level, blocked on Android 14+)
-        val iface = tunInterfaceName ?: return
-        val pair = readTrafficFromProcNetDev(iface) ?: return
-        computeTrafficStats(pair.first, pair.second, now)
-    }
-
-    private fun computeTrafficStats(rx: Long, tx: Long, now: Long) {
-        if (prevTimestampMs == 0L) {
-            baselineRxBytes = rx
-            baselineTxBytes = tx
-            prevRxBytes = rx
-            prevTxBytes = tx
-            prevTimestampMs = now
-            trafficStatsFlow.value = M2mTrafficStats(
-                totalRxBytes = 0L,
-                totalTxBytes = 0L,
-            )
-            return
-        }
-        val elapsed = now - prevTimestampMs
-        val rxDelta = (rx - prevRxBytes).coerceAtLeast(0)
-        val txDelta = (tx - prevTxBytes).coerceAtLeast(0)
-        val rxSpeed = if (elapsed > 0) rxDelta * 1000 / elapsed else 0L
-        val txSpeed = if (elapsed > 0) txDelta * 1000 / elapsed else 0L
-        trafficStatsFlow.value = M2mTrafficStats(
-            totalRxBytes = (rx - baselineRxBytes).coerceAtLeast(0),
-            totalTxBytes = (tx - baselineRxBytes).coerceAtLeast(0),
-            rxSpeed = rxSpeed,
-            txSpeed = txSpeed,
-        )
-        prevRxBytes = rx
-        prevTxBytes = tx
-        prevTimestampMs = now
+        trafficCollector.refreshTrafficStats()
     }
 
     fun logTrafficStats() {
-        val iface = tunInterfaceName ?: return
-        val pair = readTrafficFromProcNetDev(iface) ?: return
-        val (rx, tx) = pair
-        LogManager.logDebug(
-            "VPN",
-            "Traffic: ↓${formatBytes(rx)} ↑${formatBytes(tx)} | Session: ↓${formatBytes((rx - baselineRxBytes).coerceAtLeast(0))} ↑${formatBytes((tx - baselineTxBytes).coerceAtLeast(0))}",
-        )
-    }
-
-    private fun readTrafficFromProcNetDev(iface: String): Pair<Long, Long>? {
-        return try {
-            val lines = File("/proc/net/dev").readLines()
-            val trimmedLines = lines.map { it.trimStart() }
-            val matchedLine = trimmedLines.firstOrNull { it.startsWith("$iface:") }
-            if (matchedLine == null) {
-                return null
-            }
-            val parts = matchedLine.split("\\s+".toRegex())
-            if (parts.size < 10) {
-                return null
-            }
-            val rx = parts[1].toLongOrNull() ?: return null
-            val tx = parts[9].toLongOrNull() ?: return null
-            Pair(rx, tx)
-        } catch (e: Exception) {
-            Log.d("VPN", "readTrafficFromProcNetDev($iface) failed: ${e.message}")
-            null
-        }
-    }
-
-    private fun formatBytes(bytes: Long): String {
-        return when {
-            bytes < 1024 -> "$bytes B"
-            bytes < 1024 * 1024 -> String.format("%.1f KB", bytes / 1024.0)
-            bytes < 1024 * 1024 * 1024 -> String.format("%.1f MB", bytes / (1024.0 * 1024))
-            else -> String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024))
-        }
+        trafficCollector.logTrafficStats()
     }
 
     fun refresh() {
