@@ -1,9 +1,9 @@
 package info.loveyu.mfca.input
 
 import android.content.Context
-import info.loveyu.mfca.config.LinkInputConfig
-import info.loveyu.mfca.config.ReplayConfig
-import info.loveyu.mfca.config.ReplayProvider
+import info.loveyu.mfca.config.models.LinkInputConfig
+import info.loveyu.mfca.config.models.ReplayConfig
+import info.loveyu.mfca.config.models.ReplayProvider
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.util.GotifyApiConfig
 import info.loveyu.mfca.util.GotifyApiSupport

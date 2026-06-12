@@ -1,7 +1,7 @@
 package info.loveyu.mfca.m2m
 
-import info.loveyu.mfca.config.M2mAccessControlMode
-import info.loveyu.mfca.config.M2mInputConfig
+import info.loveyu.mfca.config.models.M2mAccessControlMode
+import info.loveyu.mfca.config.models.M2mInputConfig
 
 enum class M2mRuleMode {
     rule,

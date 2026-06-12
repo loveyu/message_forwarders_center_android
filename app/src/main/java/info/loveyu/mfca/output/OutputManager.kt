@@ -1,9 +1,11 @@
 package info.loveyu.mfca.output
 
 import android.content.Context
-import info.loveyu.mfca.config.AppConfig
-import info.loveyu.mfca.config.InternalOutputConfig
-import info.loveyu.mfca.config.InternalOutputType
+import info.loveyu.mfca.config.models.AppConfig
+import info.loveyu.mfca.config.models.InternalOutputConfig
+import info.loveyu.mfca.config.models.InternalOutputType
+import info.loveyu.mfca.config.models.LinkOutputConfig
+import info.loveyu.mfca.config.models.LinkType
 import info.loveyu.mfca.queue.QueueManager
 import info.loveyu.mfca.util.LogManager
 import java.lang.ref.WeakReference
@@ -152,12 +154,12 @@ object OutputManager {
         return outputs.mapValues { it.value.isAvailable() }
     }
 
-    private fun createLinkOutput(config: info.loveyu.mfca.config.LinkOutputConfig): Output {
+    private fun createLinkOutput(config: LinkOutputConfig): Output {
         val ctx = contextRef?.get() ?: throw IllegalStateException("OutputManager not initialized")
         val dsn = info.loveyu.mfca.link.LinkManager.getLinkConfig(config.linkId)?.dsn ?: config.linkId
-        return when (info.loveyu.mfca.config.LinkType.fromDsn(dsn)) {
-            info.loveyu.mfca.config.LinkType.websocket -> WebSocketOutput(ctx, config.name, config)
-            info.loveyu.mfca.config.LinkType.tcp -> TcpOutput(ctx, config.name, config)
+        return when (LinkType.fromDsn(dsn)) {
+            LinkType.websocket -> WebSocketOutput(ctx, config.name, config)
+            LinkType.tcp -> TcpOutput(ctx, config.name, config)
             else -> MqttOutput(ctx, config.name, config)
         }
     }

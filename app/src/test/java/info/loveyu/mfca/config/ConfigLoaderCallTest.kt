@@ -1,5 +1,6 @@
 package info.loveyu.mfca.config
 
+import info.loveyu.mfca.config.models.CallType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull

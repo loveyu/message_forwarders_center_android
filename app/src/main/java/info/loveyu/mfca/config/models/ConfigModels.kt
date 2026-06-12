@@ -1,4 +1,4 @@
-package info.loveyu.mfca.config
+package info.loveyu.mfca.config.models
 
 import java.util.concurrent.TimeUnit
 

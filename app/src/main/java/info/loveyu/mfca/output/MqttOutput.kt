@@ -1,7 +1,7 @@
 package info.loveyu.mfca.output
 
 import android.content.Context
-import info.loveyu.mfca.config.LinkOutputConfig
+import info.loveyu.mfca.config.models.LinkOutputConfig
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.queue.QueueManager

@@ -1,7 +1,7 @@
 package info.loveyu.mfca.deadletter
 
 import android.content.Context
-import info.loveyu.mfca.config.DeadLetterConfig
+import info.loveyu.mfca.config.models.DeadLetterConfig
 import info.loveyu.mfca.input.InputMessage
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.util.LogManager

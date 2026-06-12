@@ -1,6 +1,6 @@
 package info.loveyu.mfca.pipeline
 
-import info.loveyu.mfca.config.CallConfig
+import info.loveyu.mfca.config.models.CallConfig
 import info.loveyu.mfca.util.LogManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -9,7 +9,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 

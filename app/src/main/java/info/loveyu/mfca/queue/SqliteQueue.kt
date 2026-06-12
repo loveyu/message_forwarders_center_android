@@ -4,8 +4,8 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
-import info.loveyu.mfca.config.BackoffType
-import info.loveyu.mfca.config.SqliteQueueConfig
+import info.loveyu.mfca.config.models.BackoffType
+import info.loveyu.mfca.config.models.SqliteQueueConfig
 import info.loveyu.mfca.deadletter.DeadLetterHandler
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.StoragePathResolver

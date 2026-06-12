@@ -1,6 +1,6 @@
 package info.loveyu.mfca.pipeline
 
-import info.loveyu.mfca.config.TransformConfig
+import info.loveyu.mfca.config.models.TransformConfig
 import info.loveyu.mfca.input.InputMessage
 import info.loveyu.mfca.util.LogManager
 import org.json.JSONObject

@@ -14,7 +14,7 @@ import android.os.ParcelFileDescriptor
 import androidx.core.app.NotificationCompat
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
-import info.loveyu.mfca.config.M2mInputConfig
+import info.loveyu.mfca.config.models.M2mInputConfig
 import info.loveyu.mfca.plugin.M2mPluginCore
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.m2m.MfcaM2mService

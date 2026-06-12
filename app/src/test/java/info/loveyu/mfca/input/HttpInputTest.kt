@@ -1,7 +1,7 @@
 package info.loveyu.mfca.input
 
-import info.loveyu.mfca.config.HttpInputConfig
-import info.loveyu.mfca.config.LinkConfig
+import info.loveyu.mfca.config.models.HttpInputConfig
+import info.loveyu.mfca.config.models.LinkConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

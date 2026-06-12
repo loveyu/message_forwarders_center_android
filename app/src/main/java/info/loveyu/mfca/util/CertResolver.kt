@@ -2,7 +2,7 @@ package info.loveyu.mfca.util
 
 import android.content.Context
 import android.util.Base64
-import info.loveyu.mfca.config.TlsConfig
+import info.loveyu.mfca.config.models.TlsConfig
 import java.io.File
 import java.io.FileOutputStream
 import java.security.KeyFactory

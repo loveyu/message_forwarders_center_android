@@ -4,8 +4,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import info.loveyu.mfca.clipboard.ClipboardHistoryDbHelper
-import info.loveyu.mfca.config.Duration
-import info.loveyu.mfca.config.InternalOutputConfig
+import info.loveyu.mfca.config.models.Duration
+import info.loveyu.mfca.config.models.InternalOutputConfig
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.util.LogManager
 

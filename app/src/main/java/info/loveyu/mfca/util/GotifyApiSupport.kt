@@ -1,6 +1,6 @@
 package info.loveyu.mfca.util
 
-import info.loveyu.mfca.config.ReplayConfig
+import info.loveyu.mfca.config.models.ReplayConfig
 import info.loveyu.mfca.link.LinkManager
 import java.net.URLDecoder
 

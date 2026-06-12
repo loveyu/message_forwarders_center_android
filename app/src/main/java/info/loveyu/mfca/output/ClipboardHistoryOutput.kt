@@ -3,7 +3,7 @@ package info.loveyu.mfca.output
 import android.content.Context
 import info.loveyu.mfca.clipboard.ClipboardHistoryDbHelper
 import info.loveyu.mfca.clipboard.detectContentType
-import info.loveyu.mfca.config.InternalOutputConfig
+import info.loveyu.mfca.config.models.InternalOutputConfig
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.util.LogManager
 

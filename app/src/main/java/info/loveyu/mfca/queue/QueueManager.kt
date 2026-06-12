@@ -1,7 +1,7 @@
 package info.loveyu.mfca.queue
 
 import android.content.Context
-import info.loveyu.mfca.config.AppConfig
+import info.loveyu.mfca.config.models.AppConfig
 import info.loveyu.mfca.util.LogManager
 import java.lang.ref.WeakReference
 

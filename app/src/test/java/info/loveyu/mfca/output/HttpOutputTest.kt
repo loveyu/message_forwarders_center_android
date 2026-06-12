@@ -1,6 +1,6 @@
 package info.loveyu.mfca.output
 
-import info.loveyu.mfca.config.HttpOutputConfig
+import info.loveyu.mfca.config.models.HttpOutputConfig
 import info.loveyu.mfca.queue.QueueItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

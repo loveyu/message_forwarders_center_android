@@ -1,6 +1,6 @@
 package info.loveyu.mfca.link
 
-import info.loveyu.mfca.config.LinkConfig
+import info.loveyu.mfca.config.models.LinkConfig
 
 /**
  * 连接接口

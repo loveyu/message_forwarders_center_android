@@ -1,6 +1,14 @@
 package info.loveyu.mfca.config
 
-import info.loveyu.mfca.util.LogManager
+import info.loveyu.mfca.config.models.Duration
+import info.loveyu.mfca.config.models.HttpInputConfig
+import info.loveyu.mfca.config.models.InputsConfig
+import info.loveyu.mfca.config.models.LinkInputConfig
+import info.loveyu.mfca.config.models.M2mAccessControlMode
+import info.loveyu.mfca.config.models.M2mInputConfig
+import info.loveyu.mfca.config.models.ReplayConfig
+import info.loveyu.mfca.config.models.ReplayProvider
+import info.loveyu.mfca.config.models.Udp2RawInputConfig
 
 internal object InputConfigParser {
 
@@ -69,7 +77,8 @@ internal object InputConfigParser {
                     enabled = map["enabled"] as? Boolean ?: true,
                     insecure = map["insecure"] as? Boolean ?: false,
                     accessControlMode = parseM2mAccessControlMode(map["accessControlMode"] as? String),
-                    packages = (map["packages"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+                    packages = (map["packages"] as? List<*>)?.mapNotNull { it as? String }
+                        ?: emptyList(),
                 )
             }
         }

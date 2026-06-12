@@ -1,6 +1,6 @@
 package info.loveyu.mfca.output
 
-import info.loveyu.mfca.config.QueueRefConfig
+import info.loveyu.mfca.config.models.QueueRefConfig
 import info.loveyu.mfca.queue.QueueItem
 
 /**
@@ -13,7 +13,7 @@ import info.loveyu.mfca.queue.QueueItem
 class MultiOutput(
     override val name: String,
     private val subOutputs: List<Output>,
-    override val queueRef: info.loveyu.mfca.config.QueueRefConfig? = null
+    override val queueRef: QueueRefConfig? = null
 ) : Output, FanOut {
 
     override val type: OutputType

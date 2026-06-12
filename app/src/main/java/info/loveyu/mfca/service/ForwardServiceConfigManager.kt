@@ -1,6 +1,6 @@
 package info.loveyu.mfca.service
 
-import info.loveyu.mfca.config.AppConfig
+import info.loveyu.mfca.config.models.AppConfig
 import info.loveyu.mfca.config.ConfigLoader
 import info.loveyu.mfca.deadletter.DeadLetterHandler
 import info.loveyu.mfca.input.InputManager

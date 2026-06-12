@@ -1,6 +1,6 @@
 package info.loveyu.mfca.pipeline
 
-import info.loveyu.mfca.config.OutputFormatStep
+import info.loveyu.mfca.config.models.OutputFormatStep
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

@@ -1,6 +1,6 @@
 package info.loveyu.mfca.input
 
-import info.loveyu.mfca.config.LinkInputConfig
+import info.loveyu.mfca.config.models.LinkInputConfig
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.util.LogManager
 

@@ -1,6 +1,6 @@
 package info.loveyu.mfca.config.schema
 
-import info.loveyu.mfca.config.Duration
+import info.loveyu.mfca.config.models.Duration
 
 object SchemaValidator {
 

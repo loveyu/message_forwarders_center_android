@@ -1,14 +1,13 @@
 package info.loveyu.mfca.ui
 
 import android.content.Context
-import info.loveyu.mfca.config.HttpOutputConfig
-import info.loveyu.mfca.config.InternalOutputConfig
-import info.loveyu.mfca.config.InternalOutputType
-import info.loveyu.mfca.config.LinkOutputConfig
-import info.loveyu.mfca.config.LinkType
+import info.loveyu.mfca.config.models.HttpOutputConfig
+import info.loveyu.mfca.config.models.InternalOutputConfig
+import info.loveyu.mfca.config.models.InternalOutputType
+import info.loveyu.mfca.config.models.LinkOutputConfig
+import info.loveyu.mfca.config.models.LinkType
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.output.OutputManager
-import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.NetworkChecker
 
 internal fun buildHttpOutputStatus(

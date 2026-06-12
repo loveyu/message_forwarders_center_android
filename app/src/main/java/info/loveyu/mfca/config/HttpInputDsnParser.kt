@@ -1,5 +1,10 @@
 package info.loveyu.mfca.config
 
+import info.loveyu.mfca.config.models.BasicAuth
+import info.loveyu.mfca.config.models.BearerAuth
+import info.loveyu.mfca.config.models.CookieAuth
+import info.loveyu.mfca.config.models.HttpInputParsedConfig
+import info.loveyu.mfca.config.models.QueryAuth
 import java.net.URI
 import java.net.URLDecoder
 

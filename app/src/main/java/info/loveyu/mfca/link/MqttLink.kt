@@ -2,8 +2,8 @@ package info.loveyu.mfca.link
 
 import android.content.Context
 import android.os.Build
-import info.loveyu.mfca.config.LinkConfig
-import info.loveyu.mfca.config.LinkType
+import info.loveyu.mfca.config.models.LinkConfig
+import info.loveyu.mfca.config.models.LinkType
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.CertResolver
 import info.loveyu.mfca.util.LogManager
@@ -12,7 +12,6 @@ import org.eclipse.paho.client.mqttv3.MqttAsyncClient
 import org.eclipse.paho.client.mqttv3.MqttCallback
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions
 import org.eclipse.paho.client.mqttv3.MqttMessage
-import org.eclipse.paho.client.mqttv3.MqttToken
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import java.net.InetAddress
 import java.net.URI

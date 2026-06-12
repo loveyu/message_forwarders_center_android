@@ -1,5 +1,7 @@
 package info.loveyu.mfca.config
 
+import info.loveyu.mfca.config.models.LinkRole
+
 internal fun parseStringOrList(value: Any?): List<String> {
     return when (value) {
         is String -> if (value.isBlank()) emptyList() else listOf(value)

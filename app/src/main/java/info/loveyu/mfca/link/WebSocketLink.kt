@@ -1,8 +1,8 @@
 package info.loveyu.mfca.link
 
 import android.content.Context
-import info.loveyu.mfca.config.LinkConfig
-import info.loveyu.mfca.config.LinkType
+import info.loveyu.mfca.config.models.LinkConfig
+import info.loveyu.mfca.config.models.LinkType
 import info.loveyu.mfca.util.CertResolver
 import info.loveyu.mfca.util.LogManager
 import okhttp3.Handshake

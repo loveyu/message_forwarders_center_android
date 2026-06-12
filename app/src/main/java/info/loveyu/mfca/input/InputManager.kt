@@ -1,9 +1,12 @@
 package info.loveyu.mfca.input
 
 import android.content.Context
-import info.loveyu.mfca.config.AppConfig
-import info.loveyu.mfca.config.HttpInputConfig
-import info.loveyu.mfca.config.Udp2RawInputConfig
+import info.loveyu.mfca.config.models.AppConfig
+import info.loveyu.mfca.config.models.HttpInputConfig
+import info.loveyu.mfca.config.models.LinkConfig
+import info.loveyu.mfca.config.models.LinkInputConfig
+import info.loveyu.mfca.config.models.LinkType
+import info.loveyu.mfca.config.models.Udp2RawInputConfig
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.NetworkChecker
@@ -25,7 +28,7 @@ object InputManager {
     )
 
     private val entries = mutableListOf<InputEntry>()
-    private val linkInputConfigs = mutableListOf<info.loveyu.mfca.config.LinkInputConfig>()
+    private val linkInputConfigs = mutableListOf<LinkInputConfig>()
     private var globalMessageListener: ((InputMessage) -> Unit)? = null
     private var applicationContext: Context? = null
 
@@ -374,7 +377,7 @@ object InputManager {
      * 查找指定名称的 link input 配置。
      * 供 GotifyIconEnricher 判断参数是 inputId 还是 linkId 时使用。
      */
-    fun getLinkInputConfigByName(name: String): info.loveyu.mfca.config.LinkInputConfig? =
+    fun getLinkInputConfigByName(name: String): LinkInputConfig? =
         linkInputConfigs.firstOrNull { it.name == name }
 
     /**
@@ -395,12 +398,12 @@ object InputManager {
         }?.input?.getError()
     }
 
-    private fun createLinkInput(config: info.loveyu.mfca.config.LinkInputConfig, links: List<info.loveyu.mfca.config.LinkConfig>): InputSource {
+    private fun createLinkInput(config: LinkInputConfig, links: List<LinkConfig>): InputSource {
         val linkConfig = links.find { it.id == config.linkId }
-        val linkType = linkConfig?.let { info.loveyu.mfca.config.LinkType.fromDsn(it.dsn) } ?: info.loveyu.mfca.config.LinkType.mqtt
+        val linkType = linkConfig?.let { LinkType.fromDsn(it.dsn) } ?: LinkType.mqtt
         return when (linkType) {
-            info.loveyu.mfca.config.LinkType.mqtt -> MqttInput(config)
-            info.loveyu.mfca.config.LinkType.websocket -> WebSocketInput(config)
+            LinkType.mqtt -> MqttInput(config)
+            LinkType.websocket -> WebSocketInput(config)
             else -> TcpInput(config)
         }
     }

@@ -1,7 +1,7 @@
 package info.loveyu.mfca.input
 
 import android.content.Context
-import info.loveyu.mfca.config.Udp2RawInputConfig
+import info.loveyu.mfca.config.models.Udp2RawInputConfig
 import info.loveyu.mfca.plugin.PluginCore
 import info.loveyu.mfca.plugin.PluginManager
 import info.loveyu.mfca.plugin.Udp2RawPluginCore
@@ -10,7 +10,6 @@ import java.io.File
 import java.net.InetAddress
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
 
 class Udp2RawInput(
     private val context: Context,

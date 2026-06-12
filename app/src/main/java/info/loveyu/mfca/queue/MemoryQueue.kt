@@ -1,8 +1,8 @@
 package info.loveyu.mfca.queue
 
-import info.loveyu.mfca.config.BackoffType
-import info.loveyu.mfca.config.MemoryQueueConfig
-import info.loveyu.mfca.config.OverflowStrategy
+import info.loveyu.mfca.config.models.BackoffType
+import info.loveyu.mfca.config.models.MemoryQueueConfig
+import info.loveyu.mfca.config.models.OverflowStrategy
 import info.loveyu.mfca.deadletter.DeadLetterHandler
 import info.loveyu.mfca.util.LogManager
 import kotlinx.coroutines.CoroutineScope

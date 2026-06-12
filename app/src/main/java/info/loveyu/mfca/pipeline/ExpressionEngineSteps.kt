@@ -1,6 +1,6 @@
 package info.loveyu.mfca.pipeline
 
-import info.loveyu.mfca.config.OutputFormatStep
+import info.loveyu.mfca.config.models.OutputFormatStep
 import info.loveyu.mfca.util.LogManager
 import org.json.JSONArray
 import org.json.JSONObject

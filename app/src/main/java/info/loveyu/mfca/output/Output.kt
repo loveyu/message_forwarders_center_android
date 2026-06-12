@@ -1,7 +1,7 @@
 package info.loveyu.mfca.output
 
-import info.loveyu.mfca.config.OutputFormatStep
-import info.loveyu.mfca.config.QueueRefConfig
+import info.loveyu.mfca.config.models.OutputFormatStep
+import info.loveyu.mfca.config.models.QueueRefConfig
 import info.loveyu.mfca.queue.QueueItem
 
 /**

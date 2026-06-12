@@ -1,12 +1,10 @@
 package info.loveyu.mfca.pipeline
 
-import info.loveyu.mfca.config.OutputFormatStep
-import info.loveyu.mfca.config.TransformConfig
+import info.loveyu.mfca.config.models.OutputFormatStep
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 

@@ -1,6 +1,5 @@
 package info.loveyu.mfca.m2m
 
-import android.content.Context
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -8,7 +7,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
-import info.loveyu.mfca.config.M2mAccessControlMode
+import info.loveyu.mfca.config.models.M2mAccessControlMode
 import info.loveyu.mfca.util.LogManager
 import java.io.File
 import java.net.Inet4Address

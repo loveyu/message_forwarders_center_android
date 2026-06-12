@@ -47,7 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.R
-import info.loveyu.mfca.config.M2mAccessControlMode
+import info.loveyu.mfca.config.models.M2mAccessControlMode
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

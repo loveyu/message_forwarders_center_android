@@ -2,10 +2,13 @@ package info.loveyu.mfca.input
 
 import android.util.Base64
 import fi.iki.elonen.NanoHTTPD
-import info.loveyu.mfca.config.CookieAuth
-import info.loveyu.mfca.config.HttpInputConfig
+import info.loveyu.mfca.config.models.CookieAuth
+import info.loveyu.mfca.config.models.HttpInputConfig
 import info.loveyu.mfca.config.HttpInputDsnParser
-import info.loveyu.mfca.config.HttpInputParsedConfig
+import info.loveyu.mfca.config.models.BasicAuth
+import info.loveyu.mfca.config.models.BearerAuth
+import info.loveyu.mfca.config.models.HttpInputParsedConfig
+import info.loveyu.mfca.config.models.QueryAuth
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.NetworkChecker
 import org.json.JSONObject
@@ -197,7 +200,7 @@ class HttpInput(
             return true
         }
 
-        private fun authenticateBasic(session: NanoHTTPD.IHTTPSession, basicAuth: info.loveyu.mfca.config.BasicAuth): Boolean {
+        private fun authenticateBasic(session: NanoHTTPD.IHTTPSession, basicAuth: BasicAuth): Boolean {
             val authHeader = session.headers["authorization"] ?: return false
 
             if (!authHeader.startsWith("Basic ")) return false
@@ -210,12 +213,12 @@ class HttpInput(
             return parts[0] == basicAuth.username && parts[1] == basicAuth.password
         }
 
-        private fun authenticateBearer(session: NanoHTTPD.IHTTPSession, bearerAuth: info.loveyu.mfca.config.BearerAuth): Boolean {
+        private fun authenticateBearer(session: NanoHTTPD.IHTTPSession, bearerAuth: BearerAuth): Boolean {
             val authHeader = session.headers["authorization"] ?: return false
             return authHeader == "Bearer ${bearerAuth.token}"
         }
 
-        private fun authenticateQuery(session: NanoHTTPD.IHTTPSession, queryAuth: info.loveyu.mfca.config.QueryAuth): Boolean {
+        private fun authenticateQuery(session: NanoHTTPD.IHTTPSession, queryAuth: QueryAuth): Boolean {
             return parseQueryParameters(session.queryParameterString)[queryAuth.key] == queryAuth.value
         }
 

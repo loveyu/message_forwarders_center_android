@@ -1,8 +1,8 @@
 package info.loveyu.mfca.ui
 
 import android.content.Context
-import info.loveyu.mfca.config.PipelineStep
-import info.loveyu.mfca.config.RuleConfig
+import info.loveyu.mfca.config.models.PipelineStep
+import info.loveyu.mfca.config.models.RuleConfig
 import info.loveyu.mfca.queue.Queue
 import info.loveyu.mfca.queue.QueueType
 import info.loveyu.mfca.service.ForwardService

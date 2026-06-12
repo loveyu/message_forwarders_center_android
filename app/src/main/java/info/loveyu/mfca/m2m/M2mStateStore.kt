@@ -1,7 +1,7 @@
 package info.loveyu.mfca.m2m
 
 import android.content.Context
-import info.loveyu.mfca.config.M2mAccessControlMode
+import info.loveyu.mfca.config.models.M2mAccessControlMode
 import org.json.JSONArray
 import java.util.UUID
 

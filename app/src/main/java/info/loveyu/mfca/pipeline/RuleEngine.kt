@@ -3,8 +3,9 @@ package info.loveyu.mfca.pipeline
 import android.content.Context
 import android.provider.Settings
 import info.loveyu.mfca.clipboard.ClipboardHistoryDbHelper
-import info.loveyu.mfca.config.AppConfig
-import info.loveyu.mfca.config.RuleConfig
+import info.loveyu.mfca.config.models.AppConfig
+import info.loveyu.mfca.config.models.CallConfig
+import info.loveyu.mfca.config.models.RuleConfig
 import info.loveyu.mfca.input.InputMessage
 import info.loveyu.mfca.output.Output
 import info.loveyu.mfca.output.OutputManager
@@ -31,7 +32,7 @@ class RuleEngine(
 ) {
     private val rules = mutableMapOf<String, RuleConfig>()
     private val inputRulesMap = ConcurrentHashMap<String, MutableList<RuleConfig>>()
-    private val callConfigs = ConcurrentHashMap<String, info.loveyu.mfca.config.CallConfig>()
+    private val callConfigs = ConcurrentHashMap<String, CallConfig>()
 
     internal val expressionEngine = ExpressionEngine()
 

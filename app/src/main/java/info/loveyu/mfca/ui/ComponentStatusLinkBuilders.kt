@@ -1,8 +1,8 @@
 package info.loveyu.mfca.ui
 
 import android.content.Context
-import info.loveyu.mfca.config.LinkConfig
-import info.loveyu.mfca.config.LinkType
+import info.loveyu.mfca.config.models.LinkConfig
+import info.loveyu.mfca.config.models.LinkType
 import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.service.ForwardService

@@ -2,7 +2,7 @@ package info.loveyu.mfca.m2m
 
 import android.content.Context
 import info.loveyu.mfca.config.ConfigLoader
-import info.loveyu.mfca.config.GeoConfig
+import info.loveyu.mfca.config.models.GeoConfig
 import info.loveyu.mfca.util.LogManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

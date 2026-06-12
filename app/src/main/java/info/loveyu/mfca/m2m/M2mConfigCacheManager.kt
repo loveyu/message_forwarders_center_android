@@ -1,7 +1,7 @@
 package info.loveyu.mfca.m2m
 
 import android.content.Context
-import info.loveyu.mfca.config.M2mInputConfig
+import info.loveyu.mfca.config.models.M2mInputConfig
 import info.loveyu.mfca.util.HttpDownloader
 import info.loveyu.mfca.util.LogManager
 import org.json.JSONObject

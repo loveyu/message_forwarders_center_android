@@ -1,10 +1,10 @@
 package info.loveyu.mfca.ui
 
 import android.content.Context
-import info.loveyu.mfca.config.AppConfig
-import info.loveyu.mfca.config.HttpInputConfig
-import info.loveyu.mfca.config.LinkInputConfig
-import info.loveyu.mfca.config.Udp2RawInputConfig
+import info.loveyu.mfca.config.models.AppConfig
+import info.loveyu.mfca.config.models.HttpInputConfig
+import info.loveyu.mfca.config.models.LinkInputConfig
+import info.loveyu.mfca.config.models.Udp2RawInputConfig
 import info.loveyu.mfca.input.HttpInput
 import info.loveyu.mfca.input.HttpVirtualInput
 import info.loveyu.mfca.input.InputManager

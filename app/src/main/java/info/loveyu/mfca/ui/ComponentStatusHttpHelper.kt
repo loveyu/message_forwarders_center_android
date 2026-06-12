@@ -1,9 +1,9 @@
 package info.loveyu.mfca.ui
 
-import info.loveyu.mfca.config.HttpInputConfig
+import info.loveyu.mfca.config.models.HttpInputConfig
 import info.loveyu.mfca.config.HttpInputDsnParser
-import info.loveyu.mfca.config.HttpInputParsedConfig
-import info.loveyu.mfca.config.LinkConfig
+import info.loveyu.mfca.config.models.HttpInputParsedConfig
+import info.loveyu.mfca.config.models.LinkConfig
 import info.loveyu.mfca.util.NetworkChecker
 import java.net.URI
 

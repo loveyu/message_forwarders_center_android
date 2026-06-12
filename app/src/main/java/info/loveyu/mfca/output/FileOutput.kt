@@ -1,7 +1,7 @@
 package info.loveyu.mfca.output
 
 import android.content.Context
-import info.loveyu.mfca.config.InternalOutputConfig
+import info.loveyu.mfca.config.models.InternalOutputConfig
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.StoragePathResolver

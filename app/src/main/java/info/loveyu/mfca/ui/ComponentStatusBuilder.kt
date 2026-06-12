@@ -1,7 +1,7 @@
 package info.loveyu.mfca.ui
 
 import android.content.Context
-import info.loveyu.mfca.config.AppConfig
+import info.loveyu.mfca.config.models.AppConfig
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.queue.QueueManager
 

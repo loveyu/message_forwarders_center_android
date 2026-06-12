@@ -1,5 +1,7 @@
 package info.loveyu.mfca.config
 
+import info.loveyu.mfca.config.models.HttpOutputConfig
+import info.loveyu.mfca.config.models.OutputFormatStep
 import info.loveyu.mfca.pipeline.ExpressionEngine
 import info.loveyu.mfca.pipeline.applyFormatSteps
 import info.loveyu.mfca.util.LogManager
@@ -43,7 +45,12 @@ class ConfigLoaderHttpOutputTest {
             HttpOutputConfig(
                 name = "gps_logger_output",
                 url = "https://example.com",
-                format = listOf(OutputFormatStep(target = "\$header.X-Trace-Id", template = "{data.traceId}")),
+                format = listOf(
+                    OutputFormatStep(
+                        target = "\$header.X-Trace-Id",
+                        template = "{data.traceId}"
+                    )
+                ),
                 headers =
                     linkedMapOf(
                         "content-type" to "{headers.Content-Type}",
