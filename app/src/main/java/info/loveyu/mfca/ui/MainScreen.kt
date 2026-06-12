@@ -22,26 +22,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Science
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -56,125 +45,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.AllComponentsActivity
-import info.loveyu.mfca.ConfigActivity
-import info.loveyu.mfca.HelpActivity
 import info.loveyu.mfca.R
-import info.loveyu.mfca.SettingsActivity
-import info.loveyu.mfca.test.TestHubActivity
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.service.ForwardService
-import info.loveyu.mfca.ui.theme.BadgeDisabledDark
-import info.loveyu.mfca.ui.theme.BadgeDisabledLight
-import info.loveyu.mfca.ui.theme.BadgeEnabledDark
-import info.loveyu.mfca.ui.theme.BadgeEnabledLight
-import info.loveyu.mfca.ui.theme.DisabledChipBgDark
-import info.loveyu.mfca.ui.theme.DisabledChipBgLight
-import info.loveyu.mfca.ui.theme.DisabledChipBorderDark
-import info.loveyu.mfca.ui.theme.DisabledChipBorderLight
-import info.loveyu.mfca.ui.theme.DisabledChipTextDark
-import info.loveyu.mfca.ui.theme.DisabledChipTextLight
-import info.loveyu.mfca.ui.theme.HttpInputChipBgDark
-import info.loveyu.mfca.ui.theme.HttpInputChipBgLight
-import info.loveyu.mfca.ui.theme.HttpInputChipBorderDark
-import info.loveyu.mfca.ui.theme.HttpInputChipBorderLight
-import info.loveyu.mfca.ui.theme.HttpInputChipTextDark
-import info.loveyu.mfca.ui.theme.HttpInputChipTextLight
-import info.loveyu.mfca.ui.theme.LinkChipBgDark
-import info.loveyu.mfca.ui.theme.LinkChipBgLight
-import info.loveyu.mfca.ui.theme.LinkChipBorderDark
-import info.loveyu.mfca.ui.theme.LinkChipBorderLight
-import info.loveyu.mfca.ui.theme.LinkChipTextDark
-import info.loveyu.mfca.ui.theme.LinkChipTextLight
-import info.loveyu.mfca.ui.theme.LinkInputChipBgDark
-import info.loveyu.mfca.ui.theme.LinkInputChipBgLight
-import info.loveyu.mfca.ui.theme.LinkInputChipBorderDark
-import info.loveyu.mfca.ui.theme.LinkInputChipBorderLight
-import info.loveyu.mfca.ui.theme.LinkInputChipTextDark
-import info.loveyu.mfca.ui.theme.LinkInputChipTextLight
-import info.loveyu.mfca.ui.theme.Udp2RawChipBgDark
-import info.loveyu.mfca.ui.theme.Udp2RawChipBgLight
-import info.loveyu.mfca.ui.theme.Udp2RawChipBorderDark
-import info.loveyu.mfca.ui.theme.Udp2RawChipBorderLight
-import info.loveyu.mfca.ui.theme.Udp2RawChipTextDark
-import info.loveyu.mfca.ui.theme.Udp2RawChipTextLight
-import info.loveyu.mfca.ui.theme.OutputChipBgDark
-import info.loveyu.mfca.ui.theme.OutputChipBgLight
-import info.loveyu.mfca.ui.theme.OutputChipBorderDark
-import info.loveyu.mfca.ui.theme.OutputChipBorderLight
-import info.loveyu.mfca.ui.theme.OutputChipTextDark
-import info.loveyu.mfca.ui.theme.OutputChipTextLight
-import info.loveyu.mfca.ui.theme.QueueChipBgDark
-import info.loveyu.mfca.ui.theme.QueueChipBgLight
-import info.loveyu.mfca.ui.theme.QueueChipBorderDark
-import info.loveyu.mfca.ui.theme.QueueChipBorderLight
-import info.loveyu.mfca.ui.theme.QueueChipTextDark
-import info.loveyu.mfca.ui.theme.QueueChipTextLight
-import info.loveyu.mfca.ui.theme.StatusDisabledDark
-import info.loveyu.mfca.ui.theme.StatusDisabledLight
-import info.loveyu.mfca.ui.theme.StatusRunningDark
-import info.loveyu.mfca.ui.theme.StatusRunningLight
 import info.loveyu.mfca.util.Preferences
-
-@Composable
-fun MainTopBar() {
-    val context = LocalContext.current
-    var showOverflowMenu by remember { mutableStateOf(false) }
-
-    TopAppBar(
-        title = { Text(stringResource(R.string.app_name)) },
-        actions = {
-            Box {
-                IconButton(onClick = { showOverflowMenu = true }) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "菜单"
-                    )
-                }
-                DropdownMenu(
-                    expanded = showOverflowMenu,
-                    onDismissRequest = { showOverflowMenu = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.config_management)) },
-                        leadingIcon = { Icon(Icons.Default.Build, contentDescription = null) },
-                        onClick = {
-                            showOverflowMenu = false
-                            context.startActivity(Intent(context, ConfigActivity::class.java))
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.sample_configs)) },
-                        leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
-                        onClick = {
-                            showOverflowMenu = false
-                            context.startActivity(Intent(context, HelpActivity::class.java))
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.test_hub_menu)) },
-                        leadingIcon = { Icon(Icons.Default.Science, contentDescription = null) },
-                        onClick = {
-                            showOverflowMenu = false
-                            context.startActivity(Intent(context, TestHubActivity::class.java))
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.system_settings)) },
-                        leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                        onClick = {
-                            showOverflowMenu = false
-                            context.startActivity(Intent(context, SettingsActivity::class.java))
-                        }
-                    )
-                }
-            }
-        }
-    )
-}
 
 @Composable
 fun MainScreen(
@@ -184,14 +60,12 @@ fun MainScreen(
 ) {
     val context = LocalContext.current
     val preferences = remember { Preferences(context) }
-
     var isRunning by remember { mutableStateOf(ForwardService.isRunning) }
     var isStarting by remember { mutableStateOf(ForwardService.isStarting) }
     var componentStateVersion by remember { mutableIntStateOf(0) }
     val detailSheetState = rememberModalBottomSheetState()
     var showComponentSheet by remember { mutableStateOf(false) }
     var selectedComponentKey by remember { mutableStateOf<ComponentSelectionKey?>(null) }
-
     val listState = rememberLazyListState()
 
     LaunchedEffect(Unit) {
@@ -229,7 +103,9 @@ fun MainScreen(
 
     val networkStateVersion by LinkManager.networkStateVersion.collectAsState()
     val hasConfig = ForwardService.currentConfig != null
-    val allComponents = remember(isRunning, networkStateVersion, hasConfig, componentStateVersion) {
+    val allComponents = remember(
+        isRunning, networkStateVersion, hasConfig, componentStateVersion
+    ) {
         if (!isRunning && !hasConfig) emptyList() else getAllComponentStatuses(context)
     }
     val enabledComponents = remember(allComponents) { allComponents.filter { it.isEnabled } }
@@ -246,10 +122,11 @@ fun MainScreen(
             .padding(horizontal = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // 顶部状态卡片
         Card(modifier = Modifier.fillMaxWidth()) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -303,13 +180,9 @@ fun MainScreen(
             }
         }
 
-        // 组件状态卡片
         if (isRunning) {
             val totalCount = enabledComponents.size + disabledComponents.size
-
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -329,22 +202,31 @@ fun MainScreen(
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.clickable {
-                                    context.startActivity(Intent(context, AllComponentsActivity::class.java))
+                                    context.startActivity(
+                                        Intent(context, AllComponentsActivity::class.java)
+                                    )
                                 }
                             )
                         }
                         if (totalCount > 0) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 if (enabledComponents.isNotEmpty()) {
-                                    ComponentCountBadge(count = enabledComponents.size, label = "启用", isEnabled = true)
+                                    ComponentCountBadge(
+                                        count = enabledComponents.size,
+                                        label = "启用",
+                                        isEnabled = true
+                                    )
                                 }
                                 if (disabledComponents.isNotEmpty()) {
-                                    ComponentCountBadge(count = disabledComponents.size, label = "未启用", isEnabled = false)
+                                    ComponentCountBadge(
+                                        count = disabledComponents.size,
+                                        label = "未启用",
+                                        isEnabled = false
+                                    )
                                 }
                             }
                         }
                     }
-
                     if (totalCount > 0) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(
@@ -354,16 +236,24 @@ fun MainScreen(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             enabledComponents.take(5).forEach { component ->
-                                ComponentChip(component = component, isEnabled = true, onClick = {
-                                    selectedComponentKey = ComponentSelectionKey(component.id, component.type)
-                                    showComponentSheet = true
-                                })
+                                ComponentChip(
+                                    component = component, isEnabled = true, onClick = {
+                                        selectedComponentKey = ComponentSelectionKey(
+                                            component.id, component.type
+                                        )
+                                        showComponentSheet = true
+                                    }
+                                )
                             }
                             disabledComponents.take(5).forEach { component ->
-                                ComponentChip(component = component, isEnabled = false, onClick = {
-                                    selectedComponentKey = ComponentSelectionKey(component.id, component.type)
-                                    showComponentSheet = true
-                                })
+                                ComponentChip(
+                                    component = component, isEnabled = false, onClick = {
+                                        selectedComponentKey = ComponentSelectionKey(
+                                            component.id, component.type
+                                        )
+                                        showComponentSheet = true
+                                    }
+                                )
                             }
                         }
                     } else {
@@ -378,7 +268,6 @@ fun MainScreen(
             }
         }
 
-        // 日志卡片
         LogSection(
             preferences = preferences,
             listState = listState,
@@ -400,5 +289,3 @@ fun MainScreen(
         )
     }
 }
-
-
