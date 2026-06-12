@@ -6,7 +6,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import info.loveyu.mfca.MainActivity
+import info.loveyu.mfca.ui.main.MainActivity
 import info.loveyu.mfca.config.models.AppConfig
 import info.loveyu.mfca.pipeline.core.RuleEngine
 import info.loveyu.mfca.deadletter.DeadLetterHandler

@@ -1,4 +1,4 @@
-package info.loveyu.mfca
+package info.loveyu.mfca.ui.main
 
 import android.Manifest
 import android.content.Intent
@@ -33,6 +33,7 @@ import info.loveyu.mfca.ui.NotifyHistoryContent
 import info.loveyu.mfca.ui.NotifyHistoryTopBar
 import info.loveyu.mfca.ui.M2mScreen
 import info.loveyu.mfca.ui.theme.MfcaTheme
+import info.loveyu.mfca.R
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
 import info.loveyu.mfca.ui.config.ConfigActivity

@@ -4,7 +4,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import info.loveyu.mfca.MainActivity
+import info.loveyu.mfca.ui.main.MainActivity
 import info.loveyu.mfca.R
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.LogManager

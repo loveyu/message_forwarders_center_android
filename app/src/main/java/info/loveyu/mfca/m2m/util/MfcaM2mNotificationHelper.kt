@@ -7,7 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
-import info.loveyu.mfca.MainActivity
+import info.loveyu.mfca.ui.main.MainActivity
 import info.loveyu.mfca.m2m.service.MfcaM2mService
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.service.buildNotificationText

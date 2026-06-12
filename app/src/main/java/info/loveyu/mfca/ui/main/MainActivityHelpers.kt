@@ -22,7 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import info.loveyu.mfca.MainActivity
+import info.loveyu.mfca.ui.main.MainActivity
 import info.loveyu.mfca.R
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.util.AppStatusManager

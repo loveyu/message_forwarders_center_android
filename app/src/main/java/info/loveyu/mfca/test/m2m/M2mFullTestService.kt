@@ -12,7 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import androidx.core.app.NotificationCompat
-import info.loveyu.mfca.MainActivity
+import info.loveyu.mfca.ui.main.MainActivity
 import info.loveyu.mfca.R
 import info.loveyu.mfca.config.models.M2mInputConfig
 import info.loveyu.mfca.plugin.M2mPluginCore

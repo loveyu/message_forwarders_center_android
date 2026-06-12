@@ -12,7 +12,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import info.loveyu.mfca.MainActivity
+import info.loveyu.mfca.ui.main.MainActivity
 import info.loveyu.mfca.config.models.InternalOutputConfig
 import info.loveyu.mfca.config.models.NotifyOptions
 import info.loveyu.mfca.notification.NotifyHistoryDbHelper

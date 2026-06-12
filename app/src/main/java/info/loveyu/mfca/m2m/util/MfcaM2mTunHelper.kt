@@ -5,7 +5,7 @@ import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.app.PendingIntent
 import android.content.Intent
-import info.loveyu.mfca.MainActivity
+import info.loveyu.mfca.ui.main.MainActivity
 import info.loveyu.mfca.R
 import info.loveyu.mfca.config.models.M2mAccessControlMode
 import info.loveyu.mfca.m2m.models.M2mCandidateState

@@ -1,4 +1,4 @@
-package info.loveyu.mfca
+package info.loveyu.mfca.app
 
 import android.app.Activity
 import android.app.Application
