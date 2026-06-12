@@ -15,6 +15,7 @@ import info.loveyu.mfca.config.LinkConfig
 import info.loveyu.mfca.config.LinkType
 import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.service.ForwardService
+import info.loveyu.mfca.service.refreshStats
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.NetworkChecker
 import kotlinx.coroutines.flow.MutableStateFlow

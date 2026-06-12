@@ -16,6 +16,7 @@ import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
 import info.loveyu.mfca.plugin.M2mPluginCore
 import info.loveyu.mfca.service.ForwardService
+import info.loveyu.mfca.service.buildNotificationText
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.NetworkChecker
 import kotlinx.coroutines.CoroutineScope

@@ -9,30 +9,21 @@ import android.os.IBinder
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.config.AppConfig
 import info.loveyu.mfca.config.AppStatusConfig
-import info.loveyu.mfca.config.ConfigLoader
+import info.loveyu.mfca.pipeline.RuleEngine
 import info.loveyu.mfca.deadletter.DeadLetterHandler
 import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.input.InputMessage
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.output.OutputManager
-import info.loveyu.mfca.pipeline.RuleEngine
 import info.loveyu.mfca.queue.QueueManager
 import info.loveyu.mfca.receiver.ServiceWatchdogJob
-import info.loveyu.mfca.server.HttpServer
-import info.loveyu.mfca.server.MessageForwarder
 import info.loveyu.mfca.util.AppStatusManager
 import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
-import info.loveyu.mfca.util.NetworkChecker
 import info.loveyu.mfca.util.Preferences
-import info.loveyu.mfca.m2m.MfcaM2mService
 import info.loveyu.mfca.m2m.M2mManager
-import info.loveyu.mfca.m2m.M2mRuntimeStatus
-import androidx.core.content.ContextCompat
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.TimeUnit
 
 class ForwardService : Service() {
 
@@ -50,13 +41,6 @@ class ForwardService : Service() {
         const val ACTION_TOGGLE_WAKELOCK = "info.loveyu.mfca.action.TOGGLE_WAKELOCK"
         const val ACTION_TOGGLE_WIFILOCK = "info.loveyu.mfca.action.TOGGLE_WIFILOCK"
 
-        /** 失败计数重置间隔：每 20 个 tick（默认 tick=40s 时约 13 分钟） */
-        private const val FAILURE_RESET_TICK_INTERVAL = 20
-
-        /** 事件触发 tick 的最小间隔：5 秒，防止事件风暴 */
-        private const val MIN_TICK_INTERVAL_MS = 5_000L
-        private const val NOTIFICATION_PRESENCE_CHECK_INTERVAL_MS = 10 * 60 * 1000L
-
         /**
          * 由外部事件触发一次提前 tick（网络变更、前后台切换等）。
          * 仅当距上次 tick 超过最小间隔时才执行，执行后重置周期定时器。
@@ -67,58 +51,59 @@ class ForwardService : Service() {
 
         @Volatile
         var isRunning = false
-            private set
+            internal set
 
         @Volatile
         var isStarting = false
-            private set
+            internal set
 
         @Volatile
         var receivedCount = 0
-            private set
+            internal set
 
         @Volatile
         var forwardedCount = 0
-            private set
+            internal set
 
         @Volatile
         var isReceivingEnabled = true
-            private set
+            internal set
 
         @Volatile
         var isForwardingEnabled = true
-            private set
+            internal set
 
         @Volatile
         var isWakeLockEnabled = false
-            private set
+            internal set
 
         @Volatile
         var isWifiLockEnabled = false
-            private set
+            internal set
 
         // 简写首字母统计
         @Volatile
         var linkCount = 0
-            private set
+            internal set
 
         @Volatile
         var inputCount = 0
-            private set
+            internal set
 
         @Volatile
         var outputCount = 0
-            private set
+            internal set
 
         var onStatsChanged: (() -> Unit)? = null
         var onStartFailed: ((String) -> Unit)? = null
 
-        private var serviceInstance: ForwardService? = null
+        var serviceInstance: ForwardService? = null
+            internal set
 
         // Current loaded config
         @Volatile
         var currentConfig: AppConfig? = null
-            private set
+            internal set
 
         // Current config URL
         @Volatile
@@ -130,129 +115,29 @@ class ForwardService : Service() {
             serviceInstance?.updateNotification()
         }
 
-        fun buildNotificationText(): String {
-            val m2mState = M2mManager.state.value
-            if (isRunning) {
-                return buildString {
-                    append("L${linkCount} I${inputCount} O${outputCount}")
-                    if (!isReceivingEnabled) append(" | 暂停接收")
-                    if (!isForwardingEnabled) append(" | 暂停转发")
-                    if (isWakeLockEnabled) append(" | W锁")
-                    if (isWifiLockEnabled) append(" | WiFi锁")
-                    when (m2mState.runtimeStatus) {
-                        M2mRuntimeStatus.running -> append(" | m2m")
-                        M2mRuntimeStatus.disabled -> { }
-                        else -> if (m2mState.statusMessage.isNotBlank()) append(" | ${m2mState.statusMessage}")
-                    }
-                }
-            }
-            return if (m2mState.runtimeStatus != M2mRuntimeStatus.disabled && m2mState.statusMessage.isNotBlank()) {
-                m2mState.statusMessage
-            } else {
-                "已停止"
-            }
-        }
-
-        fun refreshStats() {
-            // Only count enabled components based on whenCondition/deny
-            val config = currentConfig
-            if (config != null) {
-                val ctx = serviceInstance ?: return
-                linkCount = config.links.count { link ->
-                    NetworkChecker.shouldEnable(ctx, link.whenCondition, link.deny)
-                }
-                inputCount = config.inputs.http.count { input ->
-                    NetworkChecker.shouldEnable(ctx, input.whenCondition, input.deny)
-                } + config.inputs.link.count { input ->
-                    NetworkChecker.shouldEnable(ctx, input.whenCondition, input.deny)
-                } + config.inputs.udp2raw.count { input ->
-                    input.enabled && NetworkChecker.shouldEnable(ctx, input.whenCondition, input.deny)
-                } + config.inputs.m2m.count { input ->
-                    input.enabled && NetworkChecker.shouldEnable(ctx, input.whenCondition, input.deny)
-                }
-                // HTTP and Internal outputs don't have whenCondition/deny, so always enabled
-                // Only Link outputs have whenCondition/deny
-                outputCount = config.outputs.http.size + config.outputs.internal.size +
-                    config.outputs.link.count { output ->
-                        NetworkChecker.shouldEnable(ctx, output.whenCondition, output.deny)
-                    }
-            } else {
-                // Fallback to all components if config not loaded yet
-                linkCount = LinkManager.getAllLinks().size
-                inputCount = InputManager.getAllInputs().size
-                outputCount = OutputManager.getAllOutputs().size
-            }
-            onStatsChanged?.invoke()
-            serviceInstance?.updateNotification()
-        }
-
-        fun loadConfig(yamlContent: String, configUrl: String = ""): Boolean {
-            return try {
-                val config = ConfigLoader.loadConfig(yamlContent)
-                currentConfigUrl = configUrl
-                serviceInstance?.applyConfig(config)
-                true
-            } catch (e: Exception) {
-                LogManager.logWarn("CONFIG", "Failed to load config: ${e.message}")
-                false
-            }
-        }
-
-        fun updateStatus(configUrl: String = currentConfigUrl) {
-            serviceInstance?.saveStatus()
-        }
-
         fun clearIconCaches() {
-            serviceInstance?.ruleEngine?.clearEnricherCaches()
+            serviceInstance?.ruleEngineRef?.clearEnricherCaches()
         }
     }
 
-    private var httpServer: HttpServer? = null
-    private var legacyMode = false
     private lateinit var preferences: Preferences
 
     // New architecture components
-    private var ruleEngine: RuleEngine? = null
+    @Volatile
+    var ruleEngineRef: RuleEngine? = null
 
     // 统一调度器：替代原来分散的 statsScheduler + configExecutor
     // 同时处理周期性 tick 和一次性 config 加载任务
     private val appScheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
-    private val tickScheduler = CoalescingTicker(
-        scheduler = appScheduler,
-        onTick = { onTick() },
-        onError = { e -> LogManager.logError("SERVICE", "Tick execution error: ${e.message}") }
-    )
-    private var earlyTickFuture: ScheduledFuture<*>? = null
-    private var tickCount = 0
-
-    // tick 间隔，从 config.scheduler 读取，默认 40s
-    @Volatile
-    private var tickIntervalMs: Long = 40_000L
-
-    // 上次 tick 执行时间，用于事件触发时的最小间隔判断
-    @Volatile
-    private var lastTickTime: Long = 0L
-    @Volatile
-    private var lastNotificationPresenceCheckMs: Long = 0L
-
-    // 充电状态：影响 tick 间隔
-    @Volatile
-    private var isCharging = false
-
-    // 配置的两个间隔值
-    @Volatile
-    private var normalTickIntervalMs: Long = 40_000L
-    @Volatile
-    private var chargingTickIntervalMs: Long = 40_000L
+    private val tickController by lazy { ForwardServiceTickController(this, appScheduler) }
+    private val configManager by lazy { ForwardServiceConfigManager(this, tickController, lockController, appScheduler) }
 
     // Lock timeout from config (0 = permanent)
     @Volatile
-    private var wakeLockTimeoutMs: Long = 3_600_000L // default 1h
+    var wakeLockTimeoutMs: Long = 3_600_000L // default 1h
     @Volatile
-    private var wifiLockTimeoutMs: Long = 3_600_000L // default 1h
+    var wifiLockTimeoutMs: Long = 3_600_000L // default 1h
 
-    @Volatile
-    private var isApplyingConfig = false
     @Volatile
     private var destroyReason = "unknown"
     private val notificationDelegate by lazy { ForwardServiceNotificationDelegate(this) }
@@ -263,6 +148,7 @@ class ForwardService : Service() {
         super.onCreate()
         serviceInstance = this
         preferences = Preferences(this)
+        configManager.init(preferences)
         createNotificationChannel()
         val notification = createNotification()
         try {
@@ -277,109 +163,15 @@ class ForwardService : Service() {
             stopSelf()
             return
         }
-        startTick()
+        tickController.start()
         registerScreenEvents()
         scheduleWatchdogJob()
     }
 
-    /**
-     * 启动统一 Ticker
-     */
-    private fun startTick() {
-        cancelEarlyTick()
-        tickScheduler.start(tickIntervalMs)
-    }
-
-    /**
-     * 统一 Ticker 回调：所有定时检查集中执行
-     */
-    private fun onTick() {
-        cancelEarlyTick()
-        if (!isRunning) return
-        val now = System.currentTimeMillis()
-        lastTickTime = now
-        tickCount++
-        LogManager.logDebug("SERVICE", "Tick #$tickCount start")
-
-        // 1. Link 健康检查 + MQTT 心跳
-        val nextLinkTickDelayMs = LinkManager.onTick()
-        val vpnConfigChanged = M2mManager.onTick(this)
-        M2mManager.refresh()
-        if (M2mManager.state.value.isEnabled) {
-            if (vpnConfigChanged) {
-                ContextCompat.startForegroundService(this, MfcaM2mService.refreshIntent(this, forceRestart = true))
-            } else {
-                MfcaM2mService.sync(this)
-            }
-            MfcaM2mService.tryApplyPendingLogLevel()
-        }
-        if (LogManager.isDebugEnabled() && M2mManager.state.value.runtimeStatus == M2mRuntimeStatus.running) {
-            M2mManager.logTrafficStats()
-        }
-
-        // 2. Input 健康检查
-        InputManager.onTick()
-
-        // 3. SqliteQueue 处理（由 tick 触发，异步执行到期批次）
-        QueueManager.onTick()
-
-        // 4. 每 N 个 tick 执行失败重置（≈10 分钟）
-        if (tickCount % FAILURE_RESET_TICK_INTERVAL == 0) {
-            LinkManager.onFailureResetTick()
-        }
-
-        // 5. 通知历史自动清理（暂时关闭，后续调整）
-        // if (tickCount % FAILURE_RESET_TICK_INTERVAL == 0) {
-        //     NotifyHistoryCleanup.onTick(this)
-        // }
-
-
-        // 6. 每 10 分钟兜底检查通知是否仍在，并强制刷新使其保持在通知栏顶部附近
-        if (now - lastNotificationPresenceCheckMs >= NOTIFICATION_PRESENCE_CHECK_INTERVAL_MS) {
-            checkNotificationPresenceNow("periodic_10m")
-            notificationDelegate.invalidateStatsCache()
-            updateNotification()
-        }
-
-        // 7. 批量 flush 日志文件缓冲
-        LogManager.logDebug("SERVICE", "Tick #$tickCount end, flushing logs")
-        LogManager.flush()
-
-        // 8. 批量 flush 文件输出缓冲
-        OutputManager.flushAllFileOutputs()
-
-        scheduleEarlyTick(nextLinkTickDelayMs)
-    }
-
-    /**
-     * 由外部事件触发一次提前 tick。
-     * 检查最小触发间隔，满足则请求执行一次 tick（与周期 tick 合并调度）。
-     */
-    private fun doTriggerTick() {
-        val now = System.currentTimeMillis()
-        val elapsed = now - lastTickTime
-        if (elapsed < MIN_TICK_INTERVAL_MS) {
-            LogManager.logDebug("SERVICE", "TriggerTick debounced: ${elapsed}ms < ${MIN_TICK_INTERVAL_MS}ms")
-            return
-        }
-        LogManager.logDebug("SERVICE", "TriggerTick: event-driven early tick (last was ${elapsed}ms ago)")
-        tickScheduler.request()
-    }
-
-    private fun scheduleEarlyTick(delayMs: Long?) {
-        cancelEarlyTick()
-        if (!isRunning || delayMs == null) return
-        val boundedDelayMs = delayMs.coerceAtLeast(1L)
-        if (boundedDelayMs >= tickIntervalMs) return
-        earlyTickFuture = appScheduler.schedule({
-            tickScheduler.request()
-        }, boundedDelayMs, TimeUnit.MILLISECONDS)
-    }
-
-    private fun cancelEarlyTick() {
-        earlyTickFuture?.cancel(false)
-        earlyTickFuture = null
-    }
+    // Ticker methods delegated to tickController
+    private fun startTick() = tickController.start()
+    fun doTriggerTick() = tickController.doTriggerTick()
+    internal fun invalidateNotificationStatsCache() = notificationDelegate.invalidateStatsCache()
 
     /**
      * 动态注册系统事件广播接收器。
@@ -389,31 +181,17 @@ class ForwardService : Service() {
     private fun registerScreenEvents() {
         screenEventController.register(
             onInitialChargingDetected = { charging ->
-                isCharging = charging
-                tickIntervalMs = if (charging) chargingTickIntervalMs else normalTickIntervalMs
-                LogManager.logDebug("SERVICE", "Initial charging state: $isCharging, tickInterval=${tickIntervalMs}ms")
+                tickController.isCharging = charging
+                tickController.tickIntervalMs = if (charging) tickController.chargingTickIntervalMs else tickController.normalTickIntervalMs
+                LogManager.logDebug("SERVICE", "Initial charging state: ${tickController.isCharging}, tickInterval=${tickController.tickIntervalMs}ms")
             },
-            onChargingChanged = { charging -> updateChargingState(charging) },
-            onTriggerTick = { doTriggerTick() },
+            onChargingChanged = { charging -> tickController.updateChargingState(charging) },
+            onTriggerTick = { tickController.doTriggerTick() },
             onNotificationCheck = { reason -> checkNotificationPresenceNow(reason) }
         )
     }
 
-    /**
-     * 更新充电状态并动态调整 tick 间隔，同时触发一次 tick。
-     */
-    private fun updateChargingState(charging: Boolean) {
-        val oldInterval = tickIntervalMs
-        isCharging = charging
-        tickIntervalMs = if (charging) chargingTickIntervalMs else normalTickIntervalMs
-        if (tickIntervalMs != oldInterval) {
-            LogManager.logDebug("SERVICE", "Tick interval changed: ${oldInterval}ms → ${tickIntervalMs}ms (charging=$charging)")
-            // 重启 tick 使用新间隔
-            startTick()
-        }
-        // 充放电状态变化时立即触发一次 tick
-        doTriggerTick()
-    }
+    // Charging state update delegated to tickController
 
     private fun unregisterScreenEvents() {
         screenEventController.unregister()
@@ -482,7 +260,7 @@ class ForwardService : Service() {
             }
             ACTION_RELOAD_CONFIG -> {
                 stopAll()
-                start()
+                configManager.startWithStoredConfig()
                 checkNotificationPresenceNow("reload_config")
                 return START_STICKY
             }
@@ -508,13 +286,13 @@ class ForwardService : Service() {
         updateNotification()
 
         if (intent?.action == ACTION_START) {
-            start()
+            configManager.startWithStoredConfig()
         } else if (intent?.action == null && wasRunningBeforeRestart) {
             // Service restarted by system (START_STICKY) after being killed
             // Auto-restore previously running service
             LogManager.logInfo("SERVICE", "Auto-restoring service after system restart")
             wasRunningBeforeRestart = false
-            start()
+            configManager.startWithStoredConfig()
         }
 
         return START_STICKY
@@ -565,8 +343,7 @@ class ForwardService : Service() {
         )
         LogManager.flushAndSync()
         stopForeground(STOP_FOREGROUND_REMOVE)
-        tickScheduler.stop()
-        cancelEarlyTick()
+        tickController.stop()
         appScheduler.shutdown()
         unregisterScreenEvents()
         serviceInstance = null
@@ -591,207 +368,27 @@ class ForwardService : Service() {
         }
     }
 
-    private fun start() {
-        // Try to load YAML config if available
-        val savedConfig = preferences.loadFullConfig()
-        if (savedConfig != null && savedConfig.isNotBlank()) {
-            try {
-                val config = ConfigLoader.loadConfig(savedConfig)
-                applyConfig(config)
-                return
-            } catch (e: Exception) {
-                LogManager.logWarn("CONFIG", "Failed to load saved config: ${e.message}")
-            }
-        }
-
-        // No valid config, just mark as not running
-        isRunning = false
-        LogManager.logInfo("SERVICE", "No valid config found, service not started")
-    }
-
     private fun startLegacyMode() {
-        if (legacyMode) return
-        startLegacyModeInternal()
+        configManager.startLegacyMode()
     }
 
-    private fun startLegacyModeInternal() {
-        val port = preferences.port
-        httpServer = HttpServer(port) { body ->
-            if (!isReceivingEnabled) return@HttpServer
-
-            receivedCount++
-            onStatsChanged?.invoke()
-
-            val target = preferences.forwardTarget
-            if (target.isNotEmpty() && isForwardingEnabled) {
-                MessageForwarder.forward(target, body) { success ->
-                    if (success) {
-                        forwardedCount++
-                        onStatsChanged?.invoke()
-                    }
-                }
-            }
-        }
-        httpServer?.startServer()
-        isRunning = true
-        saveStatus()
-        acquireLocks()
-        LogManager.logInfo("SERVICE", "Legacy mode started on port $port")
+    fun stopLegacyMode() {
+        configManager.stopLegacyMode()
     }
 
-    private fun stopLegacyMode() {
-        httpServer?.stopServer()
-        httpServer = null
-        isRunning = false
-        receivedCount = 0
-        forwardedCount = 0
+    fun applyConfig(config: AppConfig) {
+        configManager.applyConfig(config)
     }
 
-    private fun applyConfig(config: AppConfig) {
-        if (isApplyingConfig) {
-            LogManager.logDebug("CONFIG", "Config application already in progress, skipping duplicate")
-            return
-        }
-        isApplyingConfig = true
-        isStarting = true
-        onStatsChanged?.invoke()
-
-        appScheduler.execute {
-            try {
-                applyConfigInternal(config)
-            } finally {
-                isApplyingConfig = false
-                isStarting = false
-                onStatsChanged?.invoke()
-            }
-        }
+    fun startWithStoredConfig(): Boolean {
+        return configManager.startWithStoredConfig()
     }
 
-    private fun applyConfigInternal(config: AppConfig) {
-        LogManager.logInfo("CONFIG", "Applying new configuration...")
-
-        // Stop existing components
-        stopAll()
-
-        currentConfig = config
-        legacyMode = false
-        M2mManager.initialize(this, config.inputs.m2m, config.plugin.m2mCore, config.plugin.downloadProxy)
-
-        // Initialize components in order
-        try {
-            // 1. Initialize Links
-            LogManager.logDebug("CONFIG", "Initializing links...")
-            LinkManager.setContext(this)
-            LinkManager.initialize(config)
-
-            // 2. Initialize Queues
-            LogManager.logDebug("CONFIG", "Initializing queues...")
-            QueueManager.initialize(this, config)
-
-            // 3. Initialize Outputs
-            LogManager.logDebug("CONFIG", "Initializing outputs...")
-            OutputManager.initialize(this, config)
-
-            // 4. Initialize Dead Letter Handler (singleton, wire to rule engine after creation)
-            ruleEngine = RuleEngine(config, this) {
-                forwardedCount++
-                onStatsChanged?.invoke()
-            }
-            DeadLetterHandler.initialize(this, config.deadLetter) { msg ->
-                ruleEngine?.processDeadLetter(msg)
-            }
-
-            // 5. Initialize Inputs with message handler
-            InputManager.setContext(this)
-            InputManager.initialize(config) { message ->
-                handleMessage(message)
-            }
-
-            // 7. Start all components
-            LinkManager.connectAll()
-            QueueManager.startAll()
-            InputManager.startAll()
-
-            // 8. Update tick interval from config
-            normalTickIntervalMs = config.scheduler.effectiveTickInterval.millis
-            chargingTickIntervalMs = config.scheduler.effectiveChargingTickInterval.millis
-            wakeLockTimeoutMs = config.scheduler.wakeLockTimeout.millis
-            wifiLockTimeoutMs = config.scheduler.wifiLockTimeout.millis
-            val newInterval = if (isCharging) chargingTickIntervalMs else normalTickIntervalMs
-            if (newInterval != tickIntervalMs) {
-                tickIntervalMs = newInterval
-                startTick()
-                LogManager.logDebug("CONFIG", "Tick interval updated to ${newInterval}ms (charging=$isCharging)")
-            }
-
-            isRunning = true
-            tickCount = 0
-            refreshStats()
-            saveStatus()
-            acquireLocks()
-            LogManager.logInfo("CONFIG", "Configuration applied successfully. Service started.")
-            updateNotification()
-        } catch (e: Exception) {
-            LogManager.logError("CONFIG", "Failed to apply config: ${e.message}")
-            e.printStackTrace()
-            isRunning = false
-            onStartFailed?.invoke("启动失败: ${e.message}")
-        }
+    fun resetTickCount() {
+        tickController.tickCount = 0
     }
 
-    private fun handleMessage(message: InputMessage) {
-        LogManager.log(LogLevel.DEBUG, "FS", "NATIVE handleMessage: source=${message.source}, data=${String(message.data).take(30)}")
-        LogManager.log(LogLevel.DEBUG, "TRACE:FS", "handleMessage called: source=${message.source}")
-        if (!isReceivingEnabled) {
-            LogManager.logDebug("FS", "接收已暂停, 忽略消息: source=${message.source}, data=${String(message.data).take(200)}")
-            return
-        }
-
-        receivedCount++
-        onStatsChanged?.invoke()
-
-        // Process through rule engine
-        LogManager.logDebug("TRACE:FS", "Calling ruleEngine.process for ${message.source}")
-        ruleEngine?.process(message)
-
-        // Record headers
-        if (message.headers.isNotEmpty()) {
-            LogManager.logDebug("MESSAGE", "Headers: ${message.headers}")
-        }
-        LogManager.logDebug("MESSAGE", "Processed: ${message.source} -> ${String(message.data).take(1000)}")
-    }
-
-    private fun stopAll() {
-        InputManager.stopAll()
-        QueueManager.stopAll()
-        LinkManager.disconnectAll()
-        OutputManager.clear()
-        M2mManager.clear()
-        releaseLocks()
-        cancelEarlyTick()
-        isRunning = false
-        receivedCount = 0
-        forwardedCount = 0
-        ruleEngine?.shutdown()
-        ruleEngine = null
-        DeadLetterHandler.clear()
-        LogManager.logInfo("SERVICE", "All components stopped")
-    }
-
-    /**
-     * 注册 JobScheduler 看门狗（15 分钟触发一次 [ServiceWatchdogJob]）。
-     * JobService 属于 Android 12+ 明确豁免的上下文，允许启动前台服务。
-     * 仅在用户主动停止服务（ACTION_STOP）时取消，崩溃后仍能自动重启。
-     */
-    private fun scheduleWatchdogJob() {
-        ServiceWatchdogJob.schedule(this)
-    }
-
-    private fun cancelWatchdogJob() {
-        ServiceWatchdogJob.cancel(this)
-    }
-
-    private fun saveStatus() {
+    internal fun saveStatus() {
         try {
             val status = AppStatusConfig(
                 configUrl = currentConfigUrl,
@@ -807,6 +404,74 @@ class ForwardService : Service() {
         } catch (e: Exception) {
             LogManager.logWarn("APP_STATUS", "Failed to save status: ${e.message}")
         }
+    }
+
+    internal fun handleMessage(message: InputMessage) {
+        LogManager.log(LogLevel.DEBUG, "FS", "NATIVE handleMessage: source=${message.source}, data=${String(message.data).take(30)}")
+        LogManager.log(LogLevel.DEBUG, "TRACE:FS", "handleMessage called: source=${message.source}")
+        if (!isReceivingEnabled) {
+            LogManager.logDebug("FS", "接收已暂停, 忽略消息: source=${message.source}, data=${String(message.data).take(200)}")
+            return
+        }
+
+        receivedCount++
+        onStatsChanged?.invoke()
+
+        LogManager.logDebug("TRACE:FS", "Calling ruleEngine.process for ${message.source}")
+        ruleEngineRef?.process(message)
+
+        if (message.headers.isNotEmpty()) {
+            LogManager.logDebug("MESSAGE", "Headers: ${message.headers}")
+        }
+        LogManager.logDebug("MESSAGE", "Processed: ${message.source} -> ${String(message.data).take(1000)}")
+    }
+
+    internal fun stopAll() {
+        InputManager.stopAll()
+        QueueManager.stopAll()
+        LinkManager.disconnectAll()
+        OutputManager.clear()
+        M2mManager.clear()
+        releaseLocks()
+        tickController.cancelEarlyTick()
+        isRunning = false
+        receivedCount = 0
+        forwardedCount = 0
+        ruleEngineRef?.shutdown()
+        ruleEngineRef = null
+        DeadLetterHandler.clear()
+        LogManager.logInfo("SERVICE", "All components stopped")
+    }
+
+    internal fun onWakeLockAutoReleased() {
+        isWakeLockEnabled = false
+        saveStatus()
+        notificationDelegate.invalidateStatsCache()
+        updateNotification()
+        onStatsChanged?.invoke()
+        LogManager.logInfo("SERVICE", "WakeLock auto-released after ${wakeLockTimeoutMs / 1000}s timeout")
+    }
+
+    internal fun onWifiLockAutoReleased() {
+        isWifiLockEnabled = false
+        saveStatus()
+        notificationDelegate.invalidateStatsCache()
+        updateNotification()
+        onStatsChanged?.invoke()
+        LogManager.logInfo("SERVICE", "WifiLock auto-released after ${wifiLockTimeoutMs / 1000}s timeout")
+    }
+
+    /**
+     * 注册 JobScheduler 看门狗（15 分钟触发一次 [ServiceWatchdogJob]）。
+     * JobService 属于 Android 12+ 明确豁免的上下文，允许启动前台服务。
+     * 仅在用户主动停止服务（ACTION_STOP）时取消，崩溃后仍能自动重启。
+     */
+    private fun scheduleWatchdogJob() {
+        ServiceWatchdogJob.schedule(this)
+    }
+
+    private fun cancelWatchdogJob() {
+        ServiceWatchdogJob.cancel(this)
     }
 
     @Volatile
@@ -838,12 +503,12 @@ class ForwardService : Service() {
         return notificationDelegate.createNotification()
     }
 
-    private fun updateNotification() {
+    fun updateNotification() {
         notificationDelegate.updateNotification()
     }
 
-    private fun checkNotificationPresenceNow(reason: String) {
-        lastNotificationPresenceCheckMs = System.currentTimeMillis()
+    fun checkNotificationPresenceNow(reason: String) {
+        tickController.lastNotificationPresenceCheckMs = System.currentTimeMillis()
         LogManager.logDebug("SERVICE", "Checking foreground notification presence: $reason")
         updateNotification()
     }
@@ -883,21 +548,4 @@ class ForwardService : Service() {
         lockController.releaseAll()
     }
 
-    private fun onWakeLockAutoReleased() {
-        isWakeLockEnabled = false
-        saveStatus()
-        notificationDelegate.invalidateStatsCache()
-        updateNotification()
-        onStatsChanged?.invoke()
-        LogManager.logInfo("SERVICE", "WakeLock auto-released after ${wakeLockTimeoutMs / 1000}s timeout")
-    }
-
-    private fun onWifiLockAutoReleased() {
-        isWifiLockEnabled = false
-        saveStatus()
-        notificationDelegate.invalidateStatsCache()
-        updateNotification()
-        onStatsChanged?.invoke()
-        LogManager.logInfo("SERVICE", "WifiLock auto-released after ${wifiLockTimeoutMs / 1000}s timeout")
-    }
 }
