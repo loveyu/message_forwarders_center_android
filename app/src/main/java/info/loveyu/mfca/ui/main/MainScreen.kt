@@ -49,7 +49,7 @@ import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.R
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.service.ForwardService
-import info.loveyu.mfca.ui.LogSection
+import info.loveyu.mfca.ui.log.LogSection
 import info.loveyu.mfca.ui.allcomponents.AllComponentsActivity
 import info.loveyu.mfca.ui.component.ComponentDetailSheet
 import info.loveyu.mfca.ui.component.getAllComponentStatuses

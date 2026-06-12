@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.log
 
 import android.content.ClipData
 import android.content.ClipboardManager

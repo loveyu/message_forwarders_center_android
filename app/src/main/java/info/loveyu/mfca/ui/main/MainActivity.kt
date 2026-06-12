@@ -25,7 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.service.ForwardService
-import info.loveyu.mfca.ui.M2mScreen
+import info.loveyu.mfca.ui.m2m.M2mScreen
 import info.loveyu.mfca.ui.clipboard.ClipboardHistoryContent
 import info.loveyu.mfca.ui.clipboard.ClipboardHistoryTopBar
 import info.loveyu.mfca.ui.notification.NotifyHistoryContent

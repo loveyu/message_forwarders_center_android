@@ -54,8 +54,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import info.loveyu.mfca.ui.theme.MfcaTheme
-import info.loveyu.mfca.ui.extractUrls
-import info.loveyu.mfca.ui.openUrl
+import info.loveyu.mfca.ui.component.extractUrls
+import info.loveyu.mfca.ui.component.openUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat

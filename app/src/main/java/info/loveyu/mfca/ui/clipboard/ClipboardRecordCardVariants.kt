@@ -26,7 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.clipboard.ClipboardRecord
-import info.loveyu.mfca.ui.formatRelativeTime
+import info.loveyu.mfca.ui.component.formatRelativeTime
 
 @Composable
 private fun typeBadgeColors(contentType: String): Pair<Color, Color> {

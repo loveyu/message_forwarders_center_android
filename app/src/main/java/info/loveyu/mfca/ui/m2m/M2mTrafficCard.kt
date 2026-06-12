@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.m2m
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

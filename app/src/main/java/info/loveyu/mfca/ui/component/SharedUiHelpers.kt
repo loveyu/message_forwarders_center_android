@@ -1,4 +1,4 @@
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.component
 
 import android.content.Context
 import android.content.Intent

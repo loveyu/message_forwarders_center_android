@@ -48,7 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.notification.NotifyRecord
-import info.loveyu.mfca.ui.formatRelativeTime
+import info.loveyu.mfca.ui.component.formatRelativeTime
 import info.loveyu.mfca.util.cache.IconCacheManager
 
 @Composable

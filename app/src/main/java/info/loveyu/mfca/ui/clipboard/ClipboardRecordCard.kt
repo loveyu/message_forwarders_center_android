@@ -32,7 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.clipboard.ClipboardRecord
 import info.loveyu.mfca.ui.clipboard.ClipboardPreviewActivity
-import info.loveyu.mfca.ui.URL_REGEX
+import info.loveyu.mfca.ui.component.URL_REGEX
 
 @Composable
 fun ClipboardRecordCard(

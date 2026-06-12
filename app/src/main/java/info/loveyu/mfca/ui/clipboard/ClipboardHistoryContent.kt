@@ -38,9 +38,9 @@ import info.loveyu.mfca.ui.clipboard.ClipboardDetailActivity
 import info.loveyu.mfca.ui.clipboard.ClipboardPreviewActivity
 import info.loveyu.mfca.clipboard.ClipboardNotificationHelper
 import info.loveyu.mfca.clipboard.ClipboardRecord
-import info.loveyu.mfca.ui.LinkPickerSheet
-import info.loveyu.mfca.ui.extractUrls
-import info.loveyu.mfca.ui.openUrl
+import info.loveyu.mfca.ui.component.LinkPickerSheet
+import info.loveyu.mfca.ui.component.extractUrls
+import info.loveyu.mfca.ui.component.openUrl
 import info.loveyu.mfca.ui.notification.FloatingSearchBar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
