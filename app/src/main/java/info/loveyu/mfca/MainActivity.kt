@@ -12,17 +12,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.height
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -32,10 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.service.ForwardService
@@ -47,25 +33,14 @@ import info.loveyu.mfca.ui.NotifyHistoryContent
 import info.loveyu.mfca.ui.NotifyHistoryTopBar
 import info.loveyu.mfca.ui.M2mScreen
 import info.loveyu.mfca.ui.theme.MfcaTheme
-import info.loveyu.mfca.util.AppStatusManager
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
 import info.loveyu.mfca.m2m.M2mManager
 import kotlinx.coroutines.launch
 
-enum class BottomTab(
-    val icon: ImageVector,
-    val labelResId: Int
-) {
-    HOME(Icons.Default.Home, R.string.tab_home),
-    NOTIFY_HISTORY(Icons.Default.Notifications, R.string.tab_notify_history),
-    CLIPBOARD_HISTORY(Icons.Default.ContentPaste, R.string.tab_clipboard_history),
-    VPN(Icons.Default.Security, R.string.tab_vpn),
-}
-
 class MainActivity : ComponentActivity() {
-    private val pendingNotifyId = mutableIntStateOf(-1)
-    private val pendingHighlight = mutableStateOf(false)
+    val pendingNotifyId = mutableIntStateOf(-1)
+    val pendingHighlight = mutableStateOf(false)
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -144,7 +119,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        handleIntent(intent)
+        handleIntentInternal(intent)
 
         setContent {
             MfcaTheme {
@@ -166,28 +141,15 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleIntent(intent)
+        handleIntentInternal(intent)
     }
 
-    private fun handleIntent(intent: Intent?) {
+    private fun handleIntentInternal(intent: Intent?) {
         val notifyId = intent?.getIntExtra("notify_id", -1) ?: -1
         val highlight = intent?.getBooleanExtra("highlight", false) ?: false
         if (highlight && notifyId != -1) {
             pendingNotifyId.intValue = notifyId
             pendingHighlight.value = true
-        }
-    }
-
-    private fun ensureServiceRunning() {
-        if (!ForwardService.isServiceAlive()) {
-            val status = AppStatusManager.loadStatus(this)
-            val intent = Intent(this, ForwardService::class.java).apply {
-                action =
-                    if (status.isRunning) ForwardService.ACTION_START else ForwardService.ACTION_INIT
-            }
-            startForegroundService(intent)
-        } else {
-            ForwardService.refreshNotification()
         }
     }
 
@@ -201,20 +163,6 @@ class MainActivity : ComponentActivity() {
         startService(Intent(this, ForwardService::class.java).apply {
             action = ForwardService.ACTION_STOP
         })
-    }
-
-    private fun promptBatteryOptimization() {
-        val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
-        if (pm.isIgnoringBatteryOptimizations(packageName)) return
-        val prefs = Preferences(this)
-        if (prefs.batteryOptPrompted) return
-        prefs.batteryOptPrompted = true
-        try {
-            startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                data = android.net.Uri.parse("package:$packageName")
-            })
-        } catch (_: Exception) {
-        }
     }
 }
 
@@ -277,14 +225,26 @@ private fun MainContent(
     var cleanPasswordsTrigger by remember { mutableIntStateOf(0) }
     var cleanVerificationCodesTrigger by remember { mutableIntStateOf(0) }
 
-    Scaffold(
+    fun handleTabClick(tab: BottomTab) {
+        if (selectedTab == tab) {
+            val now = System.currentTimeMillis()
+            if (now - lastTabClickTime < 500) {
+                refreshTrigger++
+                lastTabClickTime = 0L
+            } else {
+                lastTabClickTime = now
+            }
+        }
+        selectedTab = tab
+        if (tab != BottomTab.NOTIFY_HISTORY) highlightNotifyId = null
+    }
+
+    androidx.compose.material3.Scaffold(
         topBar = {
             when (selectedTab) {
                 BottomTab.HOME -> MainTopBar()
                 BottomTab.NOTIFY_HISTORY -> NotifyHistoryTopBar(
-                    onMenuClick = {
-                        notifyScope.launch { notifyDrawerState.open() }
-                    }
+                    onMenuClick = { notifyScope.launch { notifyDrawerState.open() } }
                 )
                 BottomTab.CLIPBOARD_HISTORY -> ClipboardHistoryTopBar(
                     onCleanByTime = { cleanByTimeTrigger++ },
@@ -295,40 +255,19 @@ private fun MainContent(
             }
         },
         bottomBar = {
-            NavigationBar(
-                modifier = if (!showTabLabel) Modifier.height(96.dp) else Modifier,
-            ) {
-                tabs.forEach { tab ->
-                    NavigationBarItem(
-                        icon = { Icon(tab.icon, contentDescription = null) },
-                        label = if (showTabLabel) {
-                            { Text(stringResource(tab.labelResId)) }
-                        } else null,
-                        selected = selectedTab == tab,
-                        onClick = {
-                            if (selectedTab == tab) {
-                                val now = System.currentTimeMillis()
-                                if (now - lastTabClickTime < 500) {
-                                    refreshTrigger++
-                                    lastTabClickTime = 0L
-                                } else {
-                                    lastTabClickTime = now
-                                }
-                            }
-                            selectedTab = tab
-                            if (tab != BottomTab.NOTIFY_HISTORY) highlightNotifyId = null
-                        }
-                    )
-                }
-            }
+            MainBottomBar(
+                tabs = tabs,
+                selectedTab = selectedTab,
+                showTabLabel = showTabLabel,
+                onTabSelected = { handleTabClick(it) },
+            )
         }
     ) { innerPadding ->
         when (selectedTab) {
             BottomTab.HOME -> MainScreen(
                 onStartServer = {
                     if (!preferences.hasConfig()) {
-                        Toast.makeText(activity, R.string.config_not_found, Toast.LENGTH_LONG)
-                            .show()
+                        Toast.makeText(activity, R.string.config_not_found, Toast.LENGTH_LONG).show()
                         activity.startActivity(Intent(activity, ConfigActivity::class.java))
                     } else {
                         activity.startServer()
