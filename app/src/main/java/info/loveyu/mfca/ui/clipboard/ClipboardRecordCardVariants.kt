@@ -1,6 +1,6 @@
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.clipboard
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.clipboard.ClipboardRecord
+import info.loveyu.mfca.ui.formatRelativeTime
 
 @Composable
 private fun typeBadgeColors(contentType: String): Pair<Color, Color> {

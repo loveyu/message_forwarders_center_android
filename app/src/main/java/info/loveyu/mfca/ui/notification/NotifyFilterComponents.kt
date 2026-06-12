@@ -1,4 +1,4 @@
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.notification
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically

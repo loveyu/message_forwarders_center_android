@@ -1,6 +1,6 @@
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.clipboard
 
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.clipboard.ClipboardPreviewActivity
 import info.loveyu.mfca.clipboard.ClipboardRecord
+import info.loveyu.mfca.ui.URL_REGEX
 
 @Composable
 fun ClipboardRecordCard(

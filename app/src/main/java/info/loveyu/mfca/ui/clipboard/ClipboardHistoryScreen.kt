@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.clipboard
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CleaningServices

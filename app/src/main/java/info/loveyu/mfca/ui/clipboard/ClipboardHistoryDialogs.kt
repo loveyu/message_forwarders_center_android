@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.clipboard
 
 import android.content.Context
 import android.widget.Toast

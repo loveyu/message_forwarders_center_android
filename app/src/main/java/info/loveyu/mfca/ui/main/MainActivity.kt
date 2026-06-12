@@ -25,13 +25,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.service.ForwardService
-import info.loveyu.mfca.ui.ClipboardHistoryContent
-import info.loveyu.mfca.ui.ClipboardHistoryTopBar
 import info.loveyu.mfca.ui.MainScreen
 import info.loveyu.mfca.ui.MainTopBar
-import info.loveyu.mfca.ui.NotifyHistoryContent
-import info.loveyu.mfca.ui.NotifyHistoryTopBar
 import info.loveyu.mfca.ui.M2mScreen
+import info.loveyu.mfca.ui.clipboard.ClipboardHistoryContent
+import info.loveyu.mfca.ui.clipboard.ClipboardHistoryTopBar
+import info.loveyu.mfca.ui.notification.NotifyHistoryContent
+import info.loveyu.mfca.ui.notification.NotifyHistoryTopBar
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import info.loveyu.mfca.R
 import info.loveyu.mfca.util.LogManager

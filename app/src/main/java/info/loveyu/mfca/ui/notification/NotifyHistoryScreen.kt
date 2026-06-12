@@ -1,4 +1,4 @@
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.notification
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -42,6 +42,9 @@ import info.loveyu.mfca.notification.NotifyHistoryDbHelper
 import info.loveyu.mfca.notification.NotifyHistoryDbHelper.Companion.changeVersion
 import info.loveyu.mfca.notification.NotifyRecord
 import info.loveyu.mfca.notification.TimeRange
+import info.loveyu.mfca.ui.LinkPickerSheet
+import info.loveyu.mfca.ui.extractUrls
+import info.loveyu.mfca.ui.openUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay

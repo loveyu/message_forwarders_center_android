@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class, FlowPreview::class)
 
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.clipboard
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -38,6 +38,10 @@ import info.loveyu.mfca.clipboard.ClipboardHistoryDbHelper
 import info.loveyu.mfca.clipboard.ClipboardPreviewActivity
 import info.loveyu.mfca.clipboard.ClipboardNotificationHelper
 import info.loveyu.mfca.clipboard.ClipboardRecord
+import info.loveyu.mfca.ui.LinkPickerSheet
+import info.loveyu.mfca.ui.extractUrls
+import info.loveyu.mfca.ui.openUrl
+import info.loveyu.mfca.ui.notification.FloatingSearchBar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce

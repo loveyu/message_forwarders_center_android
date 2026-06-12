@@ -3,7 +3,7 @@
     androidx.compose.material3.ExperimentalMaterial3Api::class
 )
 
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.notification
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.notification.NotifyRecord
+import info.loveyu.mfca.ui.formatRelativeTime
 import info.loveyu.mfca.util.cache.IconCacheManager
 
 @Composable
