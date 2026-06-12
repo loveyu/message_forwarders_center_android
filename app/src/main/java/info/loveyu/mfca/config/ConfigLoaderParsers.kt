@@ -1,0 +1,435 @@
+package info.loveyu.mfca.config
+
+import info.loveyu.mfca.config.models.BackoffConfig
+import info.loveyu.mfca.config.models.BackoffType
+import info.loveyu.mfca.config.models.CallConfig
+import info.loveyu.mfca.config.models.CallType
+import info.loveyu.mfca.config.models.CleanupConfig
+import info.loveyu.mfca.config.models.DeadLetterConfig
+import info.loveyu.mfca.config.models.Duration
+import info.loveyu.mfca.config.models.GeoConfig
+import info.loveyu.mfca.config.models.HttpOutputConfig
+import info.loveyu.mfca.config.models.InternalOutputConfig
+import info.loveyu.mfca.config.models.InternalOutputType
+import info.loveyu.mfca.config.models.LinkConfig
+import info.loveyu.mfca.config.models.LinkOutputConfig
+import info.loveyu.mfca.config.models.MemoryQueueConfig
+import info.loveyu.mfca.config.models.OutputFormatStep
+import info.loveyu.mfca.config.models.OutputsConfig
+import info.loveyu.mfca.config.models.OverflowStrategy
+import info.loveyu.mfca.config.models.PipelineStep
+import info.loveyu.mfca.config.models.PluginConfig
+import info.loveyu.mfca.config.models.QueueRefConfig
+import info.loveyu.mfca.config.models.QueuesConfig
+import info.loveyu.mfca.config.models.QuickSettingsConfig
+import info.loveyu.mfca.config.models.ReconnectConfig
+import info.loveyu.mfca.config.models.RetryConfig
+import info.loveyu.mfca.config.models.RuleConfig
+import info.loveyu.mfca.config.models.SchedulerConfig
+import info.loveyu.mfca.config.models.SqliteQueueConfig
+import info.loveyu.mfca.config.models.TlsConfig
+import info.loveyu.mfca.config.models.TransformConfig
+import info.loveyu.mfca.util.LogManager
+
+internal fun parsePlugin(plugin: Any?): PluginConfig {
+    if (plugin == null) return PluginConfig()
+    val map = plugin as Map<String, Any>
+    return PluginConfig(
+        udp2rawCore = map["udp2rawCore"] as? String ?: "",
+        m2mCore = map["m2mCore"] as? String ?: "",
+        downloadProxy = map["downloadProxy"] as? String ?: "",
+    )
+}
+
+internal fun parseScheduler(scheduler: Any?): SchedulerConfig {
+    if (scheduler == null) return SchedulerConfig()
+    val map = scheduler as Map<String, Any>
+    return SchedulerConfig(
+        tickInterval = Duration(map["tickInterval"] as? String ?: "40s"),
+        chargingTickInterval = (map["chargingTickInterval"] as? String)?.let { Duration(it) },
+        wakeLockTimeout = Duration(map["wakeLockTimeout"] as? String ?: "1h"),
+        wifiLockTimeout = Duration(map["wifiLockTimeout"] as? String ?: "1h")
+    )
+}
+
+internal fun parseGeo(geo: Any?): GeoConfig {
+    if (geo == null) return GeoConfig()
+    val map = geo as Map<String, Any>
+    return GeoConfig(
+        geoip = map["geoip"] as? String ?: "",
+        geosite = map["geosite"] as? String ?: "",
+        country = map["country"] as? String ?: "",
+        asn = map["asn"] as? String ?: "",
+    )
+}
+
+internal fun parseLinks(links: Any?): List<LinkConfig> {
+    if (links == null) return emptyList()
+    return (links as List<*>).mapNotNull { link ->
+        (link as? Map<String, Any>)?.let { map ->
+            LinkConfig(
+                id = map["id"] as? String ?: return@mapNotNull null,
+                dsn = map["dsn"] as? String,
+                clientId = (map["clientId"] as? String),
+                host = map["host"] as? String,
+                port = (map["port"] as? Number)?.toInt(),
+                reconnect = parseReconnect(map["reconnect"]),
+                tls = parseTls(map["tls"]),
+                whenCondition = map["when"] as? String,
+                deny = map["deny"] as? String
+            )
+        }
+    }
+}
+
+internal fun parseTls(tls: Any?): TlsConfig? {
+    if (tls == null) return null
+    val map = tls as Map<String, Any>
+    return TlsConfig(
+        ca = map["ca"] as? String,
+        cert = map["cert"] as? String,
+        key = map["key"] as? String,
+        insecure = map["insecure"] as? Boolean ?: false
+    )
+}
+
+internal fun parseReconnect(reconnect: Any?): ReconnectConfig? {
+    if (reconnect == null) return null
+    val map = reconnect as Map<String, Any>
+    return ReconnectConfig(
+        enabled = map["enabled"] as? Boolean ?: true,
+        interval = Duration(map["interval"] as? String ?: "10s"),
+        maxInterval = Duration(map["maxInterval"] as? String ?: "60s")
+    )
+}
+
+internal fun parseQueues(queues: Any?): QueuesConfig {
+    if (queues == null) return QueuesConfig()
+    val map = queues as Map<String, Any>
+    return QueuesConfig(
+        memory = parseMemoryQueues(map["memory"]),
+        sqlite = parseSqliteQueues(map["sqlite"])
+    )
+}
+
+internal fun parseMemoryQueues(memory: Any?): Map<String, MemoryQueueConfig> {
+    if (memory == null) return emptyMap()
+    val result = mutableMapOf<String, MemoryQueueConfig>()
+    (memory as Map<String, Any>).forEach { (name, config) ->
+        (config as? Map<String, Any>)?.let { map ->
+            result[name] = MemoryQueueConfig(
+                capacity = (map["capacity"] as? Number)?.toInt() ?: 1000,
+                workers = (map["workers"] as? Number)?.toInt() ?: 1,
+                overflow = parseOverflowStrategy(map["overflow"] as? String),
+                retryInterval = Duration(map["retryInterval"] as? String ?: "5s"),
+                maxRetry = (map["maxRetry"] as? Number)?.toInt() ?: 10,
+                backoff = parseBackoff(map["backoff"])
+            )
+        }
+    }
+    return result
+}
+
+internal fun parseOverflowStrategy(strategy: String?): OverflowStrategy {
+    return when (strategy?.lowercase()?.replace("_", "")) {
+        "dropoldest" -> OverflowStrategy.dropOldest
+        "dropnew" -> OverflowStrategy.dropNew
+        "block" -> OverflowStrategy.block
+        else -> OverflowStrategy.dropOldest
+    }
+}
+
+internal fun parseSqliteQueues(sqlite: Any?): Map<String, SqliteQueueConfig> {
+    if (sqlite == null) return emptyMap()
+    val result = mutableMapOf<String, SqliteQueueConfig>()
+    (sqlite as Map<String, Any>).forEach { (name, config) ->
+        (config as? Map<String, Any>)?.let { map ->
+            result[name] = SqliteQueueConfig(
+                path = map["path"] as? String ?: "",
+                batchSize = (map["batchSize"] as? Number)?.toInt() ?: 20,
+                retryInterval = Duration(map["retryInterval"] as? String ?: "5s"),
+                maxRetry = (map["maxRetry"] as? Number)?.toInt() ?: 10,
+                backoff = parseBackoff(map["backoff"]),
+                cleanup = parseCleanup(map["cleanup"])
+            )
+        }
+    }
+    return result
+}
+
+internal fun parseBackoff(backoff: Any?): BackoffConfig? {
+    if (backoff == null) return null
+    val map = backoff as Map<String, Any>
+    return BackoffConfig(
+        type = when ((map["type"] as? String)?.lowercase()) {
+            "exponential" -> BackoffType.exponential
+            "linear" -> BackoffType.linear
+            else -> BackoffType.exponential
+        },
+        initial = Duration(map["initial"] as? String ?: "2s"),
+        max = Duration(map["max"] as? String ?: "5m")
+    )
+}
+
+internal fun parseCleanup(cleanup: Any?): CleanupConfig? {
+    if (cleanup == null) return null
+    val map = cleanup as Map<String, Any>
+    return CleanupConfig(maxAge = Duration(map["maxAge"] as? String ?: "7d"))
+}
+
+internal fun parseOutputs(outputs: Any?): OutputsConfig {
+    if (outputs == null) return OutputsConfig()
+    val map = outputs as Map<String, Any>
+    return OutputsConfig(
+        http = parseHttpOutputs(map["http"]),
+        link = parseLinkOutputs(map["link"]),
+        internal = parseInternalOutputs(map["internal"])
+    )
+}
+
+internal fun parseFormatSteps(format: Any?): List<OutputFormatStep>? {
+    if (format == null) return null
+    return when (format) {
+        is String -> listOf(OutputFormatStep(target = "\$data", template = format, raw = null))
+        is List<*> ->
+            format.mapNotNull { item ->
+                (item as? Map<*, *>)?.entries?.firstOrNull()?.let { (k, v) ->
+                    if (v is String) {
+                        OutputFormatStep(target = k.toString(), template = v, raw = null)
+                    } else {
+                        OutputFormatStep(target = k.toString(), template = v.toString(), raw = v)
+                    }
+                }
+            }
+        else -> null
+    }
+}
+
+internal fun parseHttpOutputs(http: Any?): List<HttpOutputConfig> {
+    if (http == null) return emptyList()
+    return (http as List<*>).mapNotNull { output ->
+        (output as? Map<String, Any>)?.let { map ->
+            HttpOutputConfig(
+                name = map["name"] as? String ?: return@mapNotNull null,
+                url = map["url"] as? String ?: "",
+                method = map["method"] as? String ?: "POST",
+                headers = parseStringMap(map["headers"]),
+                body = map["body"]?.toString(),
+                timeout = Duration(map["timeout"] as? String ?: "5s"),
+                retry = parseRetry(map["retry"]),
+                onFailureQueue = parseQueueRef(map["onFailureQueue"]),
+                queue = parseQueueRef(map["queue"]),
+                whenCondition = map["when"] as? String,
+                deny = map["deny"] as? String,
+                format = parseFormatSteps(map["format"])
+            )
+        }
+    }
+}
+
+internal fun parseRetry(retry: Any?): RetryConfig? {
+    if (retry == null) return null
+    val map = retry as Map<String, Any>
+    return RetryConfig(
+        maxAttempts = (map["maxAttempts"] as? Number)?.toInt() ?: 1,
+        interval = Duration(map["interval"] as? String ?: "1s")
+    )
+}
+
+internal fun parseQueueRef(queue: Any?): QueueRefConfig? {
+    if (queue == null) return null
+    val map = queue as? Map<String, Any> ?: return null
+    val name = map["name"] as? String ?: return null
+    val delayRaw = map["delay"]
+    val delayStr = when (delayRaw) {
+        is String -> delayRaw
+        is Number -> "${delayRaw.toLong()}ms"
+        else -> "0s"
+    }
+    return QueueRefConfig(name = name, delay = Duration(delayStr))
+}
+
+internal fun parseLinkOutputs(link: Any?): List<LinkOutputConfig> {
+    if (link == null) return emptyList()
+    return (link as List<*>).mapNotNull { output ->
+        (output as? Map<String, Any>)?.let { map ->
+            LinkOutputConfig(
+                name = map["name"] as? String ?: return@mapNotNull null,
+                linkIds = parseStringOrList(map["linkId"]).also { if (it.isEmpty()) return@mapNotNull null },
+                role = parseLinkRole(map["role"] as? String),
+                topic = map["topic"] as? String,
+                qos = (map["qos"] as? Number)?.toInt(),
+                retain = map["retain"] as? Boolean ?: false,
+                retry = parseRetry(map["retry"]),
+                onFailureQueue = parseQueueRef(map["onFailureQueue"]),
+                queue = parseQueueRef(map["queue"]),
+                whenCondition = map["when"] as? String,
+                deny = map["deny"] as? String,
+                format = parseFormatSteps(map["format"])
+            )
+        }
+    }
+}
+
+internal fun parseInternalOutputs(internal: Any?): List<InternalOutputConfig> {
+    if (internal == null) return emptyList()
+    return (internal as List<*>).mapNotNull { output ->
+        (output as? Map<String, Any>)?.let { map ->
+            InternalOutputConfig(
+                name = map["name"] as? String ?: return@mapNotNull null,
+                type = parseInternalOutputType(map["type"] as? String) ?: return@mapNotNull null,
+                basePath = map["basePath"] as? String,
+                fileName = map["fileName"] as? String,
+                options = map["options"] as? Map<String, Any>,
+                channel = map["channel"] as? String,
+                queue = parseQueueRef(map["queue"]),
+                whenCondition = map["when"] as? String,
+                deny = map["deny"] as? String,
+                format = parseFormatSteps(map["format"])
+            )
+        }
+    }
+}
+
+internal fun parseInternalOutputType(type: String?): InternalOutputType? {
+    return when (type?.lowercase()) {
+        "clipboard" -> InternalOutputType.clipboard
+        "file" -> InternalOutputType.file
+        "broadcast" -> InternalOutputType.broadcast
+        "notify" -> InternalOutputType.notify
+        "clipboardhistory" -> InternalOutputType.clipboardHistory
+        else -> {
+            LogManager.logError("CONFIG", "Unknown internal output type: $type")
+            LogManager.showToast("未知的输出类型: $type")
+            null
+        }
+    }
+}
+
+internal fun parseRules(rules: Any?): List<RuleConfig> {
+    if (rules == null) return emptyList()
+    return (rules as List<*>).mapNotNull { rule ->
+        (rule as? Map<String, Any>)?.let { map ->
+            val froms = parseStringOrList(map["from"]).ifEmpty { parseStringOrList(map["froms"]) }
+            if (froms.isEmpty()) return@mapNotNull null
+            RuleConfig(
+                name = map["name"] as? String ?: return@mapNotNull null,
+                froms = froms,
+                pipeline = parsePipeline(map["pipeline"]),
+                onError = parsePipeline(map["onError"]),
+                whenCondition = map["when"] as? String,
+                deny = map["deny"] as? String
+            )
+        }
+    }
+}
+
+internal fun parsePipeline(pipeline: Any?): List<PipelineStep> {
+    if (pipeline == null) return emptyList()
+    return (pipeline as List<*>).mapNotNull { step ->
+        (step as? Map<String, Any>)?.let { map ->
+            PipelineStep(
+                transform = parseTransform(map["transform"]),
+                to = (map["to"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+            )
+        }
+    }
+}
+
+internal fun parseTransform(transform: Any?): TransformConfig? {
+    if (transform == null) return null
+    val map = transform as Map<String, Any>
+    val rawFormat = map["format"]
+    val formatSteps = if (rawFormat is List<*>) parseFormatSteps(rawFormat) else null
+    val formatStr = if (rawFormat is String) rawFormat else null
+    val callSteps = parseCallSteps(map["call"])
+    return TransformConfig(
+        decode = map["decode"] as? String,
+        extract = map["extract"] as? String,
+        filter = map["filter"] as? String,
+        detect = map["detect"] as? String,
+        format = formatStr,
+        enrich = map["enrich"] as? String,
+        formatSteps = formatSteps,
+        call = callSteps,
+        breakOnReject = map["breakOnReject"] as? Boolean ?: false
+    )
+}
+
+@Suppress("UNCHECKED_CAST")
+internal fun parseCallSteps(raw: Any?): List<Map<String, String>>? {
+    if (raw == null) return null
+    val list = raw as? List<*> ?: return null
+    return list.mapNotNull { item ->
+        val m = item as? Map<*, *> ?: return@mapNotNull null
+        m.entries
+            .filter { it.key is String && it.value is String }
+            .associate { it.key as String to it.value as String }
+            .takeIf { it.isNotEmpty() }
+    }
+}
+
+@Suppress("UNCHECKED_CAST")
+internal fun parseCalls(calls: Any?): List<CallConfig> {
+    if (calls == null) return emptyList()
+    val list = calls as? List<*> ?: return emptyList()
+    return list.mapNotNull { item ->
+        val m = item as? Map<*, *> ?: return@mapNotNull null
+        val map = m as Map<String, Any>
+        val name = map["name"] as? String ?: return@mapNotNull null
+        val typeStr = map["type"] as? String ?: "http"
+        val type =
+            try {
+                CallType.valueOf(typeStr)
+            } catch (_: IllegalArgumentException) {
+                CallType.http
+            }
+        val headers =
+            (map["headers"] as? Map<*, *>)
+                ?.entries
+                ?.mapNotNull { e ->
+                    val k = e.key as? String ?: return@mapNotNull null
+                    val v = e.value?.toString() ?: return@mapNotNull null
+                    k to v
+                }
+                ?.toMap() ?: emptyMap()
+        val retryMap = map["retry"] as? Map<*, *>
+        val retry =
+            if (retryMap != null) {
+                val rm = retryMap as Map<String, Any>
+                RetryConfig(
+                    maxAttempts = (rm["maxAttempts"] as? Number)?.toInt() ?: 3,
+                    interval = Duration(rm["interval"] as? String ?: "1s"),
+                )
+            } else null
+        CallConfig(
+            name = name,
+            type = type,
+            url = map["url"] as? String ?: "",
+            method = (map["method"] as? String)?.uppercase() ?: "POST",
+            headers = headers,
+            body = map["body"] as? String,
+            response = map["response"] as? String,
+            timeout = Duration(map["timeout"] as? String ?: "15s"),
+            retry = retry,
+        )
+    }
+}
+
+internal fun parseDeadLetter(deadLetter: Any?): DeadLetterConfig {
+    if (deadLetter == null) return DeadLetterConfig()
+    val map = deadLetter as Map<String, Any>
+    return DeadLetterConfig(
+        enabled = map["enabled"] as? Boolean ?: false,
+        maxRetry = (map["maxRetry"] as? Number)?.toInt() ?: 10,
+        pipeline = parsePipeline(map["pipeline"])
+    )
+}
+
+internal fun parseQuickSettings(quickSettings: Any?): QuickSettingsConfig {
+    if (quickSettings == null) return QuickSettingsConfig()
+    val map = quickSettings as Map<String, Any>
+    return QuickSettingsConfig(
+        inputMethodSwitcher = map["inputMethodSwitcher"] as? Boolean ?: true
+    )
+}

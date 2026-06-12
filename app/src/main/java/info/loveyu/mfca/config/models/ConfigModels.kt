@@ -2,16 +2,10 @@ package info.loveyu.mfca.config.models
 
 import java.util.concurrent.TimeUnit
 
-/**
- * 快捷设置配置（通知栏按钮开关）
- */
 data class QuickSettingsConfig(
     val inputMethodSwitcher: Boolean = true
 )
 
-/**
- * 应用完整配置
- */
 data class AppConfig(
     val version: String = "",
     val plugin: PluginConfig = PluginConfig(),
@@ -33,9 +27,6 @@ data class PluginConfig(
     val downloadProxy: String = "",
 )
 
-/**
- * Geo 数据文件配置（全局默认下载 URL）
- */
 data class GeoConfig(
     val geoip: String = "",
     val geosite: String = "",
@@ -43,20 +34,15 @@ data class GeoConfig(
     val asn: String = "",
 )
 
-/**
- * 统一调度器配置
- */
 data class SchedulerConfig(
     val tickInterval: Duration = Duration("40s"),
     val chargingTickInterval: Duration? = null,
     val wakeLockTimeout: Duration = Duration("1h"),
     val wifiLockTimeout: Duration = Duration("1h")
 ) {
-    /** 保证最小 20 秒 */
     val effectiveTickInterval: Duration
         get() = if (tickInterval.millis >= 20_000) tickInterval else Duration("20s")
 
-    /** 充电时的 tick 间隔，未配置时与普通间隔一致 */
     val effectiveChargingTickInterval: Duration
         get() {
             val interval = chargingTickInterval ?: tickInterval
@@ -64,439 +50,12 @@ data class SchedulerConfig(
         }
 }
 
-/**
- * 链接配置 (连接池)
- * type 通过 dsn 协议自动判断: mqtt:// → mqtt, ws:// → websocket, tcp:// → tcp
- */
-data class LinkConfig(
-    val id: String,
-    val dsn: String? = null,  // 连接字符串，格式: protocol://user:pass@host:port?param=value
-    val clientId: String? = null,
-    val host: String? = null,
-    val port: Int? = null,
-    val reconnect: ReconnectConfig? = null,
-    val tls: TlsConfig? = null,
-    val whenCondition: String? = null,  // 启用条件，URI query格式: network=wifi,ssid=MyWiFi
-    val deny: String? = null  // 禁用条件，URI query格式: network=mobile
-)
-
-/**
- * 从 DSN 或 URL 协议推断链接类型
- */
-enum class LinkType {
-    mqtt, websocket, tcp, http;
-
-    companion object {
-        fun fromDsn(dsn: String?): LinkType {
-            if (dsn == null) return mqtt
-            return when {
-                dsn.startsWith("mqtt://") || dsn.startsWith("mqtts://") -> mqtt
-                dsn.startsWith("ws://") || dsn.startsWith("wss://") -> websocket
-                dsn.startsWith("tcp://") || dsn.startsWith("ssl://") -> tcp
-                dsn.startsWith("http://") || dsn.startsWith("https://") -> http
-                else -> mqtt
-            }
-        }
-    }
-}
-
-data class ReconnectConfig(
-    val enabled: Boolean = true,
-    val interval: Duration = Duration("10s"),
-    val maxInterval: Duration = Duration("60s")
-)
-
-data class TlsConfig(
-    val ca: String? = null,
-    val cert: String? = null,
-    val key: String? = null,
-    val insecure: Boolean = false
-)
-
-/**
- * 输入模块配置
- */
-data class InputsConfig(
-    val http: List<HttpInputConfig> = emptyList(),
-    val link: List<LinkInputConfig> = emptyList(),
-    val udp2raw: List<Udp2RawInputConfig> = emptyList(),
-    val m2m: List<M2mInputConfig> = emptyList()
-)
-
-data class HttpInputConfig(
-    val name: String,
-    val dsn: String,
-    val paths: List<String> = emptyList(),
-    val linkId: String? = null,
-    val whenCondition: String? = null,
-    val deny: String? = null
-)
-
-/**
- * DSN 解析后的 HTTP 输入配置
- */
-data class HttpInputParsedConfig(
-    val listen: String,
-    val port: Int,
-    val methods: List<String> = emptyList(),
-    val basicAuth: BasicAuth? = null,
-    val bearerAuth: BearerAuth? = null,
-    val queryAuth: QueryAuth? = null,
-    val cookieAuth: CookieAuth? = null,
-    val allowIps: List<String> = emptyList(),
-    val denyIps: List<String> = emptyList()
-)
-
-data class BasicAuth(
-    val username: String,
-    val password: String
-)
-
-data class BearerAuth(
-    val token: String
-)
-
-data class QueryAuth(
-    val key: String,
-    val value: String
-)
-
-data class CookieAuth(
-    val key: String,
-    val value: String
-)
-
-data class LinkInputConfig(
-    val name: String,
-    val linkIds: List<String>,
-    val role: LinkRole,
-    val topic: String? = null,
-    val topics: List<String>? = null,
-    val excludeTopics: List<String>? = null,
-    val qos: Int? = null,
-    val replay: ReplayConfig? = null,
-    val whenCondition: String? = null,
-    val deny: String? = null
-) {
-    val linkId: String get() = linkIds.firstOrNull() ?: ""
-}
-
-enum class LinkRole {
-    consumer, producer
-}
-
-data class M2mInputConfig(
-    val name: String,
-    val configUrl: String,
-    val refreshIntervalMs: Long = 0L,
-    val whenCondition: String? = null,
-    val deny: String? = null,
-    val enabled: Boolean = true,
-    val insecure: Boolean = false,
-    val accessControlMode: M2mAccessControlMode = M2mAccessControlMode.acceptAll,
-    val packages: List<String> = emptyList(),
-)
-
-data class Udp2RawInputConfig(
-    val name: String,
-    val dsn: String? = null,
-    val args: List<String> = emptyList(),
-    val enabled: Boolean = true,
-    val whenCondition: String? = null,
-    val deny: String? = null,
-)
-
-enum class M2mAccessControlMode {
-    acceptAll, include, exclude
-}
-
-data class ReplayConfig(
-    val enabled: Boolean = false,
-    val provider: ReplayProvider = ReplayProvider.gotifyApi,
-    val messageIdPath: String = "id",
-    val pageSize: Int = 50,
-    val maxPages: Int = 20,
-    val maxMessages: Int = 500,
-    val persistState: Boolean = true,
-    val baseUrl: String? = null,
-    val token: String? = null,
-    val applicationId: Int? = null
-)
-
-enum class ReplayProvider {
-    gotifyApi
-}
-
-/**
- * 队列系统配置
- */
-data class QueuesConfig(
-    val memory: Map<String, MemoryQueueConfig> = emptyMap(),
-    val sqlite: Map<String, SqliteQueueConfig> = emptyMap()
-)
-
-data class MemoryQueueConfig(
-    val capacity: Int = 1000,
-    val workers: Int = 1,
-    val overflow: OverflowStrategy = OverflowStrategy.dropOldest,
-    val retryInterval: Duration = Duration("5s"),
-    val maxRetry: Int = 10,
-    val backoff: BackoffConfig? = null
-)
-
-enum class OverflowStrategy {
-    dropOldest, dropNew, block
-}
-
-data class SqliteQueueConfig(
-    val path: String,
-    val batchSize: Int = 20,
-    val retryInterval: Duration = Duration("5s"),
-    val maxRetry: Int = 10,
-    val backoff: BackoffConfig? = null,
-    val cleanup: CleanupConfig? = null
-)
-
-data class BackoffConfig(
-    val type: BackoffType = BackoffType.exponential,
-    val initial: Duration = Duration("2s"),
-    val max: Duration = Duration("5m")
-)
-
-enum class BackoffType {
-    exponential, linear
-}
-
-data class CleanupConfig(
-    val maxAge: Duration = Duration("7d")
-)
-
-/**
- * 输出模块配置
- */
-data class OutputsConfig(
-    val http: List<HttpOutputConfig> = emptyList(),
-    val link: List<LinkOutputConfig> = emptyList(),
-    val internal: List<InternalOutputConfig> = emptyList()
-)
-
-data class HttpOutputConfig(
-    val name: String,
-    val url: String,
-    val method: String = "POST",
-    /** 额外 HTTP headers，值支持模板格式化 */
-    val headers: Map<String, String> = emptyMap(),
-    /** HTTP request body 模板，未配置时默认发送当前 data */
-    val body: String? = null,
-    val timeout: Duration = Duration("5s"),
-    val retry: RetryConfig? = null,
-    val onFailureQueue: QueueRefConfig? = null,
-    val queue: QueueRefConfig? = null,
-    val whenCondition: String? = null,
-    val deny: String? = null,
-    /** 输出前的数据格式化步骤 */
-    val format: List<OutputFormatStep>? = null
-) {
-    /**
-     * HTTP output 的 headers/body 语法最终转换为统一 formatSteps，
-     * 且放在已有 format 之后，确保显式的 headers/body 配置覆盖默认值。
-     */
-    val effectiveFormatSteps: List<OutputFormatStep>?
-        get() {
-            val steps = mutableListOf<OutputFormatStep>()
-            format?.let { steps += it }
-            headers.forEach { (key, value) ->
-                steps += OutputFormatStep(target = "\$header.$key", template = value)
-            }
-            body?.let { steps += OutputFormatStep(target = "\$data", template = it) }
-            return steps.takeIf { it.isNotEmpty() }
-        }
-}
-
-data class RetryConfig(
-    val maxAttempts: Int = 1,
-    val interval: Duration = Duration("1s")
-)
-
-data class QueueRefConfig(
-    /** 队列名称，直接引用 queues 中定义的名称 */
-    val name: String,
-    /** 入队延迟，默认 0 立即处理 */
-    val delay: Duration = Duration("0s")
-)
-
-data class LinkOutputConfig(
-    val name: String,
-    val linkIds: List<String>,
-    val role: LinkRole,
-    val topic: String? = null,
-    // MQTT only: QoS level 0/1/2 (default 1)
-    val qos: Int? = null,
-    // MQTT only: retain flag (default false)
-    val retain: Boolean = false,
-    // Retry on transient failure before giving up
-    val retry: RetryConfig? = null,
-    // Queue to enqueue failed messages for async retry (null = discard)
-    val onFailureQueue: QueueRefConfig? = null,
-    val queue: QueueRefConfig? = null,
-    val whenCondition: String? = null,
-    val deny: String? = null,
-    /** 输出前的数据格式化步骤 */
-    val format: List<OutputFormatStep>? = null
-) {
-    val linkId: String get() = linkIds.firstOrNull() ?: ""
-}
-
-data class InternalOutputConfig(
-    val name: String,
-    val type: InternalOutputType,
-    val basePath: String? = null,
-    val fileName: String? = null,
-    val options: Map<String, Any>? = null,
-    val channel: String? = null,
-    val queue: QueueRefConfig? = null,
-    val whenCondition: String? = null,
-    val deny: String? = null,
-    /** 输出前的数据格式化步骤 */
-    val format: List<OutputFormatStep>? = null
-)
-
-enum class InternalOutputType {
-    clipboard, file, broadcast, notify, clipboardHistory
-}
-
-/**
- * 通知选项
- *
- * 模板变量说明 (tag、group、id 支持):
- * - {channel} - 输出配置的 channel
- * - {name} - 输出配置的 name
- * - {seq} - 全局递增序列号 (0-999 循环)
- * - {timestamp} - 秒级时间戳 (10位)
- * - {unix} - 毫秒级时间戳 (13位)
- * - {date:format} - 格式化日期，如 {date:yyyyMMddHHmmss}
- * - {data} - 原始数据内容 (UTF-8 解码)
- * - {data.path} - JSON 路径提取 (当 data 为 JSON 时)
- * - {meta.key} - metadata 字段
- *
- * 标识字段语义:
- * - tag:   通知替换域，相同 tag+id 的通知替换旧通知。默认为 name (输出名称)
- * - group: 通知栏视觉分组，相同 group 的通知折叠在一起。默认与 tag 相同
- * - id:    通知唯一标识，Int 值。默认为秒级时间戳 * 1000 + 序列号
- *
- * 运行时覆盖:
- * - metadata:  notify_tag / notify_group / notify_id / notify_popup / notify_persistent (带 notify_ 前缀)
- * - data JSON: 内容字段直接读取 (title/message/icon/fixedIcon)，控制字段使用 notify 前缀 (notifyTag/notifyGroup/notifyId/notifyPopup/notifyPersistent)
- */
-data class NotifyOptions(
-    var title: String? = null,
-    var message: String? = null,
-    var icon: String? = null,
-    var fixedIcon: String? = null,
-    var popup: Boolean? = null,
-    var persistent: Boolean? = null,
-    var tag: String? = null,
-    var group: String? = null,
-    var id: String? = null
-)
-
-/**
- * 转发规则配置
- */
-data class RuleConfig(
-    val name: String,
-    val froms: List<String>,
-    val pipeline: List<PipelineStep> = emptyList(),
-    val onError: List<PipelineStep>? = null,
-    val whenCondition: String? = null,
-    val deny: String? = null
-) {
-    val from: String get() = froms.firstOrNull() ?: ""
-}
-
-data class PipelineStep(
-    val transform: TransformConfig? = null,
-    val to: List<String> = emptyList()
-)
-
-/**
- * 单个格式化步骤，指定目标和模板。
- *
- * target 语法:
- *   $data              — 替换整个 data（模板求值结果为新的 data 字符串）
- *   $data.field        — 设置/添加 data JSON 对象的 field 字段
- *   $header            — 替换全部 headers（模板必须求值为 JSON 对象字符串）
- *   $header.Key        — 设置/添加单个 header 键
- */
-data class OutputFormatStep(
-    val target: String,
-    val template: String,
-    /**
-     * 原始解析的模板值（可能是 String / List / Map），用于支持 delete 等非字符串操作
-     */
-    val raw: Any? = null
-)
-
-data class TransformConfig(
-    val decode: String? = null,
-    val extract: String? = null,
-    val filter: String? = null,
-    val detect: String? = null,
-    /** 字符串简写格式，等同于 formatSteps = [{target="\$data", template=format}] */
-    val format: String? = null,
-    /** 数组格式，与 format 互斥，优先级高于 format */
-    val formatSteps: List<OutputFormatStep>? = null,
-    val enrich: String? = null,  // "enricherType:parameter", e.g., "gotifyIcon:gotify_link"
-    /**
-     * Call 步骤列表，每项为 {varName: "callName(arg1, arg2, ...)"} 的 map。
-     * 按顺序执行，后一项可以使用前一项产生的变量。
-     * 如果调用返回包含 data 或 headers 键的对象，会覆盖当前消息的对应变量。
-     */
-    val call: List<Map<String, String>>? = null,
-    /**
-     * 过滤拒绝时是否中断整个管道流程。
-     * 默认 false：过滤拒绝仅跳过当前步骤，继续执行后续管道步骤。
-     * 设为 true：过滤拒绝时中断整个管道，不再执行后续步骤。
-     */
-    val breakOnReject: Boolean = false
-)
-
-/**
- * Call 资源配置，定义可在 pipeline 中调用的外部服务。
- * 目前支持 http 类型，后续可扩展。
- */
-data class CallConfig(
-    val name: String,
-    val type: CallType = CallType.http,
-    /** 目标 URL，支持格式化模板（可使用 {args[N]} 等） */
-    val url: String = "",
-    val method: String = "POST",
-    /** 请求 headers，值支持格式化模板 */
-    val headers: Map<String, String> = emptyMap(),
-    /** 请求 body 模板，未配置时默认发送当前 data */
-    val body: String? = null,
-    /** 响应处理模板，支持 {response}（响应体）、{$responseCode}（状态码）等，可为函数调用 */
-    val response: String? = null,
-    val timeout: Duration = Duration("15s"),
-    val retry: RetryConfig? = null
-)
-
-enum class CallType {
-    http
-}
-
-/**
- * 死信队列配置
- */
 data class DeadLetterConfig(
     val enabled: Boolean = false,
     val maxRetry: Int = 10,
     val pipeline: List<PipelineStep> = emptyList()
 )
 
-/**
- * 通用配置
- */
 data class Duration(
     val value: String
 ) {
@@ -515,7 +74,6 @@ data class Duration(
 
     private fun parseDuration(d: String): Long {
         return try {
-            // "ms" suffix must be checked first to avoid mis-detecting as minutes
             val isMillis = d.endsWith("ms")
             val numStr = if (isMillis) d.dropLast(2) else d.dropLast(1)
             val num = numStr.toDoubleOrNull() ?: 0.0
