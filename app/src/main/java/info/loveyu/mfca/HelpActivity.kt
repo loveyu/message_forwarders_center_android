@@ -189,10 +189,8 @@ fun SampleDetailScreen(
         ) {
             WebViewScreen(
                 title = sampleFile.name,
-                htmlContent = htmlContent,
-                isDarkTheme = isDarkTheme,
+                content = htmlContent,
                 onBack = onBack,
-                rawHtml = true
             )
         }
     }
