@@ -25,6 +25,13 @@ data class PluginConfig(
     val udp2rawCore: String = "",
     val m2mCore: String = "",
     val downloadProxy: String = "",
+    val input: List<PluginSlotConfig> = emptyList(),
+    val output: List<PluginSlotConfig> = emptyList(),
+)
+
+data class PluginSlotConfig(
+    val slot: Int,
+    val url: String,
 )
 
 data class GeoConfig(

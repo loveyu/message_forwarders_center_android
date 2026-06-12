@@ -3,11 +3,14 @@ package info.loveyu.mfca.pipeline.core
 import info.loveyu.mfca.output.FanOut
 import info.loveyu.mfca.output.Output
 import info.loveyu.mfca.output.OutputManager
+import info.loveyu.mfca.output.plugin.OutputPluginDispatcher
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.queue.QueueManager
 import info.loveyu.mfca.util.LogManager
 
-internal class RuleEngineOutputDispatcher {
+internal class RuleEngineOutputDispatcher(
+    private val dispatcherLookup: ((String) -> OutputPluginDispatcher?)? = null,
+) {
     fun dispatchToOutput(
         output: Output,
         outputName: String,
@@ -18,6 +21,19 @@ internal class RuleEngineOutputDispatcher {
         onForwarded: (() -> Unit)?,
         isDeadLetter: Boolean = false
     ) {
+        // ★ Output plugin intercept
+        val pluginDispatcher = dispatcherLookup?.invoke(outputName)
+        val (data, headers) = if (pluginDispatcher != null) {
+            pluginDispatcher.intercept(
+                outputName = outputName,
+                outputTypeName = output.type.name,
+                data = outData,
+                headers = outHeaders,
+                ruleName = ruleName,
+                source = source,
+            )
+        } else outData to outHeaders
+
         val queueRef = if (isDeadLetter) null else output.queueRef
 
         if (output is FanOut && queueRef == null) {
@@ -29,9 +45,9 @@ internal class RuleEngineOutputDispatcher {
                         val queue = QueueManager.getQueue(subQueueRef.name)
                         if (queue != null) {
                             val queueItem = QueueItem(
-                                data = outData,
+                                data = data,
                                 metadata = mapOf("rule" to ruleName, "source" to source, "outputName" to subTarget.name),
-                                headers = outHeaders,
+                                headers = headers,
                                 nextAttemptAt = System.currentTimeMillis() + subQueueRef.delay.millis,
                                 isDeadLetter = isDeadLetter
                             )
@@ -46,9 +62,9 @@ internal class RuleEngineOutputDispatcher {
                         }
                     } else {
                         val item = QueueItem(
-                            data = outData,
+                            data = data,
                             metadata = mapOf("rule" to ruleName, "source" to source, "outputName" to subTarget.name),
-                            headers = outHeaders,
+                            headers = headers,
                             isDeadLetter = isDeadLetter
                         )
                         subTarget.send(item) { success ->
@@ -69,9 +85,9 @@ internal class RuleEngineOutputDispatcher {
             val queue = QueueManager.getQueue(queueRef.name)
             if (queue != null) {
                 val queueItem = QueueItem(
-                    data = outData,
+                    data = data,
                     metadata = mapOf("rule" to ruleName, "source" to source, "outputName" to outputName),
-                    headers = outHeaders,
+                    headers = headers,
                     nextAttemptAt = System.currentTimeMillis() + queueRef.delay.millis,
                     isDeadLetter = isDeadLetter
                 )
@@ -86,9 +102,9 @@ internal class RuleEngineOutputDispatcher {
             }
         } else {
             val item = QueueItem(
-                data = outData,
+                data = data,
                 metadata = mapOf("rule" to ruleName, "source" to source, "outputName" to outputName),
-                headers = outHeaders,
+                headers = headers,
                 isDeadLetter = isDeadLetter
             )
             output.send(item) { success ->

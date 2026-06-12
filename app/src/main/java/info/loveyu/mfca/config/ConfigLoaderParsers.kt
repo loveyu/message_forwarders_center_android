@@ -18,7 +18,12 @@ import info.loveyu.mfca.config.models.OutputFormatStep
 import info.loveyu.mfca.config.models.OutputsConfig
 import info.loveyu.mfca.config.models.OverflowStrategy
 import info.loveyu.mfca.config.models.PipelineStep
+import info.loveyu.mfca.config.models.InputPluginConfig
+import info.loveyu.mfca.config.models.OutputPluginConfig
 import info.loveyu.mfca.config.models.PluginConfig
+import info.loveyu.mfca.config.models.PluginMode
+import info.loveyu.mfca.config.models.PluginModeConfig
+import info.loveyu.mfca.config.models.PluginSlotConfig
 import info.loveyu.mfca.config.models.QueueRefConfig
 import info.loveyu.mfca.config.models.QueuesConfig
 import info.loveyu.mfca.config.models.QuickSettingsConfig
@@ -38,6 +43,48 @@ internal fun parsePlugin(plugin: Any?): PluginConfig {
         udp2rawCore = map["udp2rawCore"] as? String ?: "",
         m2mCore = map["m2mCore"] as? String ?: "",
         downloadProxy = map["downloadProxy"] as? String ?: "",
+        input = parsePluginSlotList(map["input"]),
+        output = parsePluginSlotList(map["output"]),
+    )
+}
+
+private fun parsePluginSlotList(list: Any?): List<PluginSlotConfig> {
+    if (list == null) return emptyList()
+    return (list as List<*>).mapNotNull { item ->
+        (item as? Map<String, Any>)?.let { map ->
+            val slot = (map["slot"] as? Number)?.toInt() ?: return@mapNotNull null
+            val url = map["url"] as? String ?: return@mapNotNull null
+            PluginSlotConfig(slot = slot, url = url)
+        }
+    }
+}
+
+internal fun parseInputPluginConfig(map: Map<String, Any>?): InputPluginConfig? {
+    if (map == null) return null
+    return InputPluginConfig(
+        enabled = map["enabled"] as? Boolean ?: true,
+        front = parsePluginModeConfig(map["front"]),
+        rear = parsePluginModeConfig(map["rear"]),
+    )
+}
+
+internal fun parseOutputPluginConfig(map: Map<String, Any>?): OutputPluginConfig? {
+    if (map == null) return null
+    return OutputPluginConfig(
+        enabled = map["enabled"] as? Boolean ?: true,
+        front = parsePluginModeConfig(map["front"]),
+    )
+}
+
+private fun parsePluginModeConfig(raw: Any?): PluginModeConfig {
+    if (raw == null) return PluginModeConfig()
+    val map = raw as? Map<String, Any> ?: return PluginModeConfig()
+    return PluginModeConfig(
+        mode = when ((map["mode"] as? String)?.lowercase()) {
+            "parallel" -> PluginMode.PARALLEL
+            else -> PluginMode.SERIAL
+        },
+        slots = (map["slots"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() } ?: emptyList(),
     )
 }
 
@@ -221,7 +268,8 @@ internal fun parseHttpOutputs(http: Any?): List<HttpOutputConfig> {
                 queue = parseQueueRef(map["queue"]),
                 whenCondition = map["when"] as? String,
                 deny = map["deny"] as? String,
-                format = parseFormatSteps(map["format"])
+                format = parseFormatSteps(map["format"]),
+                plugins = parseOutputPluginConfig(map["plugins"] as? Map<String, Any>),
             )
         }
     }
@@ -265,7 +313,8 @@ internal fun parseLinkOutputs(link: Any?): List<LinkOutputConfig> {
                 queue = parseQueueRef(map["queue"]),
                 whenCondition = map["when"] as? String,
                 deny = map["deny"] as? String,
-                format = parseFormatSteps(map["format"])
+                format = parseFormatSteps(map["format"]),
+                plugins = parseOutputPluginConfig(map["plugins"] as? Map<String, Any>),
             )
         }
     }
@@ -285,7 +334,8 @@ internal fun parseInternalOutputs(internal: Any?): List<InternalOutputConfig> {
                 queue = parseQueueRef(map["queue"]),
                 whenCondition = map["when"] as? String,
                 deny = map["deny"] as? String,
-                format = parseFormatSteps(map["format"])
+                format = parseFormatSteps(map["format"]),
+                plugins = parseOutputPluginConfig(map["plugins"] as? Map<String, Any>),
             )
         }
     }

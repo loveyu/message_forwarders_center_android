@@ -13,7 +13,8 @@ data class HttpInputConfig(
     val paths: List<String> = emptyList(),
     val linkId: String? = null,
     val whenCondition: String? = null,
-    val deny: String? = null
+    val deny: String? = null,
+    val plugins: InputPluginConfig? = null,
 )
 
 data class HttpInputParsedConfig(
@@ -57,7 +58,8 @@ data class LinkInputConfig(
     val qos: Int? = null,
     val replay: ReplayConfig? = null,
     val whenCondition: String? = null,
-    val deny: String? = null
+    val deny: String? = null,
+    val plugins: InputPluginConfig? = null,
 ) {
     val linkId: String get() = linkIds.firstOrNull() ?: ""
 }
@@ -106,4 +108,20 @@ data class ReplayConfig(
 
 enum class ReplayProvider {
     gotifyApi
+}
+
+data class InputPluginConfig(
+    val enabled: Boolean = true,
+    val front: PluginModeConfig = PluginModeConfig(),
+    val rear: PluginModeConfig = PluginModeConfig(),
+)
+
+data class PluginModeConfig(
+    val mode: PluginMode = PluginMode.SERIAL,
+    val slots: List<Int> = emptyList(),
+)
+
+enum class PluginMode {
+    SERIAL,
+    PARALLEL,
 }

@@ -12,6 +12,7 @@ import info.loveyu.mfca.config.models.BasicAuth
 import info.loveyu.mfca.config.models.BearerAuth
 import info.loveyu.mfca.config.models.HttpInputParsedConfig
 import info.loveyu.mfca.config.models.QueryAuth
+import info.loveyu.mfca.input.plugin.InputPluginDispatcher
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.network.NetworkChecker
 import org.json.JSONObject
@@ -34,6 +35,11 @@ class HttpInput(
     @Volatile private var fatalError: String? = null
     @Volatile private var lastError: String? = null
     private var messageListener: ((InputMessage) -> Unit)? = null
+    private var pluginDispatcher: InputPluginDispatcher? = null
+
+    fun setPluginDispatcher(dispatcher: InputPluginDispatcher?) {
+        pluginDispatcher = dispatcher
+    }
 
     init {
         parsedConfig = try {
@@ -139,7 +145,14 @@ class HttpInput(
             }
         }
 
-        return handleRequest(session, uri, inputName, parsedConfig, messageListener)
+        return handleRequest(
+            session = session,
+            uri = uri,
+            sourceName = inputName,
+            parsedConfig = parsedConfig,
+            messageListener = messageListener,
+            pluginDispatcher = pluginDispatcher,
+        )
     }
 
     companion object {
@@ -261,10 +274,10 @@ class HttpInput(
             uri: String,
             sourceName: String,
             parsedConfig: HttpInputParsedConfig,
-            messageListener: ((InputMessage) -> Unit)?
+            messageListener: ((InputMessage) -> Unit)?,
+            pluginDispatcher: InputPluginDispatcher? = null,
         ): NanoHTTPD.Response {
             try {
-                // Read raw POST body before parseBody consumes the stream
                 val contentLength = session.headers["content-length"]?.toLongOrNull() ?: 0L
                 val body: ByteArray = if (contentLength > 0) {
                     val buffer = ByteArray(contentLength.toInt())
@@ -278,10 +291,8 @@ class HttpInput(
                 session.headers.forEach { (key, value) ->
                     headersMap[key] = value
                 }
-                // Include matched path in headers
                 headersMap["X-Matched-Path"] = uri
 
-                // Parse query string
                 session.queryParameterString?.let { queryStr ->
                     headersMap["queryRaw"] = queryStr
                     val queryJson = JSONObject()
@@ -291,11 +302,14 @@ class HttpInput(
                     headersMap["X-Query-Params"] = queryJson.toString()
                 }
 
-                val message = InputMessage(
+                var message = InputMessage(
                     source = sourceName,
                     data = body,
                     headers = headersMap
                 )
+
+                // ★ Input front plugin
+                message = pluginDispatcher?.interceptFront(message) ?: message
 
                 if (messageListener != null) {
                     messageListener.invoke(message)
@@ -304,11 +318,29 @@ class HttpInput(
                 }
                 LogManager.logDebug("HTTP", "Message received from $sourceName path=$uri (${body.size} bytes)")
 
-                return NanoHTTPD.newFixedLengthResponse(
+                val defaultResponse = NanoHTTPD.newFixedLengthResponse(
                     NanoHTTPD.Response.Status.OK,
                     NanoHTTPD.MIME_PLAINTEXT,
                     "OK"
                 )
+
+                // ★ Input rear plugin
+                val rearResult = pluginDispatcher?.interceptRear(
+                    sourceName = sourceName,
+                    uri = uri,
+                    method = session.method.name,
+                    statusCode = NanoHTTPD.Response.Status.OK.requestStatus,
+                    responseBody = "OK",
+                    responseHeaders = emptyMap(),
+                )
+                if (rearResult != null) {
+                    return NanoHTTPD.newFixedLengthResponse(
+                        NanoHTTPD.Response.Status.lookup(rearResult.statusCode),
+                        rearResult.responseHeaders["content-type"] ?: NanoHTTPD.MIME_PLAINTEXT,
+                        rearResult.responseBody,
+                    )
+                }
+                return defaultResponse
             } catch (e: Exception) {
                 LogManager.logError("HTTP", "Error processing request from $sourceName: ${e.message}")
                 return NanoHTTPD.newFixedLengthResponse(
@@ -342,6 +374,11 @@ class HttpVirtualInput(
 
     @Volatile private var error: String? = null
     private var messageListener: ((InputMessage) -> Unit)? = null
+    private var pluginDispatcher: InputPluginDispatcher? = null
+
+    fun setPluginDispatcher(dispatcher: InputPluginDispatcher?) {
+        pluginDispatcher = dispatcher
+    }
 
     init {
         parsedConfig = try {
@@ -426,6 +463,13 @@ class HttpVirtualInput(
             }
         }
 
-        return HttpInput.handleRequest(session, uri, inputName, parsedConfig, messageListener)
+        return HttpInput.handleRequest(
+            session = session,
+            uri = uri,
+            sourceName = inputName,
+            parsedConfig = parsedConfig,
+            messageListener = messageListener,
+            pluginDispatcher = pluginDispatcher,
+        )
     }
 }

@@ -18,7 +18,8 @@ data class HttpOutputConfig(
     val queue: QueueRefConfig? = null,
     val whenCondition: String? = null,
     val deny: String? = null,
-    val format: List<OutputFormatStep>? = null
+    val format: List<OutputFormatStep>? = null,
+    val plugins: OutputPluginConfig? = null,
 ) {
     val effectiveFormatSteps: List<OutputFormatStep>?
         get() {
@@ -54,7 +55,8 @@ data class LinkOutputConfig(
     val queue: QueueRefConfig? = null,
     val whenCondition: String? = null,
     val deny: String? = null,
-    val format: List<OutputFormatStep>? = null
+    val format: List<OutputFormatStep>? = null,
+    val plugins: OutputPluginConfig? = null,
 ) {
     val linkId: String get() = linkIds.firstOrNull() ?: ""
 }
@@ -69,7 +71,8 @@ data class InternalOutputConfig(
     val queue: QueueRefConfig? = null,
     val whenCondition: String? = null,
     val deny: String? = null,
-    val format: List<OutputFormatStep>? = null
+    val format: List<OutputFormatStep>? = null,
+    val plugins: OutputPluginConfig? = null,
 )
 
 enum class InternalOutputType {
@@ -137,3 +140,8 @@ data class CallConfig(
 enum class CallType {
     http
 }
+
+data class OutputPluginConfig(
+    val enabled: Boolean = true,
+    val front: PluginModeConfig = PluginModeConfig(),
+)

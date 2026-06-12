@@ -11,9 +11,22 @@ import info.loveyu.mfca.input.http.HttpInput
 import info.loveyu.mfca.input.http.HttpVirtualInput
 import info.loveyu.mfca.input.http.SharedHttpInput
 import info.loveyu.mfca.input.mqtt.MqttInput
+import info.loveyu.mfca.input.plugin.InputPluginDispatcher
+import info.loveyu.mfca.input.plugin.InputSlot0
+import info.loveyu.mfca.input.plugin.InputSlot1
+import info.loveyu.mfca.input.plugin.InputSlot2
+import info.loveyu.mfca.input.plugin.InputSlot3
+import info.loveyu.mfca.input.plugin.InputSlot4
+import info.loveyu.mfca.input.plugin.InputSlot5
+import info.loveyu.mfca.input.plugin.InputSlot6
+import info.loveyu.mfca.input.plugin.InputSlot7
+import info.loveyu.mfca.input.plugin.InputSlot8
+import info.loveyu.mfca.input.plugin.InputSlot9
 import info.loveyu.mfca.input.tcp.TcpInput
 import info.loveyu.mfca.input.tcp.WebSocketInput
 import info.loveyu.mfca.link.LinkManager
+import info.loveyu.mfca.plugin.core.PluginBase
+import info.loveyu.mfca.plugin.core.PluginEngine
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.network.NetworkChecker
 
@@ -37,6 +50,7 @@ object InputManager {
     private val linkInputConfigs = mutableListOf<LinkInputConfig>()
     private var globalMessageListener: ((InputMessage) -> Unit)? = null
     private var applicationContext: Context? = null
+    private var inputPluginEngine: PluginEngine? = null
 
     /**
      * 输入源配置信息
@@ -66,12 +80,17 @@ object InputManager {
             "Initializing InputManager with ${config.inputs.http.size} HTTP inputs, ${config.inputs.link.size} link inputs, ${config.inputs.udp2raw.size} udp2raw inputs",
         )
 
+        val ctx = applicationContext
         val timestampedHandler: (InputMessage) -> Unit = { msg ->
             val enriched =
                 if ("X-ReceivedAt" in msg.headers) msg
                 else msg.copy(headers = msg.headers + ("X-ReceivedAt" to System.currentTimeMillis().toString()))
             messageHandler(enriched)
         }
+
+        // ── Init input plugin engine ──
+        val inputPluginEngine = ctx?.let { createInputPluginEngine(it, config) }
+        this.inputPluginEngine = inputPluginEngine
 
         // HTTP inputs - group by linkId for shared mode
         val standaloneInputs = mutableListOf<HttpInputConfig>()
@@ -88,6 +107,7 @@ object InputManager {
         // Standalone HTTP inputs (no link_id → independent server)
         standaloneInputs.forEach { httpConfig ->
             val input = HttpInput(httpConfig)
+            input.setPluginDispatcher(createInputDispatcher(inputPluginEngine, httpConfig.plugins))
             entries.add(InputEntry(
                 input = input,
                 config = InputSourceConfig(
@@ -117,6 +137,7 @@ object InputManager {
 
             httpConfigs.forEach { httpConfig ->
                 val virtualInput = HttpVirtualInput(httpConfig)
+                virtualInput.setPluginDispatcher(createInputDispatcher(inputPluginEngine, httpConfig.plugins))
                 sharedInput.addVirtualInput(virtualInput)
 
                 entries.add(InputEntry(
@@ -134,7 +155,6 @@ object InputManager {
                 LogManager.logDebug("INPUT", "Registered shared HTTP input: ${httpConfig.name} (link: $linkId)")
             }
 
-            // Register SharedHttpInput as a special entry for lifecycle management
             entries.add(InputEntry(
                 input = sharedInput,
                 config = InputSourceConfig(
@@ -151,7 +171,6 @@ object InputManager {
         }
 
         // Link-based inputs (MQTT, WebSocket, TCP)
-        // 支持 link_id 为数组，展开为多个 InputSource 实例
         config.inputs.link.forEach { linkConfig ->
             val ids = linkConfig.linkIds
             ids.forEach { linkId ->
@@ -168,7 +187,13 @@ object InputManager {
                         deny = linkConfig.deny
                     )
                 ))
-                input.setOnMessageListener { msg -> timestampedHandler(msg) }
+                val pluginDispatcher = createInputDispatcher(inputPluginEngine, perLinkConfig.plugins)
+                val wrappedListener: (InputMessage) -> Unit = if (pluginDispatcher != null) {
+                    { msg -> timestampedHandler(pluginDispatcher.interceptFront(msg)) }
+                } else {
+                    timestampedHandler
+                }
+                input.setOnMessageListener(wrappedListener)
                 LogManager.logDebug("INPUT", "Registered ${linkConfig.role} input: ${linkConfig.name} (link: $linkId)")
             }
         }
@@ -176,6 +201,39 @@ object InputManager {
         registerUdp2RawInputs(config.inputs.udp2raw, config.plugin.udp2rawCore)
 
         LogManager.logDebug("INPUT", "InputManager initialized: ${entries.size} inputs registered")
+    }
+
+    private fun createInputPluginEngine(ctx: Context, config: AppConfig): PluginEngine {
+        val engine = PluginEngine(ctx, "Input") { slot ->
+            when (slot) {
+                0 -> InputSlot0()
+                1 -> InputSlot1()
+                2 -> InputSlot2()
+                3 -> InputSlot3()
+                4 -> InputSlot4()
+                5 -> InputSlot5()
+                6 -> InputSlot6()
+                7 -> InputSlot7()
+                8 -> InputSlot8()
+                else -> InputSlot9()
+            }
+        }
+        val allSlots = (config.inputs.http.flatMap { listOfNotNull(it.plugins) }.flatMap {
+            it.front.slots + it.rear.slots
+        } + config.inputs.link.flatMap { listOfNotNull(it.plugins) }.flatMap {
+            it.front.slots + it.rear.slots
+        }).distinct()
+        engine.loadConfiguredSlots(allSlots)
+        return engine
+    }
+
+    private fun createInputDispatcher(
+        engine: PluginEngine?,
+        pluginConfig: info.loveyu.mfca.config.models.InputPluginConfig?,
+    ): InputPluginDispatcher? {
+        if (engine == null || pluginConfig == null || !pluginConfig.enabled) return null
+        if (pluginConfig.front.slots.isEmpty() && pluginConfig.rear.slots.isEmpty()) return null
+        return InputPluginDispatcher(engine, pluginConfig)
     }
 
     /**
@@ -354,6 +412,8 @@ object InputManager {
 
     fun clear() {
         stopAll()
+        inputPluginEngine?.unloadAll()
+        inputPluginEngine = null
         entries.clear()
         linkInputConfigs.clear()
         globalMessageListener = null

@@ -34,6 +34,7 @@ internal object InputConfigParser {
                     linkId = map["linkId"] as? String,
                     whenCondition = map["when"] as? String,
                     deny = map["deny"] as? String,
+                    plugins = parseInputPluginConfig(map["plugins"] as? Map<String, Any>),
                 )
             }
         }
@@ -56,6 +57,7 @@ internal object InputConfigParser {
                     replay = parseReplay(map["replay"]),
                     whenCondition = map["when"] as? String,
                     deny = map["deny"] as? String,
+                    plugins = parseInputPluginConfig(map["plugins"] as? Map<String, Any>),
                 )
             }
         }

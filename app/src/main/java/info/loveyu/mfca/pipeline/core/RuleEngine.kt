@@ -53,7 +53,9 @@ class RuleEngine(
     }
 
     internal val callHandler = RuleEngineCallHandler(callConfigs, callHttpClient, expressionEngine)
-    internal val outputDispatcher = RuleEngineOutputDispatcher()
+    internal val outputDispatcher = RuleEngineOutputDispatcher(
+        dispatcherLookup = { name -> info.loveyu.mfca.output.OutputManager.getOutputPluginDispatcher(name) }
+    )
 
     init {
         config.rules.forEach { rule ->
