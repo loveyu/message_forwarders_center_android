@@ -68,6 +68,10 @@ import info.loveyu.mfca.ui.theme.Udp2RawChipBgDark
 import info.loveyu.mfca.ui.theme.Udp2RawChipBgLight
 import info.loveyu.mfca.ui.theme.Udp2RawChipBorderDark
 import info.loveyu.mfca.ui.theme.Udp2RawChipBorderLight
+import info.loveyu.mfca.ui.component.ComponentStatus
+import info.loveyu.mfca.ui.component.ComponentType
+import info.loveyu.mfca.ui.component.getComponentIcon
+import info.loveyu.mfca.ui.component.getComponentTypeName
 
 @Composable
 fun ComponentGroupHeader(type: ComponentType, count: Int) {

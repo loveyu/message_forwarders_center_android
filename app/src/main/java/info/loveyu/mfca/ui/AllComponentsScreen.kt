@@ -32,6 +32,11 @@ import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.R
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.service.ForwardService
+import info.loveyu.mfca.ui.component.ComponentDetailSheet
+import info.loveyu.mfca.ui.component.ComponentStatus
+import info.loveyu.mfca.ui.component.ComponentType
+import info.loveyu.mfca.ui.component.getAllComponentStatuses
+import info.loveyu.mfca.ui.component.getComponentTypeOrder
 
 private data class AllComponentsSelectionKey(
     val id: String,

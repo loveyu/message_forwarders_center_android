@@ -1,4 +1,4 @@
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.component
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send

@@ -1,4 +1,4 @@
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.component
 
 import info.loveyu.mfca.config.models.HttpInputConfig
 import info.loveyu.mfca.config.HttpInputDsnParser

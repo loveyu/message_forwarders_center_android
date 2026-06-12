@@ -1,4 +1,4 @@
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.component
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
