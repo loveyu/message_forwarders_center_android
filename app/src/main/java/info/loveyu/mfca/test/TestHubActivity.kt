@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.VpnLock
@@ -44,7 +45,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.R
+import info.loveyu.mfca.test.input_plugin.InputPluginTestActivity
 import info.loveyu.mfca.test.m2m.M2mFullTestActivity
+import info.loveyu.mfca.test.output_plugin.OutputPluginTestActivity
 import info.loveyu.mfca.test.udp2raw.Udp2RawTestActivity
 import info.loveyu.mfca.ui.theme.MfcaTheme
 
@@ -85,6 +88,18 @@ private fun TestHubScreen(onBack: () -> Unit) {
                 description = stringResource(R.string.test_m2m_vpn_description),
                 icon = Icons.Default.VpnLock,
                 action = { ctx -> ctx.startActivity(Intent(ctx, M2mFullTestActivity::class.java)) },
+            ),
+            TestModule(
+                title = "Input Plugin",
+                description = "Test Input plugin slots (mock)",
+                icon = Icons.Default.Extension,
+                action = { ctx -> ctx.startActivity(Intent(ctx, InputPluginTestActivity::class.java)) },
+            ),
+            TestModule(
+                title = "Output Plugin",
+                description = "Test Output plugin slots (mock)",
+                icon = Icons.Default.Extension,
+                action = { ctx -> ctx.startActivity(Intent(ctx, OutputPluginTestActivity::class.java)) },
             ),
         )
 

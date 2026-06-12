@@ -149,6 +149,16 @@
 
             android:theme="@style/Theme.FlowGate" />
 
+        <activity
+            android:name=".test.input_plugin.InputPluginTestActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FlowGate" />
+
+        <activity
+            android:name=".test.output_plugin.OutputPluginTestActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FlowGate" />
+
         <service
             android:name=".test.m2m.M2mFullTestService"
             android:exported="false"
