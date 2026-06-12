@@ -8,17 +8,13 @@ import android.os.Build
 import android.os.IBinder
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.config.AppConfig
-import info.loveyu.mfca.config.AppStatusConfig
 import info.loveyu.mfca.pipeline.RuleEngine
 import info.loveyu.mfca.deadletter.DeadLetterHandler
 import info.loveyu.mfca.input.InputManager
-import info.loveyu.mfca.input.InputMessage
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.queue.QueueManager
 import info.loveyu.mfca.receiver.ServiceWatchdogJob
-import info.loveyu.mfca.util.AppStatusManager
-import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
 import info.loveyu.mfca.m2m.M2mManager
@@ -120,7 +116,7 @@ class ForwardService : Service() {
         }
     }
 
-    private lateinit var preferences: Preferences
+    internal lateinit var preferences: Preferences
 
     // New architecture components
     @Volatile
@@ -388,43 +384,7 @@ class ForwardService : Service() {
         tickController.tickCount = 0
     }
 
-    internal fun saveStatus() {
-        try {
-            val status = AppStatusConfig(
-                configUrl = currentConfigUrl,
-                isRunning = isRunning,
-                isReceivingEnabled = isReceivingEnabled,
-                isForwardingEnabled = isForwardingEnabled,
-                isWakeLockEnabled = isWakeLockEnabled,
-                isWifiLockEnabled = isWifiLockEnabled,
-                autoStart = preferences.autoStart,
-                appAutoStartOnBoot = preferences.autoStart
-            )
-            AppStatusManager.saveStatus(this, status)
-        } catch (e: Exception) {
-            LogManager.logWarn("APP_STATUS", "Failed to save status: ${e.message}")
-        }
-    }
 
-    internal fun handleMessage(message: InputMessage) {
-        LogManager.log(LogLevel.DEBUG, "FS", "NATIVE handleMessage: source=${message.source}, data=${String(message.data).take(30)}")
-        LogManager.log(LogLevel.DEBUG, "TRACE:FS", "handleMessage called: source=${message.source}")
-        if (!isReceivingEnabled) {
-            LogManager.logDebug("FS", "接收已暂停, 忽略消息: source=${message.source}, data=${String(message.data).take(200)}")
-            return
-        }
-
-        receivedCount++
-        onStatsChanged?.invoke()
-
-        LogManager.logDebug("TRACE:FS", "Calling ruleEngine.process for ${message.source}")
-        ruleEngineRef?.process(message)
-
-        if (message.headers.isNotEmpty()) {
-            LogManager.logDebug("MESSAGE", "Headers: ${message.headers}")
-        }
-        LogManager.logDebug("MESSAGE", "Processed: ${message.source} -> ${String(message.data).take(1000)}")
-    }
 
     internal fun stopAll() {
         InputManager.stopAll()
@@ -475,25 +435,7 @@ class ForwardService : Service() {
     }
 
     @Volatile
-    private var wasRunningBeforeRestart = false
-
-    private fun loadStatus() {
-        try {
-            val status = AppStatusManager.loadStatus(this)
-            currentConfigUrl = status.configUrl
-            isReceivingEnabled = status.isReceivingEnabled
-            isForwardingEnabled = status.isForwardingEnabled
-            isWakeLockEnabled = status.isWakeLockEnabled
-            isWifiLockEnabled = status.isWifiLockEnabled
-            preferences.receivingEnabled = status.isReceivingEnabled
-            preferences.forwardingEnabled = status.isForwardingEnabled
-            preferences.autoStart = status.autoStart
-            wasRunningBeforeRestart = status.isRunning
-            LogManager.logDebug("APP_STATUS", "Status loaded: running=${status.isRunning}, receive=${status.isReceivingEnabled}, forward=${status.isForwardingEnabled}, wakeLock=${status.isWakeLockEnabled}")
-        } catch (e: Exception) {
-            LogManager.logWarn("APP_STATUS", "Failed to load status: ${e.message}")
-        }
-    }
+    internal var wasRunningBeforeRestart = false
 
     private fun createNotificationChannel() {
         notificationDelegate.createNotificationChannels()

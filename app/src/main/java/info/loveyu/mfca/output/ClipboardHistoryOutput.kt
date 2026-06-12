@@ -2,6 +2,7 @@ package info.loveyu.mfca.output
 
 import android.content.Context
 import info.loveyu.mfca.clipboard.ClipboardHistoryDbHelper
+import info.loveyu.mfca.clipboard.detectContentType
 import info.loveyu.mfca.config.InternalOutputConfig
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.util.LogManager
@@ -23,7 +24,7 @@ class ClipboardHistoryOutput(
     override fun send(item: QueueItem, callback: ((Boolean) -> Unit)?) {
         try {
             val text = item.text
-            val contentType = ClipboardHistoryDbHelper.detectContentType(text)
+            val contentType = detectContentType(text)
             historyDbHelper.insertOrUpdate(text, contentType)
             if (LogManager.isDebugEnabled()) {
                 LogManager.logDebug("CLIPBOARD", "History recorded: $name (len=${text.length}, type=$contentType)")
