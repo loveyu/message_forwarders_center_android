@@ -2,17 +2,12 @@
 
 package info.loveyu.mfca
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,7 +26,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -54,7 +48,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -63,7 +56,8 @@ import androidx.compose.ui.unit.sp
 import info.loveyu.mfca.notification.NotifyHistoryDbHelper
 import info.loveyu.mfca.notification.NotifyRecord
 import info.loveyu.mfca.ui.theme.MfcaTheme
-import info.loveyu.mfca.util.IconCacheManager
+import info.loveyu.mfca.ui.extractUrls
+import info.loveyu.mfca.ui.openUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -86,9 +80,11 @@ class NotifyDetailActivity : ComponentActivity() {
 
     companion object {
         fun start(context: Context, recordId: Long) {
-            context.startActivity(Intent(context, NotifyDetailActivity::class.java).apply {
-                putExtra("record_id", recordId)
-            })
+            context.startActivity(
+                Intent(context, NotifyDetailActivity::class.java).apply {
+                    putExtra("record_id", recordId)
+                }
+            )
         }
     }
 }
@@ -116,7 +112,10 @@ private fun NotifyDetailScreen(recordId: Long, onBack: () -> Unit) {
                     title = { Text("通知详情") },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "返回"
+                            )
                         }
                     }
                 )
@@ -126,7 +125,10 @@ private fun NotifyDetailScreen(recordId: Long, onBack: () -> Unit) {
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                Text("通知不存在或已删除", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "通知不存在或已删除",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
         return
@@ -138,7 +140,10 @@ private fun NotifyDetailScreen(recordId: Long, onBack: () -> Unit) {
                 title = { Text(r.title, maxLines = 1) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "返回"
+                        )
                     }
                 },
                 actions = {
@@ -157,7 +162,6 @@ private fun NotifyDetailScreen(recordId: Long, onBack: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Header: icon + title + content
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.Top
@@ -179,7 +183,6 @@ private fun NotifyDetailScreen(recordId: Long, onBack: () -> Unit) {
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-            // Time and channel
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -197,7 +200,6 @@ private fun NotifyDetailScreen(recordId: Long, onBack: () -> Unit) {
                 )
             }
 
-            // More info & Raw data buttons
             var showMoreInfo by remember { mutableStateOf(false) }
             var showRawData by remember { mutableStateOf(false) }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -210,20 +212,32 @@ private fun NotifyDetailScreen(recordId: Long, onBack: () -> Unit) {
                     }
                 }
             }
+
             if (showMoreInfo) {
-                Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        DetailInfoRow("输出名称", r.outputName)
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
                         r.sourceRule?.let { DetailInfoRow("来源规则", it) }
-                        r.tag?.let { DetailInfoRow("标签", it) }
-                        r.group?.let { DetailInfoRow("分组", it) }
-                        if (r.popup) DetailInfoRow("弹出通知", "是")
-                        if (r.persistent) DetailInfoRow("常驻通知", "是")
+                        DetailInfoRow("输出名称", r.outputName)
+                        DetailInfoRow("Channel", r.channel)
+                        r.tag?.let { DetailInfoRow("Tag", it) }
+                        r.group?.let { DetailInfoRow("Group", it) }
+                        if (r.notifyId > 0) {
+                            DetailInfoRow("NotifyId", r.notifyId.toString())
+                        }
                     }
                 }
             }
+
             if (showRawData && !r.rawData.isNullOrBlank()) {
-                Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(
                         text = formatRawData(r.rawData),
                         style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
@@ -232,9 +246,7 @@ private fun NotifyDetailScreen(recordId: Long, onBack: () -> Unit) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
-
-            val urls = remember(r.content) { extractUrls(r.content) }
+            HorizontalDivider()
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -242,8 +254,12 @@ private fun NotifyDetailScreen(recordId: Long, onBack: () -> Unit) {
             ) {
                 OutlinedButton(
                     onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("通知内容", r.content))
+                        android.content.ClipboardManager::class.java
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                            as android.content.ClipboardManager
+                        clipboard.setPrimaryClip(
+                            android.content.ClipData.newPlainText("通知内容", r.content)
+                        )
                         Toast.makeText(context, "已复制内容", Toast.LENGTH_SHORT).show()
                     },
                     modifier = Modifier.weight(1f)
@@ -251,10 +267,13 @@ private fun NotifyDetailScreen(recordId: Long, onBack: () -> Unit) {
                     Icon(
                         Icons.Default.ContentCopy,
                         contentDescription = null,
-                        modifier = Modifier.padding(end = 4.dp).size(16.dp)
+                        modifier = Modifier.size(18.dp)
                     )
+                    Spacer(Modifier.size(4.dp))
                     Text("复制")
                 }
+
+                val urls = extractUrls(r.content)
                 if (urls.isNotEmpty()) {
                     OutlinedButton(
                         onClick = {
@@ -269,33 +288,24 @@ private fun NotifyDetailScreen(recordId: Long, onBack: () -> Unit) {
                         Icon(
                             Icons.Default.Link,
                             contentDescription = null,
-                            modifier = Modifier.padding(end = 4.dp).size(16.dp)
+                            modifier = Modifier.size(18.dp)
                         )
-                        Text(if (urls.size == 1) "打开链接" else "链接 (${urls.size})")
+                        Spacer(Modifier.size(4.dp))
+                        Text("打开链接")
                     }
                 }
             }
         }
     }
 
-    // Link picker
     if (linkPickerUrls.isNotEmpty()) {
         val sheetState = rememberModalBottomSheetState()
         ModalBottomSheet(
             onDismissRequest = { linkPickerUrls = emptyList() },
             sheetState = sheetState
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 32.dp)
-            ) {
-                Text(
-                    text = "选择链接",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("选择链接", style = MaterialTheme.typography.titleMedium)
                 linkPickerUrls.forEach { url ->
                     TextButton(
                         onClick = {
@@ -304,13 +314,7 @@ private fun NotifyDetailScreen(recordId: Long, onBack: () -> Unit) {
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(
-                            text = url,
-                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                            maxLines = 2,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        Text(url, fontFamily = FontFamily.Monospace)
                     }
                 }
             }
@@ -320,88 +324,45 @@ private fun NotifyDetailScreen(recordId: Long, onBack: () -> Unit) {
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("删除通知") },
-            text = { Text("确定要删除这条通知记录吗？") },
+            title = { Text("确认删除") },
+            text = { Text("确定要删除此通知记录吗？") },
             confirmButton = {
-                TextButton(onClick = {
-                    scope.launch(Dispatchers.IO) {
-                        dbHelper.deleteById(r.id)
-                        launch(Dispatchers.Main) {
-                            showDeleteDialog = false
-                            onBack()
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        scope.launch(Dispatchers.IO) {
+                            dbHelper.deleteById(recordId)
                         }
+                        onBack()
                     }
-                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                ) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) { Text("取消") }
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("取消")
+                }
             }
         )
     }
 }
 
-@Composable
-private fun NotifyIcon(record: NotifyRecord, size: androidx.compose.ui.unit.Dp) {
-    val context = LocalContext.current
-    var iconBitmap by remember(record.iconUrl) { mutableStateOf<android.graphics.Bitmap?>(null) }
-    LaunchedEffect(record.iconUrl) {
-        if (!record.iconUrl.isNullOrBlank()) {
-            iconBitmap = IconCacheManager.getInstance(context).getIcon(record.iconUrl, null)
-        }
-    }
-    if (iconBitmap != null) {
-        Image(
-            bitmap = iconBitmap!!.asImageBitmap(),
-            contentDescription = null,
-            modifier = Modifier.size(size)
-        )
-    } else {
-        Box(
-            modifier = Modifier.size(size).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                Icons.Default.Search,
-                contentDescription = null,
-                modifier = Modifier.size(size * 0.5f),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
+private fun formatAbsoluteTime(timestamp: Long): String {
+    val sdf = java.text.SimpleDateFormat(
+        "yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()
+    )
+    return sdf.format(java.util.Date(timestamp))
 }
 
 @Composable
 private fun DetailInfoRow(label: String, value: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(text = "$label: ", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            text = "$label: ",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Text(text = value, style = MaterialTheme.typography.bodyLarge)
-    }
-}
-
-private fun formatAbsoluteTime(timestamp: Long): String {
-    return SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(timestamp))
-}
-
-private fun formatRawData(rawData: String): String {
-    return try {
-        val trimmed = rawData.trimStart()
-        if (trimmed.startsWith("{")) org.json.JSONObject(rawData).toString(2)
-        else if (trimmed.startsWith("[")) org.json.JSONArray(rawData).toString(2)
-        else rawData
-    } catch (e: Exception) { rawData }
-}
-
-private val URL_REGEX = Regex("""https?://[^\s<>"{}|\\^`\[\]]+""")
-
-private fun extractUrls(content: String): List<String> {
-    return URL_REGEX.findAll(content).map { it.value.trimEnd(',', '.', ';', '!', '?', ':', ')') }
-        .distinct().toList()
-}
-
-private fun openUrl(context: Context, url: String) {
-    try {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-    } catch (_: Exception) {
-        Toast.makeText(context, "无法打开链接", Toast.LENGTH_SHORT).show()
     }
 }
