@@ -1,18 +1,13 @@
 package info.loveyu.mfca.m2m
 
-import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
-import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,21 +16,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,18 +38,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.drawable.toBitmap
 import info.loveyu.mfca.R
 import info.loveyu.mfca.config.M2mAccessControlMode
 import info.loveyu.mfca.ui.theme.MfcaTheme
@@ -163,76 +148,39 @@ private fun M2mAppSelectScreen(
                     IconButton(onClick = { menuExpanded = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = null)
                     }
-                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.vpn_select_all)) },
-                            onClick = {
-                                selectedPackages = filteredApps.map { it.packageName }.toSet()
-                                menuExpanded = false
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.vpn_select_none)) },
-                            onClick = {
-                                selectedPackages = emptySet()
-                                menuExpanded = false
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.vpn_select_invert)) },
-                            onClick = {
-                                val allVisible = filteredApps.map { it.packageName }.toSet()
-                                selectedPackages =
-                                    (allVisible - selectedPackages) + (selectedPackages - allVisible)
-                                menuExpanded = false
-                            },
-                        )
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.vpn_import_clipboard)) },
-                            onClick = {
-                                val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                val text = cb?.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-                                val imported = text.lines().map { it.trim() }.filter { it.isNotBlank() }
-                                selectedPackages = imported.toSet()
-                                menuExpanded = false
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.vpn_imported_packages, imported.size),
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.vpn_export_clipboard)) },
-                            onClick = {
-                                val text = selectedPackages.sorted().joinToString("\n")
-                                val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                cb?.setPrimaryClip(ClipData.newPlainText("packages", text))
-                                menuExpanded = false
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.vpn_exported_packages, selectedPackages.size),
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                            },
-                        )
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    stringResource(
-                                        if (sortMode == "selected_first") R.string.vpn_sort_unselected_first
-                                        else R.string.vpn_sort_selected_first
-                                    )
-                                )
-                            },
-                            onClick = {
-                                sortMode = if (sortMode == "selected_first") null else "selected_first"
-                                menuExpanded = false
-                            },
-                        )
-                    }
+                    AppSelectDropdownMenu(
+                        expanded = menuExpanded,
+                        sortMode = sortMode,
+                        onSelectAll = { selectedPackages = filteredApps.map { it.packageName }.toSet() },
+                        onSelectNone = { selectedPackages = emptySet() },
+                        onInvertSelection = {
+                            val allVisible = filteredApps.map { it.packageName }.toSet()
+                            selectedPackages = (allVisible - selectedPackages) + (selectedPackages - allVisible)
+                        },
+                        onImportClipboard = {
+                            val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                            val text = cb?.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                            val imported = text.lines().map { it.trim() }.filter { it.isNotBlank() }
+                            selectedPackages = selectedPackages + imported
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.vpn_imported_packages, imported.size),
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        },
+                        onExportClipboard = {
+                            val text = selectedPackages.sorted().joinToString("\n")
+                            val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                            cb?.setPrimaryClip(ClipData.newPlainText("packages", text))
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.vpn_exported_packages, selectedPackages.size),
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        },
+                        onToggleSortMode = { sortMode = if (sortMode == "selected_first") null else "selected_first" },
+                        onDismissRequest = { menuExpanded = false },
+                    )
                     TextButton(onClick = { onSave(mode, selectedPackages.toList().sorted()) }) {
                         Text(stringResource(R.string.vpn_save))
                     }
@@ -303,90 +251,20 @@ private fun M2mAppSelectScreen(
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     items(filteredApps, key = { it.packageName }) { app ->
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        ) {
-                            AppIcon(packageName = app.packageName, modifier = Modifier.size(40.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(app.label, style = MaterialTheme.typography.bodyMedium)
-                                Text(
-                                    app.packageName,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            Checkbox(
-                                checked = app.packageName in selectedPackages,
-                                onCheckedChange = { checked ->
-                                    selectedPackages = if (checked) {
-                                        selectedPackages + app.packageName
-                                    } else {
-                                        selectedPackages - app.packageName
-                                    }
-                                },
-                            )
-                        }
+                        AppSelectRow(
+                            app = app,
+                            isSelected = app.packageName in selectedPackages,
+                            onToggle = { checked ->
+                                selectedPackages = if (checked) {
+                                    selectedPackages + app.packageName
+                                } else {
+                                    selectedPackages - app.packageName
+                                }
+                            },
+                        )
                     }
                 }
             }
         }
     }
-}
-
-private data class AppItem(
-    val label: String,
-    val packageName: String,
-)
-
-/** Lazily loads and displays an app icon. Triggered only when the item enters the composition (i.e. scrolls into view). */
-@Composable
-private fun AppIcon(packageName: String, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    val icon by produceState<ImageBitmap?>(initialValue = null, packageName) {
-        value =
-            withContext(Dispatchers.IO) {
-                runCatching {
-                    val drawable: Drawable = context.packageManager.getApplicationIcon(packageName)
-                    drawable.toBitmap().asImageBitmap()
-                }.getOrNull()
-            }
-    }
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        if (icon != null) {
-            Image(bitmap = icon!!, contentDescription = null, modifier = Modifier.size(36.dp))
-        } else {
-            Icon(
-                imageVector = Icons.Default.Android,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(28.dp),
-            )
-        }
-    }
-}
-
-private fun loadApps(context: Context, includeSystem: Boolean): List<AppItem> {
-    val pm = context.packageManager
-    val packages =
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            pm.getInstalledPackages(PackageManager.PackageInfoFlags.of(PackageManager.GET_PERMISSIONS.toLong()))
-        } else {
-            @Suppress("DEPRECATION")
-            pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)
-        }
-    return packages
-        .filter { pkg ->
-            val app = pkg.applicationInfo ?: return@filter false
-            if (!includeSystem && (app.flags and ApplicationInfo.FLAG_SYSTEM != 0)) return@filter false
-            pkg.requestedPermissions?.contains(Manifest.permission.INTERNET) == true
-        }
-        .map { pkg ->
-            AppItem(
-                label = pm.getApplicationLabel(pkg.applicationInfo!!).toString(),
-                packageName = pkg.packageName,
-            )
-        }
-        .sortedBy { it.label.lowercase() }
 }
