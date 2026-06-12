@@ -46,7 +46,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import info.loveyu.mfca.input.Udp2RawLogActivity
+import info.loveyu.mfca.ui.input.Udp2RawLogActivity
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.ui.theme.ErrorCardBgDark
 import info.loveyu.mfca.ui.theme.ErrorCardBgLight

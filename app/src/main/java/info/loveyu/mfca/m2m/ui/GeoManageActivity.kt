@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package info.loveyu.mfca.m2m.geo
+package info.loveyu.mfca.m2m.ui
 
 import android.app.Activity
 import android.os.Bundle
@@ -41,6 +41,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.R
 import info.loveyu.mfca.m2m.core.M2mStateStore
+import info.loveyu.mfca.m2m.geo.GeoCacheState
+import info.loveyu.mfca.m2m.geo.GeoFileManager
+import info.loveyu.mfca.m2m.geo.GeoFileType
+import info.loveyu.mfca.m2m.geo.batchDownload
+import info.loveyu.mfca.m2m.geo.deleteAll
+import info.loveyu.mfca.m2m.geo.deleteSingle
+import info.loveyu.mfca.m2m.geo.downloadSingle
+import info.loveyu.mfca.m2m.geo.loadGeoConfig
+import info.loveyu.mfca.m2m.geo.refreshStates
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import kotlinx.coroutines.launch
 

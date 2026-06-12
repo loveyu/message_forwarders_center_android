@@ -41,7 +41,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.R
-import info.loveyu.mfca.m2m.geo.GeoManageActivity
+import info.loveyu.mfca.m2m.ui.GeoManageActivity
 import info.loveyu.mfca.m2m.ui.M2mAppSelectActivity
 import info.loveyu.mfca.m2m.ui.M2mCandidateSettingsActivity
 import info.loveyu.mfca.m2m.ui.M2mLogActivity

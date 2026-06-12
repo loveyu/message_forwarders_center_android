@@ -1,4 +1,4 @@
-package info.loveyu.mfca.input
+package info.loveyu.mfca.ui.input
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -46,6 +46,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
+import info.loveyu.mfca.input.Udp2RawInput
 
 class Udp2RawLogActivity : ComponentActivity() {
 

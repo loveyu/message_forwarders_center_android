@@ -60,7 +60,7 @@
         </activity>
 
         <activity
-            android:name=".config.ConfigActivity"
+            android:name=".ui.config.ConfigActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
@@ -120,12 +120,12 @@
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".m2m.geo.GeoManageActivity"
+            android:name=".m2m.ui.GeoManageActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".input.Udp2RawLogActivity"
+            android:name=".ui.input.Udp2RawLogActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 

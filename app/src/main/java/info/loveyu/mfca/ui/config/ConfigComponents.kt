@@ -1,4 +1,4 @@
-package info.loveyu.mfca.config
+package info.loveyu.mfca.ui.config
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row

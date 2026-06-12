@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package info.loveyu.mfca.m2m.geo
+package info.loveyu.mfca.m2m.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,6 +38,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.R
+import info.loveyu.mfca.m2m.geo.GeoCacheState
+import info.loveyu.mfca.m2m.geo.GeoFileType
+import info.loveyu.mfca.m2m.geo.formatFileSize
 
 @Composable
 fun GeoFileCard(

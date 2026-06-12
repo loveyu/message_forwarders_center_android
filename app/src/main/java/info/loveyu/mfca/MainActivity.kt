@@ -35,7 +35,7 @@ import info.loveyu.mfca.ui.M2mScreen
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
-import info.loveyu.mfca.config.ConfigActivity
+import info.loveyu.mfca.ui.config.ConfigActivity
 import info.loveyu.mfca.m2m.core.M2mManager
 import info.loveyu.mfca.m2m.models.M2mUiState
 import info.loveyu.mfca.ui.main.BottomTab
