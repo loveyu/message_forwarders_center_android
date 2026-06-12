@@ -118,6 +118,14 @@ object M2mProfileManager {
         }
         normalized["dns"] = dns
 
+        // Fallback: inject default relative paths if source config has no geoip/geosite
+        if (!normalized.containsKey("geoip")) {
+            normalized["geoip"] = listOf("./country.mmdb", "./geoip.dat")
+        }
+        if (!normalized.containsKey("geosite")) {
+            normalized["geosite"] = listOf("./geosite.dat")
+        }
+
         return yamlDump.dumpToString(normalized)
     }
 

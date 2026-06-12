@@ -42,6 +42,7 @@ object HttpDownloader {
         val tag: String = "HTTP",
         val userAgent: String? = null,
         val insecure: Boolean = false,
+        val progressIntervalMs: Long = 20_000L,
     )
 
     fun interface ProgressCallback {
@@ -209,7 +210,7 @@ object HttpDownloader {
                                 downloaded += n
                                 if (progressCallback != null) {
                                     val now = System.currentTimeMillis()
-                                    if (now - lastLogTime >= 20_000) {
+                                    if (now - lastLogTime >= config.progressIntervalMs) {
                                         progressCallback.onProgress(downloaded, totalSize)
                                         lastLogTime = now
                                     }

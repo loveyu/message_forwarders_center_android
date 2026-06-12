@@ -132,6 +132,14 @@ class M2mStateStore(context: Context) {
         editor.apply()
     }
 
+    fun getGeoUrlOverride(type: String): String? = preferences.getString(geoUrlKey(type), null)
+
+    fun setGeoUrlOverride(type: String, url: String?) {
+        val editor = preferences.edit()
+        if (url == null) editor.remove(geoUrlKey(type)) else editor.putString(geoUrlKey(type), url)
+        editor.apply()
+    }
+
     fun getOrCreateApiSecret(): String {
         var secret = preferences.getString(KEY_API_SECRET, null)
         if (secret == null) {
@@ -194,6 +202,8 @@ class M2mStateStore(context: Context) {
         private fun ipv6Key(candidateName: String): String = "ipv6_${sanitize(candidateName)}"
 
         private fun dnsHijackKey(candidateName: String): String = "dns_hijack_${sanitize(candidateName)}"
+
+        private fun geoUrlKey(type: String): String = "geo_url_${sanitize(type)}"
 
         private fun sanitize(value: String): String = value.replace(Regex("[^a-zA-Z0-9._-]"), "_")
     }

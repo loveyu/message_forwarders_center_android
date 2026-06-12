@@ -26,6 +26,7 @@ object ConfigLoader {
                 version = data["version"] as? String ?: "",
                 plugin = parsePlugin(data["plugin"]),
                 scheduler = parseScheduler(data["scheduler"]),
+                geo = parseGeo(data["geo"]),
                 links = parseLinks(data["links"]),
                 inputs = parseInputs(data["inputs"]),
                 queues = parseQueues(data["queues"]),
@@ -72,6 +73,19 @@ object ConfigLoader {
             chargingTickInterval = (map["chargingTickInterval"] as? String)?.let { Duration(it) },
             wakeLockTimeout = Duration(map["wakeLockTimeout"] as? String ?: "1h"),
             wifiLockTimeout = Duration(map["wifiLockTimeout"] as? String ?: "1h")
+        )
+    }
+
+    // ==================== Geo Parsing ====================
+
+    private fun parseGeo(geo: Any?): GeoConfig {
+        if (geo == null) return GeoConfig()
+        val map = geo as Map<String, Any>
+        return GeoConfig(
+            geoip = map["geoip"] as? String ?: "",
+            geosite = map["geosite"] as? String ?: "",
+            country = map["country"] as? String ?: "",
+            asn = map["asn"] as? String ?: "",
         )
     }
 

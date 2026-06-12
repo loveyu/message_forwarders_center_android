@@ -36,6 +36,27 @@ object AppConfigSchema {
             }
         }
 
+        objectNode("geo") {
+            description = "Global geo data file download URLs"
+
+            string("geoip") {
+                description = "GeoIP database download URL"
+                default = ""
+            }
+            string("geosite") {
+                description = "GeoSite database download URL"
+                default = ""
+            }
+            string("country") {
+                description = "Country MMDB database download URL"
+                default = ""
+            }
+            string("asn") {
+                description = "ASN database download URL"
+                default = ""
+            }
+        }
+
         objectList("links", block = { description = "Link (connection pool) configurations" }) {
             string("id") {
                 required()

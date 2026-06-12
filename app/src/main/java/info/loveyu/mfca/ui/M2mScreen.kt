@@ -52,6 +52,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.R
+import info.loveyu.mfca.m2m.GeoManageActivity
 import info.loveyu.mfca.m2m.MfcaM2mService
 import info.loveyu.mfca.m2m.M2mAppSelectActivity
 import info.loveyu.mfca.m2m.M2mCandidateSettingsActivity
@@ -305,6 +306,15 @@ fun M2mScreen(contentPadding: PaddingValues) {
                                     onClick = {
                                         showOverflowMenu = false
                                         context.startActivity(M2mLogActivity.intent(context))
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.geo_manage_menu)) },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        context.startActivity(
+                                            android.content.Intent(context, GeoManageActivity::class.java),
+                                        )
                                     },
                                 )
                                 DropdownMenuItem(

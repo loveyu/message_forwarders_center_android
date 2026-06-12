@@ -5,6 +5,7 @@
 | `version` | string |  | `` | Config version identifier |
 | `plugin` | object |  |  | 插件下载配置 |
 | `scheduler` | object |  |  | Unified scheduler configuration |
+| `geo` | object |  |  | Global geo data file download URLs |
 | `links` | list[object] |  |  | Link (connection pool) configurations |
 | `inputs` | object |  |  | Input source configurations |
 | `queues` | object |  |  | Queue system configuration |
@@ -40,6 +41,20 @@ Unified scheduler configuration
 | `chargingTickInterval` | duration |  |  | Tick interval when charging (defaults to tickInterval if omitted) |
 | `wakeLockTimeout` | duration |  | `1h` | Wake lock maximum hold duration |
 | `wifiLockTimeout` | duration |  | `1h` | WiFi lock maximum hold duration |
+
+## `geo`
+
+Global geo data file download URLs
+
+- **Type**: object
+
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `geoip` | string |  | `` | GeoIP database download URL |
+| `geosite` | string |  | `` | GeoSite database download URL |
+| `country` | string |  | `` | Country MMDB database download URL |
+| `asn` | string |  | `` | ASN database download URL |
 
 ## `links`
 

@@ -1,5 +1,12 @@
 version: "1.0"
 
+# Geo 数据文件全局配置（可选，用于在 UI 中设置默认下载 URL）
+# geo:
+#   geoip: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb"
+#   geosite: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.metadb"
+#   country: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/country.mmdb"
+#   asn: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/GeoLite2-ASN.mmdb"
+
 inputs:
   m2m:
     - name: home_vpn_primary

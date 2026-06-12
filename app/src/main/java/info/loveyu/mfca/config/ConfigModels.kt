@@ -16,6 +16,7 @@ data class AppConfig(
     val version: String = "",
     val plugin: PluginConfig = PluginConfig(),
     val scheduler: SchedulerConfig = SchedulerConfig(),
+    val geo: GeoConfig = GeoConfig(),
     val links: List<LinkConfig> = emptyList(),
     val inputs: InputsConfig = InputsConfig(),
     val queues: QueuesConfig = QueuesConfig(),
@@ -30,6 +31,16 @@ data class PluginConfig(
     val udp2rawCore: String = "",
     val m2mCore: String = "",
     val downloadProxy: String = "",
+)
+
+/**
+ * Geo 数据文件配置（全局默认下载 URL）
+ */
+data class GeoConfig(
+    val geoip: String = "",
+    val geosite: String = "",
+    val country: String = "",
+    val asn: String = "",
 )
 
 /**

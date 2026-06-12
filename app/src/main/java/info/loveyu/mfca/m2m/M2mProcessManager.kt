@@ -7,6 +7,7 @@ import java.io.File
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.security.MessageDigest
 
 object M2mProcessManager {
     data class RunningCore(
@@ -44,6 +45,9 @@ object M2mProcessManager {
             val workDir = File(context.filesDir, "vpn/runtime/${sanitize(artifacts.candidate.name)}").apply {
                 mkdirs()
             }
+            // Copy cached geo data files to the working directory so the mihomo core
+            // can find them at the relative paths specified in the source config.
+            copyGeoFiles(context, workDir)
             val logDir = File(context.cacheDir, "vpn/${sanitize(artifacts.candidate.name)}").apply {
                 mkdirs()
             }
@@ -163,5 +167,64 @@ object M2mProcessManager {
         } catch (_: IOException) {
             false
         }
+    }
+
+    private fun copyGeoFiles(context: Context, workDir: File) {
+        val geoDir = File(context.filesDir, "vpn/geo")
+        if (!geoDir.isDirectory) return
+        val cachedFiles = geoDir.listFiles()?.filter { it.isFile && !it.name.endsWith(".hash") } ?: return
+        val processed = mutableSetOf<String>()
+        for (source in cachedFiles) {
+            val target = File(workDir, source.name)
+            // Use pre-computed hash from download time; auto-generate if missing (backward compat)
+            var sourceHash = GeoFileManager.readSavedHash(source)
+            if (sourceHash == null) {
+                sourceHash = source.md5()
+                val hashFile = File(geoDir, "${source.name}.hash")
+                runCatching { hashFile.writeText(sourceHash) }
+            }
+            val storedHash = target.readSavedHash()
+            if (sourceHash == storedHash && target.exists() && target.length() == source.length()) {
+                LogManager.logDebug("VPN", "Skipping ${source.name}, hash unchanged")
+            } else {
+                runCatching {
+                    source.copyTo(target, overwrite = true)
+                    // Copy the hash sidecar too
+                    val sourceHashFile = File(geoDir, "${source.name}.hash")
+                    if (sourceHashFile.exists()) {
+                        sourceHashFile.copyTo(File(workDir, "${source.name}.hash"), overwrite = true)
+                    }
+                    LogManager.logDebug("VPN", "Copied geo file ${source.name} to working directory")
+                }
+            }
+            processed.add(source.name)
+        }
+        // Clean stale runtime files and their .hash sidecars
+        workDir.listFiles()?.forEach { file ->
+            if (file.isFile && file.name !in processed && !file.name.endsWith(".hash")) {
+                runCatching {
+                    file.delete()
+                    File(workDir, "${file.name}.hash").delete()
+                }
+            }
+        }
+    }
+
+    private fun File.md5(): String {
+        val md = MessageDigest.getInstance("MD5")
+        inputStream().use { input ->
+            val buffer = ByteArray(8192)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                md.update(buffer, 0, read)
+            }
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun File.readSavedHash(): String? {
+        val hashFile = File(parentFile, "${name}.hash")
+        return if (hashFile.exists()) hashFile.readText().trim() else null
     }
 }

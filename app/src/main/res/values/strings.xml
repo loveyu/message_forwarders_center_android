@@ -175,6 +175,37 @@
     <string name="more_options">更多选项</string>
     <string name="vpn_running_title_format">运行中：%1$s</string>
 
+    <!-- Geo 数据管理 -->
+    <string name="geo_manage_title">Geo 数据管理</string>
+    <string name="geo_manage_menu">Geo 数据</string>
+    <string name="geo_type_geoip">GeoIP 数据库</string>
+    <string name="geo_type_geosite">GeoSite 数据库</string>
+    <string name="geo_type_country">Country MMDB 数据库</string>
+    <string name="geo_type_asn">ASN 数据库</string>
+    <string name="geo_status_cached">已缓存（%1$s）</string>
+    <string name="geo_status_not_cached">未缓存</string>
+    <string name="geo_download">下载</string>
+    <string name="geo_redownload">重新下载</string>
+    <string name="geo_delete_cache">删除缓存</string>
+    <string name="geo_edit_url">编辑 URL</string>
+    <string name="geo_reset_url">重置为默认</string>
+    <string name="geo_batch_download">批量下载</string>
+    <string name="geo_batch_delete">批量删除缓存</string>
+    <string name="geo_reset_all">重置全部为默认</string>
+    <string name="geo_url_dialog_title">编辑下载 URL</string>
+    <string name="geo_url_dialog_hint">输入 URL（支持 https://、data://、cache://、sdcard://、file://）</string>
+    <string name="geo_url_dialog_save">保存</string>
+    <string name="geo_url_dialog_cancel">取消</string>
+    <string name="geo_download_success">%1$s 下载完成</string>
+    <string name="geo_download_failed">%1$s 下载失败：%2$s</string>
+    <string name="geo_delete_confirm">确认删除 %1$s 的缓存？</string>
+    <string name="geo_delete_all_confirm">确认删除所有 Geo 数据缓存？</string>
+    <string name="geo_reset_confirm">确认重置 %1$s 的 URL 为默认值？</string>
+    <string name="geo_reset_all_confirm">确认重置所有 URL 为默认值？</string>
+    <string name="geo_no_default_url">无默认 URL</string>
+    <string name="geo_downloading">下载中…</string>
+    <string name="geo_batch_downloading">批量下载中…</string>
+
     <!-- m2m 流量统计 -->
     <string name="vpn_traffic_title">流量统计</string>
     <string name="vpn_download_speed">下载速度</string>
