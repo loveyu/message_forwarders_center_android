@@ -1,4 +1,4 @@
-package info.loveyu.mfca.test
+package info.loveyu.mfca.test.m2m
 
 import android.app.Notification
 import android.app.NotificationChannel

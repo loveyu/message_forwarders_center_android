@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package info.loveyu.mfca.test
+package info.loveyu.mfca.test.m2m
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement

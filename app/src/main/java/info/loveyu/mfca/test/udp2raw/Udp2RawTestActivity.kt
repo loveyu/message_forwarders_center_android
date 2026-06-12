@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package info.loveyu.mfca.test
+package info.loveyu.mfca.test.udp2raw
 
 import android.content.Context
 import android.os.Bundle

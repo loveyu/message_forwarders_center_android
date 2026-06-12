@@ -135,22 +135,22 @@
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".test.Udp2RawTestActivity"
-            android:exported="false"
+            android:name=".test.udp2raw.Udp2RawTestActivity"
+
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".test.M2mTestActivity"
-            android:exported="false"
+            android:name=".test.m2m.M2mTestActivity"
+
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".test.M2mFullTestActivity"
-            android:exported="true"
+            android:name=".test.m2m.M2mFullTestActivity"
+
             android:theme="@style/Theme.FlowGate" />
 
         <service
-            android:name=".test.M2mFullTestService"
+            android:name=".test.m2m.M2mFullTestService"
             android:exported="false"
             android:foregroundServiceType="specialUse"
             android:permission="android.permission.BIND_VPN_SERVICE">
@@ -163,12 +163,12 @@
         </service>
 
         <service
-            android:name=".test.Udp2RawTestHelperService"
+            android:name=".test.udp2raw.Udp2RawTestHelperService"
             android:exported="false"
             android:process=":udp2rawtest" />
 
         <service
-            android:name=".test.Udp2RawClientTestService"
+            android:name=".test.udp2raw.Udp2RawClientTestService"
             android:exported="false"
             android:process=":udp2rawclienttest" />
 

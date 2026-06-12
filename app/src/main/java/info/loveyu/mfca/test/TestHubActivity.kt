@@ -44,6 +44,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.R
+import info.loveyu.mfca.test.m2m.M2mFullTestActivity
+import info.loveyu.mfca.test.udp2raw.Udp2RawTestActivity
 import info.loveyu.mfca.ui.theme.MfcaTheme
 
 class TestHubActivity : ComponentActivity() {
