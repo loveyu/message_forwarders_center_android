@@ -119,11 +119,6 @@ import info.loveyu.mfca.ui.theme.StatusRunningDark
 import info.loveyu.mfca.ui.theme.StatusRunningLight
 import info.loveyu.mfca.util.Preferences
 
-private data class ComponentSelectionKey(
-    val id: String,
-    val type: ComponentType
-)
-
 @Composable
 fun MainTopBar() {
     val context = LocalContext.current
@@ -406,105 +401,4 @@ fun MainScreen(
     }
 }
 
-@Composable
-fun ComponentCountBadge(count: Int, label: String, isEnabled: Boolean) {
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
-    val color = if (isEnabled) {
-        if (isDark) BadgeEnabledDark else BadgeEnabledLight
-    } else {
-        if (isDark) BadgeDisabledDark else BadgeDisabledLight
-    }
-    Row(
-        modifier = Modifier
-            .background(color = color.copy(alpha = 0.1f), shape = RoundedCornerShape(16.dp))
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(modifier = Modifier.size(8.dp).background(color, CircleShape))
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(text = "$count", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = color)
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(text = label, style = MaterialTheme.typography.labelMedium, color = color)
-    }
-}
 
-@Composable
-fun ComponentChip(component: ComponentStatus, isEnabled: Boolean, onClick: () -> Unit) {
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
-    val backgroundColor = if (isEnabled) {
-        when (component.type) {
-            ComponentType.LINK -> if (isDark) LinkChipBgDark else LinkChipBgLight
-            ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBgDark else HttpInputChipBgLight
-            ComponentType.LINK_INPUT -> if (isDark) LinkInputChipBgDark else LinkInputChipBgLight
-            ComponentType.UDP2RAW -> if (isDark) Udp2RawChipBgDark else Udp2RawChipBgLight
-            ComponentType.RULE -> if (isDark) LinkInputChipBgDark else LinkInputChipBgLight
-            ComponentType.OUTPUT -> if (isDark) OutputChipBgDark else OutputChipBgLight
-            ComponentType.QUEUE -> if (isDark) QueueChipBgDark else QueueChipBgLight
-        }
-    } else {
-        if (isDark) DisabledChipBgDark else DisabledChipBgLight
-    }
-
-    @Suppress("UNUSED")
-    val borderColor = if (isEnabled) {
-        when (component.type) {
-            ComponentType.LINK -> if (isDark) LinkChipBorderDark else LinkChipBorderLight
-            ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipBorderDark else HttpInputChipBorderLight
-            ComponentType.LINK_INPUT -> if (isDark) LinkInputChipBorderDark else LinkInputChipBorderLight
-            ComponentType.UDP2RAW -> if (isDark) Udp2RawChipBorderDark else Udp2RawChipBorderLight
-            ComponentType.RULE -> if (isDark) LinkInputChipBorderDark else LinkInputChipBorderLight
-            ComponentType.OUTPUT -> if (isDark) OutputChipBorderDark else OutputChipBorderLight
-            ComponentType.QUEUE -> if (isDark) QueueChipBorderDark else QueueChipBorderLight
-        }
-    } else {
-        if (isDark) DisabledChipBorderDark else DisabledChipBorderLight
-    }
-
-    val textColor = if (isEnabled) {
-        when (component.type) {
-            ComponentType.LINK -> if (isDark) LinkChipTextDark else LinkChipTextLight
-            ComponentType.HTTP_INPUT -> if (isDark) HttpInputChipTextDark else HttpInputChipTextLight
-            ComponentType.LINK_INPUT -> if (isDark) LinkInputChipTextDark else LinkInputChipTextLight
-            ComponentType.UDP2RAW -> if (isDark) Udp2RawChipTextDark else Udp2RawChipTextLight
-            ComponentType.RULE -> if (isDark) LinkInputChipTextDark else LinkInputChipTextLight
-            ComponentType.OUTPUT -> if (isDark) OutputChipTextDark else OutputChipTextLight
-            ComponentType.QUEUE -> if (isDark) QueueChipTextDark else QueueChipTextLight
-        }
-    } else {
-        if (isDark) DisabledChipTextDark else DisabledChipTextLight
-    }
-
-    val statusColor = if (component.isRunning) {
-        if (isDark) StatusRunningDark else StatusRunningLight
-    } else {
-        if (isDark) StatusDisabledDark else StatusDisabledLight
-    }
-
-    Card(
-        modifier = Modifier.clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = backgroundColor),
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .background(
-                        color = statusColor,
-                        shape = CircleShape
-                    )
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = component.name,
-                style = MaterialTheme.typography.labelMedium,
-                color = textColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
