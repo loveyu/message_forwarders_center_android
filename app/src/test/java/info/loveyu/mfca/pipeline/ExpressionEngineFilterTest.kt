@@ -245,7 +245,7 @@ class ExpressionEngineFilterTest : ExpressionEngineBaseTest() {
     fun `filter - raw data function`() {
         engine.registerRawDataFunction(
             "testRaw",
-            ExpressionEngine.RawDataFunction("testRaw") { data, _ ->
+            RawDataFunction("testRaw") { data, _ ->
                 String(data).contains("test")
             }
         )
@@ -257,7 +257,7 @@ class ExpressionEngineFilterTest : ExpressionEngineBaseTest() {
     fun `filter - raw data function with args`() {
         engine.registerRawDataFunction(
             "dataEquals",
-            ExpressionEngine.RawDataFunction("dataEquals") { data, args ->
+            RawDataFunction("dataEquals") { data, args ->
                 val expected = args.getOrNull(0)?.toString() ?: ""
                 String(data) == expected
             }
@@ -285,7 +285,7 @@ class ExpressionEngineFilterTest : ExpressionEngineBaseTest() {
         val lastPassed = mutableMapOf<String, Long>()
         engine.registerRawDataFunction(
             "simClipboardNew",
-            ExpressionEngine.RawDataFunction("simClipboardNew") { data, args ->
+            RawDataFunction("simClipboardNew") { data, args ->
                 val maxAgeMs = (args.getOrNull(0) as? Number)?.toLong()?.times(1000L) ?: 10_000L
                 val text = String(data)
                 val now = System.currentTimeMillis()
@@ -303,7 +303,7 @@ class ExpressionEngineFilterTest : ExpressionEngineBaseTest() {
         val lastPassed = mutableMapOf<String, Long>()
         engine.registerRawDataFunction(
             "simClipboardNew2",
-            ExpressionEngine.RawDataFunction("simClipboardNew2") { data, args ->
+            RawDataFunction("simClipboardNew2") { data, args ->
                 val maxAgeMs = (args.getOrNull(0) as? Number)?.toLong()?.times(1000L) ?: 10_000L
                 val text = String(data)
                 val now = System.currentTimeMillis()
@@ -324,7 +324,7 @@ class ExpressionEngineFilterTest : ExpressionEngineBaseTest() {
         val lastPassed = mutableMapOf<String, Long>()
         engine.registerRawDataFunction(
             "simClipboardNew3",
-            ExpressionEngine.RawDataFunction("simClipboardNew3") { data, args ->
+            RawDataFunction("simClipboardNew3") { data, args ->
                 val maxAgeMs = (args.getOrNull(0) as? Number)?.toLong()?.times(1000L) ?: 10_000L
                 val text = String(data)
                 val now = System.currentTimeMillis()
@@ -500,7 +500,7 @@ class ExpressionEngineFilterTest : ExpressionEngineBaseTest() {
     fun `backward compat - clipboardNew raw data function still works`() {
         engine.registerRawDataFunction(
             "testClipboardNewCompat",
-            ExpressionEngine.RawDataFunction("testClipboardNewCompat") { _, _ -> true }
+            RawDataFunction("testClipboardNewCompat") { _, _ -> true }
         )
         val data = "hello".toByteArray()
         assertTrue(engine.executeTwoPhaseFilter("testClipboardNewCompat(10)", data))

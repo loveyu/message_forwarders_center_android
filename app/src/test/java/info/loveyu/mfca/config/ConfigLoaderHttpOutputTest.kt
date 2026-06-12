@@ -1,6 +1,7 @@
 package info.loveyu.mfca.config
 
 import info.loveyu.mfca.pipeline.ExpressionEngine
+import info.loveyu.mfca.pipeline.applyFormatSteps
 import info.loveyu.mfca.util.LogManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull

@@ -230,18 +230,18 @@ class ExpressionEngineCallTest : ExpressionEngineBaseTest() {
 
     @Test
     fun `anyValueToString converts null to empty string`() {
-        assertEquals("", engine.anyValueToString(null))
+        assertEquals("", anyValueToString(null))
     }
 
     @Test
     fun `anyValueToString converts string unchanged`() {
-        assertEquals("hello", engine.anyValueToString("hello"))
+        assertEquals("hello", anyValueToString("hello"))
     }
 
     @Test
     fun `anyValueToString converts Map to JSON string`() {
         val map = mapOf("a" to 1, "b" to "two")
-        val result = engine.anyValueToString(map)
+        val result = anyValueToString(map)
         val parsed = JSONObject(result)
         assertEquals(1, parsed.getInt("a"))
         assertEquals("two", parsed.getString("b"))
@@ -250,7 +250,7 @@ class ExpressionEngineCallTest : ExpressionEngineBaseTest() {
     @Test
     fun `anyValueToString converts JSONObject to JSON string`() {
         val obj = JSONObject("""{"key":"value"}""")
-        assertEquals("""{"key":"value"}""", engine.anyValueToString(obj))
+        assertEquals("""{"key":"value"}""", anyValueToString(obj))
     }
 
     @Test

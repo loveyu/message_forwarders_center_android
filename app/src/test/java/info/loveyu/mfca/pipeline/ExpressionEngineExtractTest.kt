@@ -28,7 +28,7 @@ class ExpressionEngineExtractTest : ExpressionEngineBaseTest() {
         // Override gzEncode/gzDecode to use java.util.Base64 instead of android.util.Base64
         engine.registerCustomFunction(
             "gzEncode",
-            ExpressionEngine.BuiltinFunction("gzEncode", 1) { args ->
+            BuiltinFunction("gzEncode", 1) { args ->
                 val str = args.getOrNull(0)?.toString() ?: return@BuiltinFunction ""
                 try {
                     val bos = ByteArrayOutputStream()
@@ -43,7 +43,7 @@ class ExpressionEngineExtractTest : ExpressionEngineBaseTest() {
         )
         engine.registerCustomFunction(
             "gzDecode",
-            ExpressionEngine.BuiltinFunction("gzDecode", 1) { args ->
+            BuiltinFunction("gzDecode", 1) { args ->
                 val str = args.getOrNull(0)?.toString() ?: return@BuiltinFunction ""
                 try {
                     val compressed = java.util.Base64.getDecoder().decode(str)

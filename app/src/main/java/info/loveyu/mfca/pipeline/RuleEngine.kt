@@ -93,7 +93,7 @@ class RuleEngine(
             // 用于剪贴板去重同步，在写入历史之前调用
             expressionEngine.registerRawDataFunction(
                 "clipboardNew",
-                ExpressionEngine.RawDataFunction("clipboardNew") { data, args ->
+                RawDataFunction("clipboardNew") { data, args ->
                     val seconds = args.getOrNull(0)
                     val maxAgeMs = when (seconds) {
                         is Long -> seconds * 1000L
@@ -274,7 +274,7 @@ class RuleEngine(
                         currentData = enriched
                         currentJson = parseJson(currentData)
                         if (LogManager.isDebugEnabled()) {
-                            LogManager.logDebug("RULE", "Rule [${rule.name}] enrich [${transform.enrich}] -> OK, dataLen=${currentData.size}, preview=${expressionEngine.truncateForLog(String(currentData))}")
+                            LogManager.logDebug("RULE", "Rule [${rule.name}] enrich [${transform.enrich}] -> OK, dataLen=${currentData.size}, preview=${truncateForLog(String(currentData))}")
                         }
                     }
                 } catch (e: Exception) {
@@ -292,7 +292,7 @@ class RuleEngine(
                     skipStep = true
                 } else {
                     if (LogManager.isDebugEnabled()) {
-                        LogManager.logDebug("RULE", "Rule [${rule.name}] filter [${transform.filter}] -> PASS, json=${expressionEngine.truncateForLog(currentJson?.toString())}, data=${expressionEngine.truncateForLog(String(currentData))}")
+                        LogManager.logDebug("RULE", "Rule [${rule.name}] filter [${transform.filter}] -> PASS, json=${truncateForLog(currentJson?.toString())}, data=${truncateForLog(String(currentData))}")
                     }
                     if (transform.filter!!.contains("clipboardUpdateBefore")) {
                         ClipboardHistoryDbHelper.updateLastPassedTime(String(currentData))
@@ -312,7 +312,7 @@ class RuleEngine(
                     currentData = transformed
                     currentJson = parseJson(currentData)
                     if (LogManager.isDebugEnabled()) {
-                        LogManager.logDebug("RULE", "Rule [${rule.name}] transform extract=[${transform.extract}], format=[${transform.format}] -> OK, dataLen=${currentData.size}, preview=${expressionEngine.truncateForLog(String(currentData))}")
+                        LogManager.logDebug("RULE", "Rule [${rule.name}] transform extract=[${transform.extract}], format=[${transform.format}] -> OK, dataLen=${currentData.size}, preview=${truncateForLog(String(currentData))}")
                     }
                 } else {
                     if (LogManager.isDebugEnabled()) {
@@ -344,7 +344,7 @@ class RuleEngine(
                         return@forEach
                     }
                     if (LogManager.isDebugEnabled()) {
-                        LogManager.logDebug("RULE", "Rule [${rule.name}] output -> $outputName: sending, dataLen=${currentData.size}, headers=${expressionEngine.truncateForLog(currentHeaders.toString())}")
+                        LogManager.logDebug("RULE", "Rule [${rule.name}] output -> $outputName: sending, dataLen=${currentData.size}, headers=${truncateForLog(currentHeaders.toString())}")
                     }
                     val effectiveMsg = inputMessage.copy(headers = currentHeaders)
                     val ruleCtx = buildRuleContext(rule.name, effectiveMsg)
@@ -422,7 +422,7 @@ class RuleEngine(
                         currentData = enriched
                         currentJson = parseJson(currentData)
                         if (LogManager.isDebugEnabled()) {
-                            LogManager.logDebug("RULE", "Rule [${rule.name}] enrich [${transform.enrich}] -> OK, dataLen=${currentData.size}, preview=${expressionEngine.truncateForLog(String(currentData))}")
+                            LogManager.logDebug("RULE", "Rule [${rule.name}] enrich [${transform.enrich}] -> OK, dataLen=${currentData.size}, preview=${truncateForLog(String(currentData))}")
                         }
                     }
                 } catch (e: Exception) {
@@ -437,7 +437,7 @@ class RuleEngine(
                     skipStep = true
                 } else {
                     if (LogManager.isDebugEnabled()) {
-                        LogManager.logDebug("RULE", "Rule [${rule.name}] filter [${transform.filter}] -> PASS, json=${expressionEngine.truncateForLog(currentJson?.toString())}, data=${expressionEngine.truncateForLog(String(currentData))}")
+                        LogManager.logDebug("RULE", "Rule [${rule.name}] filter [${transform.filter}] -> PASS, json=${truncateForLog(currentJson?.toString())}, data=${truncateForLog(String(currentData))}")
                     }
                     if (transform.filter!!.contains("clipboardUpdateBefore")) {
                         ClipboardHistoryDbHelper.updateLastPassedTime(String(currentData))
@@ -456,7 +456,7 @@ class RuleEngine(
                     currentData = transformed
                     currentJson = parseJson(currentData)
                     if (LogManager.isDebugEnabled()) {
-                        LogManager.logDebug("RULE", "Rule [${rule.name}] transform extract=[${transform.extract}], format=[${transform.format}] -> OK, dataLen=${currentData.size}, preview=${expressionEngine.truncateForLog(String(currentData))}")
+                        LogManager.logDebug("RULE", "Rule [${rule.name}] transform extract=[${transform.extract}], format=[${transform.format}] -> OK, dataLen=${currentData.size}, preview=${truncateForLog(String(currentData))}")
                     }
                 } else {
                     if (LogManager.isDebugEnabled()) {
@@ -487,7 +487,7 @@ class RuleEngine(
                         return@forEach
                     }
                     if (LogManager.isDebugEnabled()) {
-                        LogManager.logDebug("RULE", "Rule [${rule.name}] output -> $outputName: sending, dataLen=${currentData.size}, headers=${expressionEngine.truncateForLog(currentHeaders.toString())}")
+                        LogManager.logDebug("RULE", "Rule [${rule.name}] output -> $outputName: sending, dataLen=${currentData.size}, headers=${truncateForLog(currentHeaders.toString())}")
                     }
                     val effectiveMsg = inputMessage.copy(headers = currentHeaders)
                     val ruleCtx = buildRuleContext(rule.name, effectiveMsg)
@@ -805,7 +805,7 @@ class RuleEngine(
                     if (resultMap != null) {
                         if (resultMap.containsKey("data")) {
                             val newData = resultMap["data"]
-                            currentData = expressionEngine.anyValueToString(newData).toByteArray()
+                            currentData = anyValueToString(newData).toByteArray()
                         }
                         if (resultMap.containsKey("headers")) {
                             val newHeaders = resultMap["headers"]
@@ -854,7 +854,7 @@ class RuleEngine(
                     val resultMap = toMap(result)
                     if (resultMap != null) {
                         if (resultMap.containsKey("data")) {
-                            currentData = expressionEngine.anyValueToString(resultMap["data"]).toByteArray()
+                            currentData = anyValueToString(resultMap["data"]).toByteArray()
                         }
                         if (resultMap.containsKey("headers")) {
                             val newHeaders = resultMap["headers"]
@@ -891,11 +891,11 @@ class RuleEngine(
         callVars: Map<String, Any?>,
         ruleName: String
     ): Any? {
-        val match = ExpressionEngine.FUNC_CALL_REGEX.find(callExpr.trim())
+        val match = FUNC_CALL_REGEX.find(callExpr.trim())
             ?: throw IllegalArgumentException("Invalid call expression: $callExpr")
         val callName = match.groupValues[1]
         val argsStr = match.groupValues[2]
-        val argNames = expressionEngine.parseFunctionArgs(argsStr).map { it.trim() }
+        val argNames = parseFunctionArgs(argsStr).map { it.trim() }
         val resolvedArgs = resolveCallArgs(argNames, data, headers, callVars)
 
         val callConfig = callConfigs[callName]
@@ -915,11 +915,11 @@ class RuleEngine(
         callVars: Map<String, Any?>,
         ruleName: String
     ): Any? {
-        val match = ExpressionEngine.FUNC_CALL_REGEX.find(callExpr.trim())
+        val match = FUNC_CALL_REGEX.find(callExpr.trim())
             ?: throw IllegalArgumentException("Invalid call expression: $callExpr")
         val callName = match.groupValues[1]
         val argsStr = match.groupValues[2]
-        val argNames = expressionEngine.parseFunctionArgs(argsStr).map { it.trim() }
+        val argNames = parseFunctionArgs(argsStr).map { it.trim() }
         val resolvedArgs = resolveCallArgs(argNames, data, headers, callVars)
 
         val callConfig = callConfigs[callName]

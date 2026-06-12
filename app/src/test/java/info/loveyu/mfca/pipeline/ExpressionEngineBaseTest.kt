@@ -21,7 +21,7 @@ abstract class ExpressionEngineBaseTest {
         // Override base64 functions with java.util.Base64 for non-Android JUnit
         engine.registerCustomFunction(
             "base64Decode",
-            ExpressionEngine.BuiltinFunction("base64Decode", 1) { args ->
+            BuiltinFunction("base64Decode", 1) { args ->
                 val str = args.getOrNull(0)?.toString() ?: ""
                 try {
                     java.util.Base64.getDecoder().decode(str).toString(Charsets.UTF_8)
@@ -32,7 +32,7 @@ abstract class ExpressionEngineBaseTest {
         )
         engine.registerCustomFunction(
             "base64Encode",
-            ExpressionEngine.BuiltinFunction("base64Encode", 1) { args ->
+            BuiltinFunction("base64Encode", 1) { args ->
                 val str = args.getOrNull(0)?.toString() ?: ""
                 java.util.Base64.getEncoder()
                     .encodeToString(str.toByteArray(Charsets.UTF_8))

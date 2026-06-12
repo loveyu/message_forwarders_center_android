@@ -374,7 +374,7 @@ class YamlConfigDrivenTest : ExpressionEngineBaseTest() {
     fun `scenario - plain text with raw data function filter`() {
         engine.registerRawDataFunction(
             "textContains",
-            ExpressionEngine.RawDataFunction("textContains") { data, args ->
+            RawDataFunction("textContains") { data, args ->
                 val needle = args.getOrNull(0)?.toString() ?: ""
                 String(data).contains(needle)
             }
