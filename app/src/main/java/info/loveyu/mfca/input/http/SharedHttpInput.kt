@@ -1,7 +1,10 @@
-package info.loveyu.mfca.input
+package info.loveyu.mfca.input.http
 
 import fi.iki.elonen.NanoHTTPD
 import info.loveyu.mfca.config.models.LinkConfig
+import info.loveyu.mfca.input.InputMessage
+import info.loveyu.mfca.input.InputSource
+import info.loveyu.mfca.input.InputType
 import info.loveyu.mfca.util.LogManager
 import java.net.BindException
 

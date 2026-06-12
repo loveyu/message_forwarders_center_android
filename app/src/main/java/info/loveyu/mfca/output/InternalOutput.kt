@@ -1,6 +1,7 @@
 package info.loveyu.mfca.output
 
 import android.content.Context
+import info.loveyu.mfca.output.Output
 import info.loveyu.mfca.config.models.InternalOutputConfig
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.util.network.NetworkChecker
@@ -8,7 +9,7 @@ import info.loveyu.mfca.util.network.NetworkChecker
 /**
  * 内部输出接口
  */
-sealed interface InternalOutput : Output {
+interface InternalOutput : Output {
     override val name: String
     val internalContext: Context
     val internalConfig: InternalOutputConfig

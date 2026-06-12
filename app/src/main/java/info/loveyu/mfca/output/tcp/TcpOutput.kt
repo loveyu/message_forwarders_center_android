@@ -1,6 +1,9 @@
-package info.loveyu.mfca.output
+package info.loveyu.mfca.output.tcp
 
 import android.content.Context
+import info.loveyu.mfca.output.Output
+import info.loveyu.mfca.output.OutputType
+import info.loveyu.mfca.output.SendResult
 import info.loveyu.mfca.config.models.LinkOutputConfig
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.queue.QueueItem
@@ -14,33 +17,29 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * MQTT 生产者输出
+ * TCP 生产者输出
  *
  * 重试逻辑:
  *   retry.maxAttempts — 最大尝试次数（默认 1，即不重试）
- *   retry.interval    — 每次重试前等待时长（默认 1s）
+ *   retry.interval    — 每次重试前等待时长
  *
  * 最终失败处理 (onFailureQueue):
  *   将消息放入失败队列异步重试，队列消费者会路由回本输出
- *
- * MQTT 发布参数:
- *   qos    — QoS 级别 0/1/2（默认 1）
- *   retain — 是否设置 retain 标志（默认 false）
  */
-class MqttOutput(
+class TcpOutput(
     private val context: Context,
     override val name: String,
     private val config: LinkOutputConfig
 ) : Output {
 
-    override val type: OutputType = OutputType.mqtt
+    override val type: OutputType = OutputType.tcp
     override val formatSteps get() = config.format
     override val queueRef get() = config.queue
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    private val mqttLink: info.loveyu.mfca.link.MqttLink?
-        get() = LinkManager.getLink(config.linkId) as? info.loveyu.mfca.link.MqttLink
+    private val tcpLink: info.loveyu.mfca.link.TcpLink?
+        get() = LinkManager.getLink(config.linkId) as? info.loveyu.mfca.link.TcpLink
 
     override fun send(item: QueueItem, callback: ((Boolean) -> Unit)?) {
         scope.launch {
@@ -63,55 +62,41 @@ class MqttOutput(
                 attempt++
                 if (attempt < maxAttempts) {
                     val intervalMs = config.retry?.interval?.millis ?: 1_000L
-                    LogManager.logDebug(
-                        "MQTT",
-                        "[$name] Retry $attempt/$maxAttempts after ${intervalMs}ms"
-                    )
+                    LogManager.logDebug("TCP", "[$name] Retry $attempt/$maxAttempts after ${intervalMs}ms")
                     delay(intervalMs)
                 }
             }
 
-            LogManager.logWarn("MQTT", "[$name] Exhausted all $maxAttempts attempt(s)")
+            LogManager.logWarn("TCP", "[$name] Exhausted all $maxAttempts attempt(s)")
             handleOnFailureQueue(item)
             callback?.invoke(false)
         }
     }
 
     private fun doSend(item: QueueItem): SendResult {
-        val link = mqttLink
+        val link = tcpLink
         if (link == null) {
-            LogManager.logError("MQTT", "[$name] Link not found: ${config.linkId}")
-            return SendResult.RETRY
-        }
-
-        val topic = config.topic
-        if (topic == null) {
-            LogManager.logWarn("MQTT", "[$name] No topic specified")
+            LogManager.logError("TCP", "[$name] Link not found: ${config.linkId}")
             return SendResult.RETRY
         }
 
         if (!link.isConnected()) {
             if (!LinkManager.shouldEnableLink(config.linkId)) {
-                LogManager.logDebug("MQTT", "[$name] Skipping: link network conditions not met")
+                LogManager.logDebug("TCP", "[$name] Skipping: link network conditions not met")
                 return SendResult.SKIP
             }
             if (link.isConnecting()) {
-                LogManager.logDebug("MQTT", "[$name] Skipping: link is connecting")
+                LogManager.logDebug("TCP", "[$name] Skipping: link is connecting")
                 return SendResult.RETRY
             }
             link.connect()
             return SendResult.RETRY
         }
 
-        val qos = config.qos ?: 1
-        val retain = config.retain
         if (LogManager.isDebugEnabled()) {
-            LogManager.logDebug(
-                "MQTT",
-                "[$name] Publishing to $topic qos=$qos retain=$retain dataLen=${item.data.size}"
-            )
+            LogManager.logDebug("TCP", "[$name] Sending dataLen=${item.data.size}")
         }
-        return if (link.sendToTopic(topic, item.data, qos, retain)) SendResult.SUCCESS else SendResult.RETRY
+        return if (link.send(item.data)) SendResult.SUCCESS else SendResult.RETRY
     }
 
     private fun handleOnFailureQueue(item: QueueItem) {
@@ -130,21 +115,21 @@ class MqttOutput(
 
         val queue = QueueManager.getQueue(queueRef.name)
         val queued = queue?.enqueue(failItem) ?: run {
-            LogManager.logWarn("MQTT", "[$name] onFailureQueue not found: ${queueRef.name}")
+            LogManager.logWarn("TCP", "[$name] onFailureQueue not found: ${queueRef.name}")
             false
         }
 
         if (queued) {
-            LogManager.logDebug("MQTT", "[$name] Queued failed item to onFailureQueue=${queueRef.name}")
+            LogManager.logDebug("TCP", "[$name] Queued failed item to onFailureQueue=${queueRef.name}")
         } else {
-            LogManager.logWarn("MQTT", "[$name] Failed to enqueue item to onFailureQueue: ${queueRef.name}")
+            LogManager.logWarn("TCP", "[$name] Failed to enqueue item to onFailureQueue: ${queueRef.name}")
         }
     }
 
     override fun isAvailable(): Boolean {
         if (!NetworkChecker.shouldEnable(context, config.whenCondition, config.deny)) return false
         if (!LinkManager.shouldEnableLink(config.linkId)) return false
-        val link = mqttLink ?: return false
+        val link = tcpLink ?: return false
         return link.isConnected()
     }
 }

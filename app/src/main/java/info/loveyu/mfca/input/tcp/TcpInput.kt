@@ -1,6 +1,9 @@
-package info.loveyu.mfca.input
+package info.loveyu.mfca.input.tcp
 
 import info.loveyu.mfca.config.models.LinkInputConfig
+import info.loveyu.mfca.input.InputMessage
+import info.loveyu.mfca.input.InputSource
+import info.loveyu.mfca.input.InputType
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.util.LogManager
 

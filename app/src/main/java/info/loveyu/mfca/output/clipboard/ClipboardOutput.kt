@@ -1,4 +1,4 @@
-package info.loveyu.mfca.output
+package info.loveyu.mfca.output.clipboard
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -6,6 +6,8 @@ import android.content.Context
 import info.loveyu.mfca.clipboard.ClipboardHistoryDbHelper
 import info.loveyu.mfca.config.models.Duration
 import info.loveyu.mfca.config.models.InternalOutputConfig
+import info.loveyu.mfca.output.OutputType
+import info.loveyu.mfca.output.InternalOutput
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.util.LogManager
 

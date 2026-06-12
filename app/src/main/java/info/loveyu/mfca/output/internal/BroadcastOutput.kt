@@ -1,6 +1,8 @@
-package info.loveyu.mfca.output
+package info.loveyu.mfca.output.internal
 
 import android.content.Context
+import info.loveyu.mfca.output.InternalOutput
+import info.loveyu.mfca.output.OutputType
 import android.content.Intent
 import info.loveyu.mfca.config.models.InternalOutputConfig
 import info.loveyu.mfca.queue.QueueItem

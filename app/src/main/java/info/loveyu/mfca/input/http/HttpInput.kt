@@ -1,8 +1,11 @@
-package info.loveyu.mfca.input
+package info.loveyu.mfca.input.http
 
 import android.util.Base64
 import fi.iki.elonen.NanoHTTPD
 import info.loveyu.mfca.config.models.CookieAuth
+import info.loveyu.mfca.input.InputMessage
+import info.loveyu.mfca.input.InputSource
+import info.loveyu.mfca.input.InputType
 import info.loveyu.mfca.config.models.HttpInputConfig
 import info.loveyu.mfca.config.HttpInputDsnParser
 import info.loveyu.mfca.config.models.BasicAuth

@@ -7,6 +7,12 @@ import info.loveyu.mfca.config.models.LinkConfig
 import info.loveyu.mfca.config.models.LinkInputConfig
 import info.loveyu.mfca.config.models.LinkType
 import info.loveyu.mfca.config.models.Udp2RawInputConfig
+import info.loveyu.mfca.input.http.HttpInput
+import info.loveyu.mfca.input.http.HttpVirtualInput
+import info.loveyu.mfca.input.http.SharedHttpInput
+import info.loveyu.mfca.input.mqtt.MqttInput
+import info.loveyu.mfca.input.tcp.TcpInput
+import info.loveyu.mfca.input.tcp.WebSocketInput
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.network.NetworkChecker

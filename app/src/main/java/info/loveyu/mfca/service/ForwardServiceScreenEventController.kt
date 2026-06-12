@@ -6,7 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.PowerManager
-import info.loveyu.mfca.output.ClipboardOutput
+import info.loveyu.mfca.output.clipboard.ClipboardOutput
 import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.ScreenStateTracker

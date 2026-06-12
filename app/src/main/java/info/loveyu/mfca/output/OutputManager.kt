@@ -6,6 +6,16 @@ import info.loveyu.mfca.config.models.InternalOutputConfig
 import info.loveyu.mfca.config.models.InternalOutputType
 import info.loveyu.mfca.config.models.LinkOutputConfig
 import info.loveyu.mfca.config.models.LinkType
+import info.loveyu.mfca.output.clipboard.ClipboardHistoryOutput
+import info.loveyu.mfca.output.clipboard.ClipboardOutput
+import info.loveyu.mfca.output.file.FileOutput
+import info.loveyu.mfca.output.http.HttpOutput
+import info.loveyu.mfca.output.internal.BroadcastOutput
+import info.loveyu.mfca.output.InternalOutput
+import info.loveyu.mfca.output.mqtt.MqttOutput
+import info.loveyu.mfca.output.notify.NotifyOutput
+import info.loveyu.mfca.output.tcp.TcpOutput
+import info.loveyu.mfca.output.tcp.WebSocketOutput
 import info.loveyu.mfca.queue.QueueManager
 import info.loveyu.mfca.util.LogManager
 import java.lang.ref.WeakReference

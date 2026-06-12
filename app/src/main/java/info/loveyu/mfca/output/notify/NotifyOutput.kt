@@ -1,4 +1,4 @@
-package info.loveyu.mfca.output
+package info.loveyu.mfca.output.notify
 
 import android.Manifest
 import android.app.NotificationChannel
@@ -14,6 +14,8 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.ui.main.MainActivity
 import info.loveyu.mfca.config.models.InternalOutputConfig
+import info.loveyu.mfca.output.InternalOutput
+import info.loveyu.mfca.output.OutputType
 import info.loveyu.mfca.config.models.NotifyOptions
 import info.loveyu.mfca.notification.NotifyHistoryDbHelper
 import info.loveyu.mfca.notification.NotifyRecord

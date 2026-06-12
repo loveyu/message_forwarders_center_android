@@ -5,8 +5,8 @@ import info.loveyu.mfca.config.models.AppConfig
 import info.loveyu.mfca.config.models.HttpInputConfig
 import info.loveyu.mfca.config.models.LinkInputConfig
 import info.loveyu.mfca.config.models.Udp2RawInputConfig
-import info.loveyu.mfca.input.HttpInput
-import info.loveyu.mfca.input.HttpVirtualInput
+import info.loveyu.mfca.input.http.HttpInput
+import info.loveyu.mfca.input.http.HttpVirtualInput
 import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.util.network.NetworkChecker
