@@ -200,17 +200,6 @@ class RuleEngine(
         }
     }
 
-    /**
-     * 尝试从 ByteArray 解析 JSONObject，失败返回 null
-     */
-    private fun parseJson(data: ByteArray): JSONObject? {
-        return try {
-            JSONObject(String(data))
-        } catch (_: Exception) {
-            null
-        }
-    }
-
     private suspend fun processRule(rule: RuleConfig, inputMessage: InputMessage) {
         LogManager.logDebug("RULE", "Processing rule: ${rule.name} (${rule.pipeline.size} steps)")
 
@@ -501,15 +490,6 @@ class RuleEngine(
         }
     }
 
-    private fun buildRuleContext(ruleName: String, inputMessage: InputMessage): Map<String, String> =
-        mapOf(
-            "rule" to ruleName,
-            "source" to inputMessage.source,
-            "timestamp" to (System.currentTimeMillis() / 1000).toString(),
-            "unix" to System.currentTimeMillis().toString(),
-            "receivedAt" to (inputMessage.headers["X-ReceivedAt"] ?: System.currentTimeMillis().toString())
-        )
-
     /**
      * Dispatch formatted output data to a single target output.
      * Handles FanOut with per-sub-target queuing, single-output queuing, and direct send.
@@ -679,73 +659,6 @@ class RuleEngine(
 
     private fun evaluateFilter(filter: String, data: ByteArray, headers: Map<String, String>?): Boolean {
         return expressionEngine.executeTwoPhaseFilter(filter, data, headers)
-    }
-
-    private fun detectMedia(data: ByteArray, type: String): Boolean {
-        return when (type.lowercase()) {
-            "image" -> isImage(data)
-            "json" -> isJson(data)
-            "text" -> isText(data)
-            else -> true
-        }
-    }
-
-    private fun isImage(data: ByteArray): Boolean {
-        if (data.size < 4) return false
-
-        // PNG signature
-        if (data[0] == 0x89.toByte() && data[1] == 0x50.toByte() &&
-            data[2] == 0x4E.toByte() && data[3] == 0x47.toByte()) {
-            return true
-        }
-
-        // JPEG signature
-        if (data[0] == 0xFF.toByte() && data[1] == 0xD8.toByte()) {
-            return true
-        }
-
-        // GIF signature
-        if (data[0] == 0x47.toByte() && data[1] == 0x49.toByte() &&
-            data[2] == 0x46.toByte()) {
-            return true
-        }
-
-        // BMP signature
-        if (data[0] == 0x42.toByte() && data[1] == 0x4D.toByte()) {
-            return true
-        }
-
-        // WebP signature
-        if (data.size >= 12 &&
-            data[0] == 0x52.toByte() && data[1] == 0x49.toByte() &&
-            data[2] == 0x46.toByte() && data[3] == 0x46.toByte() &&
-            data[8] == 0x57.toByte() && data[9] == 0x45.toByte() &&
-            data[10] == 0x42.toByte() && data[11] == 0x50.toByte()) {
-            return true
-        }
-
-        return false
-    }
-
-    private fun isJson(data: ByteArray): Boolean {
-        try {
-            val str = String(data.take(100).toByteArray()).trim()
-            return str.startsWith("{") || str.startsWith("[")
-        } catch (e: Exception) {
-            return false
-        }
-    }
-
-    private fun isText(data: ByteArray): Boolean {
-        if (data.isEmpty()) return true
-        var printable = 0
-        for (b in data.take(100)) {
-            val byte = b.toInt() and 0xFF
-            if (byte in 32..126 || byte in 9..10 || byte == 13) {
-                printable++
-            }
-        }
-        return printable > (data.size.coerceAtMost(100)) * 0.85
     }
 
     private fun handleError(rule: RuleConfig, inputMessage: InputMessage, error: Exception) {
@@ -928,22 +841,6 @@ class RuleEngine(
         return executeHttpCallSync(callConfig, resolvedArgs, data, headers, context, callVars, ruleName)
     }
 
-    /** 将调用参数名解析为具体值 */
-    private fun resolveCallArgs(
-        argNames: List<String>,
-        data: ByteArray,
-        headers: Map<String, String>,
-        callVars: Map<String, Any?>
-    ): List<Any?> =
-        argNames.map { name ->
-            when {
-                name == "data" -> String(data)
-                name == "headers" -> headers
-                callVars.containsKey(name) -> callVars[name]
-                else -> name // treat as string literal
-            }
-        }
-
     /**
      * 执行 HTTP call 资源请求（suspend 版本）。
      * url/headers/body 模板中可使用 {args[N]} 等，response 模板处理响应。
@@ -1091,31 +988,6 @@ class RuleEngine(
             template, data, responseHeaders2, extendedContext, args, extendedCallVars
         )
         return tryParseJson(evaluated) ?: evaluated
-    }
-
-    private fun tryParseJson(str: String): Any? {
-        if (str.isBlank()) return null
-        return try {
-            JSONObject(str)
-        } catch (_: Exception) {
-            try {
-                org.json.JSONArray(str)
-            } catch (_: Exception) {
-                null
-            }
-        }
-    }
-
-    private fun toMap(value: Any?): Map<String, Any?>? {
-        if (value == null) return null
-        if (value is JSONObject) {
-            return value.keys().asSequence().associateWith { key -> value.opt(key) }
-        }
-        if (value is Map<*, *>) {
-            @Suppress("UNCHECKED_CAST")
-            return value as? Map<String, Any?>
-        }
-        return null
     }
 
     // ==================== Enrich ====================
