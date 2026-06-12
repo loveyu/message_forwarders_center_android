@@ -1,4 +1,4 @@
-package info.loveyu.mfca
+package info.loveyu.mfca.ui
 
 import android.content.Intent
 import android.net.Uri
@@ -28,6 +28,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import info.loveyu.mfca.BuildConfig
+import info.loveyu.mfca.R
 import androidx.compose.ui.unit.dp
 
 @Composable

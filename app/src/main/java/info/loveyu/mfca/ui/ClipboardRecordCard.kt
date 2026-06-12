@@ -30,7 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import info.loveyu.mfca.ClipboardPreviewActivity
+import info.loveyu.mfca.clipboard.ClipboardPreviewActivity
 import info.loveyu.mfca.clipboard.ClipboardRecord
 
 @Composable

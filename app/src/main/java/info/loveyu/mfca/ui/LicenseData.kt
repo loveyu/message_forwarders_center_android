@@ -1,4 +1,4 @@
-package info.loveyu.mfca
+package info.loveyu.mfca.ui
 
 data class LicenseInfo(
     val libraryName: String,

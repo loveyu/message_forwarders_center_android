@@ -1,6 +1,6 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
-package info.loveyu.mfca
+package info.loveyu.mfca.clipboard
 
 import android.content.Context
 import android.content.Intent
@@ -27,8 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
-import info.loveyu.mfca.clipboard.ClipboardHistoryDbHelper
-import info.loveyu.mfca.clipboard.ClipboardRecord
 import info.loveyu.mfca.ui.theme.MfcaTheme
 
 class ClipboardPreviewActivity : ComponentActivity() {

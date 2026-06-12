@@ -44,10 +44,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import info.loveyu.mfca.ConfigActivity
-import info.loveyu.mfca.HelpActivity
 import info.loveyu.mfca.R
-import info.loveyu.mfca.SettingsActivity
+import info.loveyu.mfca.config.ConfigActivity
 import info.loveyu.mfca.test.TestHubActivity
 import info.loveyu.mfca.ui.theme.BadgeDisabledDark
 import info.loveyu.mfca.ui.theme.BadgeDisabledLight

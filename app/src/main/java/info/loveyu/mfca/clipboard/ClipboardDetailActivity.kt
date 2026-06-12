@@ -1,6 +1,6 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
-package info.loveyu.mfca
+package info.loveyu.mfca.clipboard
 
 import android.app.PendingIntent
 import android.content.ClipData
@@ -42,9 +42,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import info.loveyu.mfca.clipboard.ClipboardHistoryDbHelper
-import info.loveyu.mfca.clipboard.ClipboardNotificationHelper
-import info.loveyu.mfca.clipboard.ClipboardRecord
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

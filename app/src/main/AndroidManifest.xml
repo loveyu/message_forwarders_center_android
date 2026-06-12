@@ -60,42 +60,42 @@
         </activity>
 
         <activity
-            android:name=".ConfigActivity"
+            android:name=".config.ConfigActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".HelpActivity"
+            android:name=".ui.HelpActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".SettingsActivity"
+            android:name=".ui.SettingsActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".AllComponentsActivity"
+            android:name=".ui.AllComponentsActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".LicenseActivity"
+            android:name=".ui.LicenseActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".NotifyDetailActivity"
+            android:name=".notification.NotifyDetailActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".ClipboardDetailActivity"
+            android:name=".clipboard.ClipboardDetailActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".ClipboardPreviewActivity"
+            android:name=".clipboard.ClipboardPreviewActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
@@ -192,7 +192,7 @@
 
         <!-- 输入法切换浮动Activity -->
         <activity
-            android:name=".InputMethodFloatingActivity"
+            android:name=".ui.InputMethodFloatingActivity"
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
@@ -202,7 +202,7 @@
 
         <!-- 状态控制浮动Activity -->
         <activity
-            android:name=".StatusFloatingActivity"
+            android:name=".ui.StatusFloatingActivity"
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"

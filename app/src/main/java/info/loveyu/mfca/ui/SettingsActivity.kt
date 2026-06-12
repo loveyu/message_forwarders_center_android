@@ -1,4 +1,4 @@
-package info.loveyu.mfca
+package info.loveyu.mfca.ui
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import info.loveyu.mfca.R
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.ui.ComponentStatus
 import info.loveyu.mfca.ui.theme.MfcaTheme

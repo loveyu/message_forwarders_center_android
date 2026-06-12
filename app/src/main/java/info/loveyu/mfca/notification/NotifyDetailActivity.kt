@@ -1,6 +1,6 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
-package info.loveyu.mfca
+package info.loveyu.mfca.notification
 
 import android.content.Context
 import android.content.Intent
@@ -53,8 +53,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import info.loveyu.mfca.notification.NotifyHistoryDbHelper
-import info.loveyu.mfca.notification.NotifyRecord
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import info.loveyu.mfca.ui.extractUrls
 import info.loveyu.mfca.ui.openUrl

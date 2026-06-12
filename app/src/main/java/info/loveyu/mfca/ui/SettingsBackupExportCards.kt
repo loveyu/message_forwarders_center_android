@@ -1,4 +1,4 @@
-package info.loveyu.mfca
+package info.loveyu.mfca.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

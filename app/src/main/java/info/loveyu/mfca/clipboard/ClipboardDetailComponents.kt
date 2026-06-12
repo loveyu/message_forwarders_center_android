@@ -1,4 +1,4 @@
-package info.loveyu.mfca
+package info.loveyu.mfca.clipboard
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +22,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import info.loveyu.mfca.clipboard.ClipboardRecord
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

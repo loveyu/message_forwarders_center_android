@@ -1,4 +1,4 @@
-package info.loveyu.mfca
+package info.loveyu.mfca.config
 
 import android.content.Intent
 import android.os.Bundle
@@ -28,7 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import info.loveyu.mfca.config.ConfigLoader
+import info.loveyu.mfca.R
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import info.loveyu.mfca.util.ConfigBackupManager

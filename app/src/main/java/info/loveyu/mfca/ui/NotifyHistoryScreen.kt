@@ -37,7 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
-import info.loveyu.mfca.NotifyDetailActivity
+import info.loveyu.mfca.notification.NotifyDetailActivity
 import info.loveyu.mfca.notification.NotifyHistoryDbHelper
 import info.loveyu.mfca.notification.NotifyHistoryDbHelper.Companion.changeVersion
 import info.loveyu.mfca.notification.NotifyRecord

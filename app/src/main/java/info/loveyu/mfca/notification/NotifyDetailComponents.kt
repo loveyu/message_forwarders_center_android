@@ -1,4 +1,4 @@
-package info.loveyu.mfca
+package info.loveyu.mfca.notification
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
