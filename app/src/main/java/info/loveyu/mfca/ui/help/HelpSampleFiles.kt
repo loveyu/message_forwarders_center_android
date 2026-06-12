@@ -1,4 +1,4 @@
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.help
 
 import android.content.Context
 import java.io.IOException

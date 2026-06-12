@@ -37,7 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.R
 import info.loveyu.mfca.service.ForwardService
-import info.loveyu.mfca.ui.LicenseActivity
+import info.loveyu.mfca.ui.license.LicenseActivity
 import info.loveyu.mfca.ui.component.ComponentStatus
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import info.loveyu.mfca.ui.theme.ThemeModeManager

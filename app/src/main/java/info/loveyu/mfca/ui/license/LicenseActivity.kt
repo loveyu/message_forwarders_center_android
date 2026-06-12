@@ -1,4 +1,4 @@
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.license
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
