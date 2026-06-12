@@ -85,17 +85,17 @@
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".notification.NotifyDetailActivity"
+            android:name=".ui.notification.NotifyDetailActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".clipboard.ClipboardDetailActivity"
+            android:name=".ui.clipboard.ClipboardDetailActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".clipboard.ClipboardPreviewActivity"
+            android:name=".ui.clipboard.ClipboardPreviewActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 

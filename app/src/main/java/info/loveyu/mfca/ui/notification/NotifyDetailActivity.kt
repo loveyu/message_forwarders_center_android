@@ -1,6 +1,6 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
-package info.loveyu.mfca.notification
+package info.loveyu.mfca.ui.notification
 
 import android.content.Context
 import android.content.Intent
@@ -61,6 +61,8 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import info.loveyu.mfca.notification.NotifyHistoryDbHelper
+import info.loveyu.mfca.notification.NotifyRecord
 
 class NotifyDetailActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

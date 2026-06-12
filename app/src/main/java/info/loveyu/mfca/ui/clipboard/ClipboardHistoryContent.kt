@@ -33,9 +33,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
-import info.loveyu.mfca.clipboard.ClipboardDetailActivity
 import info.loveyu.mfca.clipboard.ClipboardHistoryDbHelper
-import info.loveyu.mfca.clipboard.ClipboardPreviewActivity
+import info.loveyu.mfca.ui.clipboard.ClipboardDetailActivity
+import info.loveyu.mfca.ui.clipboard.ClipboardPreviewActivity
 import info.loveyu.mfca.clipboard.ClipboardNotificationHelper
 import info.loveyu.mfca.clipboard.ClipboardRecord
 import info.loveyu.mfca.ui.LinkPickerSheet

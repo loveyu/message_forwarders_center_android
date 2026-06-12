@@ -1,4 +1,4 @@
-package info.loveyu.mfca.clipboard
+package info.loveyu.mfca.ui.clipboard
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import info.loveyu.mfca.clipboard.ClipboardRecord
 
 private fun formatAbsoluteTime(timestamp: Long): String {
     return SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(timestamp))

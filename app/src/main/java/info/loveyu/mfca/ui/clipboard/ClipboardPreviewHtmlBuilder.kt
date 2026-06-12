@@ -1,4 +1,4 @@
-package info.loveyu.mfca.clipboard
+package info.loveyu.mfca.ui.clipboard
 
 import android.annotation.SuppressLint
 import android.content.Context
