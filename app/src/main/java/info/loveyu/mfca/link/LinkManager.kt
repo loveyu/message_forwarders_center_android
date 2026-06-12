@@ -36,34 +36,25 @@ object LinkManager {
     private val configs = mutableMapOf<String, LinkConfig>()
     private var applicationContext: Context? = null
 
-    private var networkCallback: ConnectivityManager.NetworkCallback? = null
-
-    // Network state
-    @Volatile
-    private var isNetworkAvailable = false
-    @Volatile
-    private var currentNetworkType = NetworkType.UNKNOWN
     @Volatile
     private var lastReconnectTime = 0L
-    @Volatile
-    private var lastNetworkTypeUpdateTime = 0L
 
     // Whether initialization is complete (links ready for connection)
     @Volatile
     private var initialized = false
 
-    // 上次记录的 transport 类型，用于 onCapabilitiesChanged 变化检测
-    @Volatile
-    private var lastTransportType: NetworkType = NetworkType.UNKNOWN
-    @Volatile
-    private var lastWifiBssid: String? = null
-
     // Notification state for link errors
     private val notifiedErrorLinks = mutableSetOf<String>()
 
-    // Network state version for UI refresh
-    private val _networkStateVersion = MutableStateFlow(0)
-    val networkStateVersion: StateFlow<Int> = _networkStateVersion.asStateFlow()
+    private val networkMonitor = LinkNetworkMonitor(
+        onResetAllFailureCounts = { resetAllFailureCounts() },
+        onDisconnectAll = { disconnectAll() },
+        onCheckAllLinkConditions = { checkAllLinkConditions() },
+        onTriggerMqttKeepAliveProbe = { triggerImmediateMqttKeepAliveProbe(it) },
+        isInitialized = { initialized },
+    )
+
+    val networkStateVersion: StateFlow<Int> get() = networkMonitor.networkStateVersion
     private val linkStateListeners = mutableSetOf<(String, Boolean) -> Unit>()
 
     enum class NetworkType {
@@ -109,153 +100,12 @@ object LinkManager {
      */
     private fun startNetworkMonitoring() {
         val ctx = applicationContext ?: return
-        val connectivityManager = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-
-        networkCallback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                LogManager.logInfo("LINK", "Network available")
-                isNetworkAvailable = true
-                resetAllFailureCounts()
-                NetworkChecker.invalidateCache()
-                lastWifiBssid = NetworkChecker.getCurrentBssid(ctx)
-                updateNetworkType()
-                // 事件触发提前 tick，加速重连
-                ForwardService.triggerTick()
-            }
-
-            override fun onLost(network: Network) {
-                LogManager.logWarn("LINK", "Network lost")
-                NetworkChecker.invalidateCache()
-                resetAllFailureCounts()
-
-                // 基于 activeNetwork 真实状态更新 isNetworkAvailable，
-                // 避免 WiFi→Mobile 切换时因 onLost(wifi) 将 isNetworkAvailable 错误置 false
-                val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-                val hasNetwork = cm.activeNetwork != null
-                isNetworkAvailable = hasNetwork
-
-                // 真正无网时立即断开所有链路，绕过 updateNetworkType 的 1s 节流
-                if (!hasNetwork && initialized) {
-                    disconnectAll()
-                    InputManager.stopAllLinkBased()
-                    InputManager.stopAllUdp2Raw()
-                }
-
-                if (!hasNetwork) {
-                    lastWifiBssid = null
-                }
-                updateNetworkType()
-                // 网络丢失也触发 tick，及时更新状态
-                ForwardService.triggerTick()
-            }
-
-            override fun onCapabilitiesChanged(
-                network: Network,
-                networkCapabilities: NetworkCapabilities
-            ) {
-                val previousBssid = lastWifiBssid
-                val previousSsid = if (previousBssid != null) NetworkChecker.getCurrentSsid(ctx) else null
-
-                // 无条件刷新网络快照（WiFi AP 漫游时 transport 不变但 SSID/BSSID 可能变）
-                NetworkChecker.invalidateCache()
-
-                val newType = when {
-                    networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> NetworkType.WIFI
-                    networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> NetworkType.MOBILE
-                    networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> NetworkType.ETHERNET
-                    else -> NetworkType.UNKNOWN
-                }
-                val newBssid = if (newType == NetworkType.WIFI) NetworkChecker.getCurrentBssid(ctx) else null
-                val newSsid = if (newType == NetworkType.WIFI) NetworkChecker.getCurrentSsid(ctx) else null
-                val bssidChanged = newType == NetworkType.WIFI &&
-                    previousBssid != null &&
-                    newBssid != null &&
-                    previousBssid != newBssid
-                lastWifiBssid = newBssid
-
-                if (bssidChanged) {
-                    LogManager.logInfo("LINK", "WiFi BSSID changed: ${previousBssid} -> ${newBssid} (ssid=${newSsid ?: previousSsid ?: "unknown"})")
-                    triggerImmediateMqttKeepAliveProbe("bssid_changed")
-                    ForwardService.triggerTick()
-                }
-
-                if (newType == lastTransportType) return
-                LogManager.logDebug("LINK", "Transport changed: $lastTransportType -> $newType")
-                lastTransportType = newType
-                resetAllFailureCounts()
-                // 网络类型切换时停止 udp2raw，使其重启时重新解析 DNS
-                InputManager.stopAllUdp2Raw()
-                updateNetworkType()
-                // 网络能力变更（WiFi↔移动网络等）触发 tick
-                ForwardService.triggerTick()
-            }
-
-            override fun onLinkPropertiesChanged(network: Network, linkProperties: android.net.LinkProperties) {
-                // IP 地址等链路属性变更时刷新快照
-                NetworkChecker.invalidateCache()
-            }
-        }
-
-        val request = NetworkRequest.Builder()
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .build()
-
-        try {
-            connectivityManager.registerNetworkCallback(request, networkCallback!!)
-            // Check initial state
-            val activeNetwork = connectivityManager.activeNetwork
-            isNetworkAvailable = activeNetwork != null
-            lastWifiBssid = NetworkChecker.getCurrentBssid(ctx)
-            updateNetworkType()
-        } catch (e: Exception) {
-            LogManager.logError("LINK", "Failed to register network callback: ${e.message}")
-        }
+        networkMonitor.startMonitoring(ctx)
     }
 
     private fun updateNetworkType() {
-        val now = System.currentTimeMillis()
-        if (now - lastNetworkTypeUpdateTime < 1_000L) return
-        lastNetworkTypeUpdateTime = now
-
         val ctx = applicationContext ?: return
-        val connectivityManager = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val network = connectivityManager.activeNetwork
-        val capabilities = network?.let { connectivityManager.getNetworkCapabilities(it) }
-
-        if (capabilities != null) {
-            currentNetworkType = when {
-                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> NetworkType.WIFI
-                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> NetworkType.MOBILE
-                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> NetworkType.ETHERNET
-                else -> NetworkType.UNKNOWN
-            }
-        } else {
-            currentNetworkType = NetworkType.UNKNOWN
-        }
-        lastTransportType = currentNetworkType
-        lastWifiBssid = if (currentNetworkType == NetworkType.WIFI) NetworkChecker.getCurrentBssid(ctx) else null
-
-        LogManager.logDebug("LINK", "Network type: $currentNetworkType")
-        LogManager.logDebug("NETWORK", NetworkChecker.getDetailedNetworkInfo(ctx))
-
-        // Notify UI to refresh component states
-        _networkStateVersion.value++
-
-        // 刷新组件统计（网络变化可能导致 when/deny 条件变化）
-        ForwardService.refreshStats()
-
-        // During initialization, skip connection management (applyConfig's connectAll handles it)
-        if (!initialized) return
-
-        // Disconnect all links when network is lost
-        if (network == null) {
-            disconnectAll()
-            return
-        }
-
-        // Check all links conditions
-        checkAllLinkConditions()
-        InputManager.checkAllInputConditions()
+        networkMonitor.updateNetworkType(ctx)
     }
 
     /**
@@ -263,7 +113,7 @@ object LinkManager {
      */
     fun onTick(): Long? {
         applicationContext ?: return null
-        if (!isNetworkAvailable) return null
+        if (!networkMonitor.isNetworkAvailable) return null
 
         checkAllLinkConditions()
 
@@ -286,7 +136,7 @@ object LinkManager {
      * 统一 Ticker 调用：每 ~10min 重置失败计数
      */
     fun onFailureResetTick() {
-        if (!isNetworkAvailable) return
+        if (!networkMonitor.isNetworkAvailable) return
         LogManager.logDebug("LINK", "Periodic failure count reset")
         resetAllFailureCounts()
         checkAllLinkConditions()
@@ -297,17 +147,14 @@ object LinkManager {
      */
     private fun checkLinkHealth() {
         val ctx = applicationContext ?: return
-        if (!isNetworkAvailable) return
+        if (!networkMonitor.isNetworkAvailable) return
 
         checkAllLinkConditions()
     }
 
-    /**
-     * 检查所有链路的网络条件，不符合的断开，符合但断开的重新连接。
-     */
     private fun checkAllLinkConditions() {
         val ctx = applicationContext ?: return
-        if (!isNetworkAvailable) return
+        if (!networkMonitor.isNetworkAvailable) return
 
         links.values.forEach { link ->
             val config = configs[link.id] ?: return@forEach
@@ -397,7 +244,7 @@ object LinkManager {
      */
     fun reconnectAll() {
         val ctx = applicationContext ?: return
-        if (!isNetworkAvailable) {
+        if (!networkMonitor.isNetworkAvailable) {
             LogManager.logDebug("LINK", "Network unavailable, skipping reconnect")
             return
         }
@@ -459,20 +306,11 @@ object LinkManager {
         if (ctx != null) LinkNotificationHelper.cancelAll(ctx, notifiedErrorLinks)
         links.clear()
         configs.clear()
-        lastWifiBssid = null
     }
 
     private fun unregisterNetworkCallback() {
-        networkCallback?.let { callback ->
-            try {
-                val ctx = applicationContext ?: return
-                val connectivityManager = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-                connectivityManager.unregisterNetworkCallback(callback)
-            } catch (e: Exception) {
-                LogManager.logWarn("LINK", "Failed to unregister network callback: ${e.message}")
-            }
-            networkCallback = null
-        }
+        val ctx = applicationContext ?: return
+        networkMonitor.unregisterCallback(ctx)
     }
 
     // ---- Link error notification helpers ----
@@ -511,23 +349,18 @@ object LinkManager {
         return NetworkChecker.getNetworkInfo(ctx)
     }
 
-    fun isNetworkAvailable(): Boolean = isNetworkAvailable
+    fun isNetworkAvailable(): Boolean = networkMonitor.isNetworkAvailable
 
-    /**
-     * 刷新网络状态（权限变更后调用）
-     */
     fun refreshNetworkState() {
         val ctx = applicationContext ?: return
-        val connectivityManager = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         NetworkChecker.invalidateCache()
         NetworkChecker.refreshCache(ctx)
-        isNetworkAvailable = connectivityManager.activeNetwork != null
-        lastNetworkTypeUpdateTime = 0L
+        networkMonitor.isNetworkAvailable = (ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager).activeNetwork != null
         updateNetworkType()
 
         if (!initialized) return
 
-        if (!isNetworkAvailable) {
+        if (!networkMonitor.isNetworkAvailable) {
             disconnectAll()
             InputManager.stopAllLinkBased()
             InputManager.stopAllUdp2Raw()
@@ -538,7 +371,7 @@ object LinkManager {
         InputManager.checkAllInputConditions()
     }
 
-    fun getCurrentNetworkType(): NetworkType = currentNetworkType
+    fun getCurrentNetworkType(): NetworkType = networkMonitor.currentNetworkType
 
     /**
      * 通知 UI 链路连接状态已变化（connected/disconnected）。
@@ -546,7 +379,7 @@ object LinkManager {
      */
     fun notifyLinkStateChanged(linkId: String, connected: Boolean) {
         LogManager.logDebug("LINK", "Link state changed: $linkId connected=$connected")
-        _networkStateVersion.value++
+        networkMonitor.signalStateChange()
         val listeners = synchronized(linkStateListeners) { linkStateListeners.toList() }
         listeners.forEach { listener ->
             try {
