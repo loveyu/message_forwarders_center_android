@@ -2,16 +2,8 @@
 
 package info.loveyu.mfca.test
 
-import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
-import android.content.ServiceConnection
 import android.os.Bundle
-import android.os.Handler
-import android.os.IBinder
-import android.os.Looper
-import android.os.Message
-import android.os.Messenger
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -40,20 +32,20 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -69,23 +61,13 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import info.loveyu.mfca.R
-import info.loveyu.mfca.plugin.PluginManager
 import info.loveyu.mfca.ui.theme.MfcaTheme
-import java.io.File
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
-import java.net.DatagramPacket
-import java.net.DatagramSocket
-import java.net.InetAddress
 
 class Udp2RawTestActivity : ComponentActivity() {
 
@@ -108,14 +90,6 @@ class Udp2RawTestActivity : ComponentActivity() {
     }
 }
 
-// ── Step model ────────────────────────────────────────────────────────────────
-
-private enum class StepStatus { IDLE, RUNNING, SUCCESS, FAILED }
-
-private data class TestStep(val label: String, var status: StepStatus = StepStatus.IDLE)
-
-// ── UI ────────────────────────────────────────────────────────────────────────
-
 @Composable
 private fun Udp2RawTestScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -137,7 +111,7 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
         )
     }
     var isRunning by remember { mutableStateOf(false) }
-    var testJob by remember { mutableStateOf<Job?>(null) }
+    var testJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var overallProgress by remember { mutableFloatStateOf(0f) }
 
     val logs = remember { mutableStateListOf<String>() }
@@ -156,7 +130,6 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
     val logListState = rememberLazyListState()
     val stepListState = rememberLazyListState()
 
-    // Track active step for auto-scroll
     val activeStepIndex by remember {
         derivedStateOf {
             val running = steps.indexOfFirst { it.status == StepStatus.RUNNING }
@@ -168,14 +141,12 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
         }
     }
 
-    // Auto-scroll step list to active step
     LaunchedEffect(activeStepIndex) {
         val target =
             (activeStepIndex - 1).coerceAtLeast(0).coerceAtMost(maxOf(0, steps.size - 3))
         stepListState.animateScrollToItem(target)
     }
 
-    // Auto-scroll log on new entry
     LaunchedEffect(logs.size) {
         if (logs.isNotEmpty()) logListState.animateScrollToItem(logs.size - 1)
     }
@@ -210,10 +181,11 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
     ) { padding ->
         Column(
             modifier =
-                Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 8.dp),
+                Modifier.fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // URL input
             OutlinedTextField(
                 value = pluginUrl,
                 onValueChange = { pluginUrl = it },
@@ -223,7 +195,6 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
                 enabled = !isRunning,
             )
 
-            // Proxy input
             OutlinedTextField(
                 value = proxyUrl,
                 onValueChange = { proxyUrl = it },
@@ -233,7 +204,6 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
                 enabled = !isRunning,
             )
 
-            // Raw mode selector + action button row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -305,7 +275,7 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
                             isRunning = true
                             testJob = scope.launch {
                                 try {
-                                    runTest(
+                                    runUdp2RawTest(
                                         context = context,
                                         pluginUrl = pluginUrl,
                                         proxyUrl = proxyUrl.ifBlank { null },
@@ -334,13 +304,11 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
                 }
             }
 
-            // Overall progress
             LinearProgressIndicator(
                 progress = { overallProgress },
                 modifier = Modifier.fillMaxWidth().height(6.dp),
             )
 
-            // Step list (max 3 visible, auto-scroll to active)
             LazyColumn(
                 state = stepListState,
                 modifier = Modifier.fillMaxWidth().height(88.dp),
@@ -350,7 +318,6 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
                 items(steps) { step -> StepRow(step) }
             }
 
-            // Log output
             Text(
                 "日志输出（单击复制行 / 双击复制全部）",
                 style = MaterialTheme.typography.titleSmall,
@@ -370,27 +337,24 @@ private fun Udp2RawTestScreen(onBack: () -> Unit) {
                         Text(
                             text = line,
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontFamily = FontFamily.Monospace,
                             modifier =
                                 Modifier.pointerInput(Unit) {
                                     detectTapGestures(
                                         onTap = {
                                             clipboardManager.setText(AnnotatedString(line))
-                                            Toast
-                                                .makeText(context, "已复制", Toast.LENGTH_SHORT)
+                                            Toast.makeText(context, "已复制", Toast.LENGTH_SHORT)
                                                 .show()
                                         },
                                         onDoubleTap = {
                                             clipboardManager.setText(
                                                 AnnotatedString(logs.joinToString("\n"))
                                             )
-                                            Toast
-                                                .makeText(
-                                                    context,
-                                                    "已复制全部日志 (${logs.size} 行)",
-                                                    Toast.LENGTH_SHORT,
-                                                )
-                                                .show()
+                                            Toast.makeText(
+                                                context,
+                                                "已复制全部日志 (${logs.size} 行)",
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
                                         },
                                     )
                                 },
@@ -431,488 +395,5 @@ private fun StepRow(step: TestStep) {
                     else -> MaterialTheme.colorScheme.onSurface
                 },
         )
-    }
-}
-
-// ── Test logic (suspend) ──────────────────────────────────────────────────────
-
-private suspend fun runTest(
-    context: Context,
-    pluginUrl: String,
-    proxyUrl: String?,
-    rawMode: String,
-    addLog: (String) -> Unit,
-    setStep: (Int, StepStatus) -> Unit,
-) {
-    var serverConn: ServiceConnection? = null
-    var serverMessenger: Messenger? = null
-    var clientServiceConn: ServiceConnection? = null
-    var clientServiceMessenger: Messenger? = null
-    var serverBound = false
-    var clientBound = false
-    var cleanedUp = false
-
-    // Prepare log directory (use external storage for easy access)
-    val testLogDir =
-        File(context.getExternalFilesDir(null), "udp2raw_test_logs").also { it.mkdirs() }
-            ?: File(context.cacheDir, "udp2raw_test_logs").also { it.mkdirs() }
-    testLogDir.listFiles()?.forEach { it.delete() }
-    val serverLogFile = File(testLogDir, "server.log")
-    val clientLogFile = File(testLogDir, "client.log")
-
-    try {
-        // ── Step 0: Download / verify plugin ──────────────────────────────────
-        setStep(0, StepStatus.RUNNING)
-        val soPath: String =
-            try {
-                withContext(Dispatchers.IO) {
-                    addLog("正在检查插件…")
-                    val installed = PluginManager.isInstalledFrom(context, "udp2raw", pluginUrl)
-                    if (installed) {
-                        addLog("插件已缓存，跳过下载")
-                    } else {
-                        addLog("正在下载插件: $pluginUrl")
-                        if (!proxyUrl.isNullOrBlank()) addLog("使用代理: $proxyUrl")
-                        PluginManager.installPlugin(context, "udp2raw", pluginUrl, proxyUrl)
-                        addLog("插件下载完成")
-                    }
-                    val path = PluginManager.getInstalledPath(context, "udp2raw")
-                    addLog("插件文件大小: ${path.length()} bytes, ABI: ${PluginManager.deviceAbi}")
-                    path.absolutePath
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                addLog("❌ 插件获取失败: ${e.message}")
-                setStep(0, StepStatus.FAILED)
-                return
-            }
-        addLog("插件路径: $soPath")
-        setStep(0, StepStatus.SUCCESS)
-
-        // ── Step 1: Java direct UDP test ──────────────────────────────────────
-        setStep(1, StepStatus.RUNNING)
-        try {
-            withContext(Dispatchers.IO) {
-                addLog("【直连】启动 UDP Echo 服务，端口 ${Udp2RawTestActivity.PORT_ECHO}…")
-                val echoSocket =
-                    DatagramSocket(
-                        Udp2RawTestActivity.PORT_ECHO,
-                        InetAddress.getByName("127.0.0.1"),
-                    )
-                val echoThread =
-                    Thread(
-                            {
-                                val buf = ByteArray(4096)
-                                repeat(3) {
-                                    try {
-                                        val pkt = DatagramPacket(buf, buf.size)
-                                        echoSocket.receive(pkt)
-                                        echoSocket.send(
-                                            DatagramPacket(
-                                                pkt.data,
-                                                pkt.length,
-                                                pkt.address,
-                                                pkt.port,
-                                            )
-                                        )
-                                    } catch (_: Exception) {}
-                                }
-                            },
-                            "direct-echo",
-                        )
-                        .apply {
-                            isDaemon = true
-                            start()
-                        }
-                addLog("【直连】Echo 服务已启动")
-
-                val socket = DatagramSocket()
-                socket.soTimeout = 3_000
-                val addr = InetAddress.getByName("127.0.0.1")
-                var directOk = true
-                repeat(3) { i ->
-                    val msg = "direct-udp-$i"
-                    val msgBytes = msg.toByteArray()
-                    socket.send(
-                        DatagramPacket(msgBytes, msgBytes.size, addr, Udp2RawTestActivity.PORT_ECHO)
-                    )
-                    addLog("【直连】→ 发送: $msg")
-                    try {
-                        val recvBuf = ByteArray(256)
-                        val recvPkt = DatagramPacket(recvBuf, recvBuf.size)
-                        socket.receive(recvPkt)
-                        val reply = String(recvPkt.data, 0, recvPkt.length)
-                        val ok = reply == msg
-                        addLog("【直连】← 收到: $reply ${if (ok) "✓" else "✗"}")
-                        if (!ok) directOk = false
-                    } catch (e: Exception) {
-                        addLog("【直连】← 超时: ${e.message}")
-                        directOk = false
-                    }
-                }
-                socket.close()
-                echoThread.join(1000)
-                echoSocket.close()
-
-                if (!directOk) error("Java 直连 UDP 测试失败")
-                addLog("【直连】测试通过")
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            addLog("❌ ${e.message}")
-            setStep(1, StepStatus.FAILED)
-            return
-        }
-        setStep(1, StepStatus.SUCCESS)
-
-        // ── Step 2: Bind helper service ────────────────────────────────────────
-        setStep(2, StepStatus.RUNNING)
-        val serverReadyDeferred = CompletableDeferred<Unit>()
-
-        val incomingHandler =
-            object : Handler(Looper.getMainLooper()) {
-                override fun handleMessage(msg: Message) {
-                    when (msg.what) {
-                        Udp2RawTestHelperService.MSG_LOG -> addLog(msg.data.getString("text", ""))
-                        Udp2RawTestHelperService.MSG_SERVER_READY ->
-                            serverReadyDeferred.complete(Unit)
-                        Udp2RawTestHelperService.MSG_ERROR -> {
-                            val err = msg.data.getString("error", "未知错误")
-                            if (!serverReadyDeferred.isCompleted) {
-                                serverReadyDeferred.completeExceptionally(Exception(err))
-                            }
-                        }
-                    }
-                }
-            }
-        val activityMessenger = Messenger(incomingHandler)
-
-        val bindDeferred = CompletableDeferred<Messenger>()
-        val conn =
-            object : ServiceConnection {
-                override fun onServiceConnected(name: ComponentName, binder: IBinder) {
-                    bindDeferred.complete(Messenger(binder))
-                }
-
-                override fun onServiceDisconnected(name: ComponentName) {
-                    if (!serverReadyDeferred.isCompleted) {
-                        serverReadyDeferred.completeExceptionally(
-                            Exception("测试服务进程异常退出（可能因 native crash）")
-                        )
-                    }
-                }
-            }
-        serverConn = conn
-
-        withContext(Dispatchers.Main) {
-            val intent = Intent(context, Udp2RawTestHelperService::class.java)
-            context.bindService(intent, conn, Context.BIND_AUTO_CREATE)
-        }
-        serverBound = true
-
-        serverMessenger =
-            try {
-                withTimeout(8_000) { bindDeferred.await() }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                addLog("❌ 绑定测试服务超时")
-                setStep(2, StepStatus.FAILED)
-                return
-            }
-        setStep(2, StepStatus.SUCCESS)
-
-        // ── Step 3: Start server-side (via service in :udp2rawtest process) ───
-        setStep(3, StepStatus.RUNNING)
-        addLog(
-            "【服务端】参数: -s -l0.0.0.0:${Udp2RawTestActivity.PORT_SERVER_RAW} " +
-                "-r127.0.0.1:${Udp2RawTestActivity.PORT_ECHO} --raw-mode $rawMode " +
-                "-k ${Udp2RawTestActivity.TUNNEL_KEY}"
-        )
-        addLog("【服务端】日志文件: ${serverLogFile.absolutePath}")
-        val startMsg =
-            Message.obtain(null, Udp2RawTestHelperService.MSG_START).apply {
-                replyTo = activityMessenger
-                data =
-                    Bundle().apply {
-                        putString("plugin_path", soPath)
-                        putInt("echo_port", Udp2RawTestActivity.PORT_ECHO)
-                        putInt("raw_port", Udp2RawTestActivity.PORT_SERVER_RAW)
-                        putString("tunnel_key", Udp2RawTestActivity.TUNNEL_KEY)
-                        putString("log_file", serverLogFile.absolutePath)
-                        putString("raw_mode", rawMode)
-                    }
-            }
-        serverMessenger.send(startMsg)
-
-        try {
-            withTimeout(30_000) { serverReadyDeferred.await() }
-        } catch (e: TimeoutCancellationException) {
-            addLog("❌ 服务端启动超时（可能缺少 CAP_NET_RAW / root 权限）")
-            dumpLogFile(serverLogFile, "服务端", addLog)
-            captureNativeCrashLogs(addLog)
-            setStep(3, StepStatus.FAILED)
-            return
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            addLog("❌ 服务端错误: ${e.message}")
-            dumpLogFile(serverLogFile, "服务端", addLog)
-            captureNativeCrashLogs(addLog)
-            setStep(3, StepStatus.FAILED)
-            return
-        }
-        setStep(3, StepStatus.SUCCESS)
-
-        // ── Step 4: Start udp2raw client in separate process ──────────────────
-        setStep(4, StepStatus.RUNNING)
-        val clientReadyDeferred = CompletableDeferred<Unit>()
-
-        val clientIncomingHandler =
-            object : Handler(Looper.getMainLooper()) {
-                override fun handleMessage(msg: Message) {
-                    when (msg.what) {
-                        Udp2RawClientTestService.MSG_LOG ->
-                            addLog(msg.data.getString("text", ""))
-                        Udp2RawClientTestService.MSG_CLIENT_READY ->
-                            clientReadyDeferred.complete(Unit)
-                        Udp2RawClientTestService.MSG_ERROR -> {
-                            val err = msg.data.getString("error", "未知错误")
-                            if (!clientReadyDeferred.isCompleted) {
-                                clientReadyDeferred.completeExceptionally(Exception(err))
-                            }
-                        }
-                    }
-                }
-            }
-        val clientActivityMessenger = Messenger(clientIncomingHandler)
-
-        val clientBindDeferred = CompletableDeferred<Messenger>()
-        val cConn =
-            object : ServiceConnection {
-                override fun onServiceConnected(name: ComponentName, binder: IBinder) {
-                    clientBindDeferred.complete(Messenger(binder))
-                }
-
-                override fun onServiceDisconnected(name: ComponentName) {
-                    if (!clientReadyDeferred.isCompleted) {
-                        clientReadyDeferred.completeExceptionally(
-                            Exception("客户端服务进程异常退出")
-                        )
-                    }
-                }
-            }
-        clientServiceConn = cConn
-
-        withContext(Dispatchers.Main) {
-            val intent = Intent(context, Udp2RawClientTestService::class.java)
-            context.bindService(intent, cConn, Context.BIND_AUTO_CREATE)
-        }
-        clientBound = true
-
-        clientServiceMessenger =
-            try {
-                withTimeout(8_000) { clientBindDeferred.await() }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                addLog("❌ 绑定客户端服务超时")
-                setStep(4, StepStatus.FAILED)
-                return
-            }
-
-        clientLogFile.parentFile?.mkdirs()
-        if (!clientLogFile.exists()) clientLogFile.createNewFile()
-        val clientStartMsg =
-            Message.obtain(null, Udp2RawClientTestService.MSG_START).apply {
-                replyTo = clientActivityMessenger
-                data =
-                    Bundle().apply {
-                        putString("plugin_path", soPath)
-                        putString("log_file", clientLogFile.absolutePath)
-                        putString("raw_mode", rawMode)
-                        putInt("client_port", Udp2RawTestActivity.PORT_CLIENT_UDP)
-                        putInt("server_port", Udp2RawTestActivity.PORT_SERVER_RAW)
-                        putString("tunnel_key", Udp2RawTestActivity.TUNNEL_KEY)
-                    }
-            }
-        clientServiceMessenger.send(clientStartMsg)
-
-        try {
-            withTimeout(30_000) { clientReadyDeferred.await() }
-        } catch (e: TimeoutCancellationException) {
-            addLog("❌ 客户端启动超时")
-            dumpLogFile(clientLogFile, "客户端", addLog)
-            captureNativeCrashLogs(addLog)
-            setStep(4, StepStatus.FAILED)
-            return
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            addLog("❌ 客户端错误: ${e.message}")
-            dumpLogFile(clientLogFile, "客户端", addLog)
-            captureNativeCrashLogs(addLog)
-            setStep(4, StepStatus.FAILED)
-            return
-        }
-        setStep(4, StepStatus.SUCCESS)
-
-        // ── Step 5: Send UDP echo packets through tunnel ────────────────────────
-        setStep(5, StepStatus.RUNNING)
-        val echoResults = mutableListOf<Boolean>()
-        try {
-            withContext(Dispatchers.IO) {
-                val socket = DatagramSocket()
-                socket.soTimeout = 5_000
-                addLog(
-                    "【隧道】本地端口: ${socket.localPort}, 目标: 127.0.0.1:${Udp2RawTestActivity.PORT_CLIENT_UDP}"
-                )
-                val serverAddr = InetAddress.getByName("127.0.0.1")
-                repeat(5) { i ->
-                    val msg = "hello-flowgate-$i"
-                    val sendBuf = msg.toByteArray()
-                    val sendPkt =
-                        DatagramPacket(
-                            sendBuf,
-                            sendBuf.size,
-                            serverAddr,
-                            Udp2RawTestActivity.PORT_CLIENT_UDP,
-                        )
-                    socket.send(sendPkt)
-                    addLog("→ 发送: $msg")
-                    val recvBuf = ByteArray(256)
-                    val recvPkt = DatagramPacket(recvBuf, recvBuf.size)
-                    try {
-                        socket.receive(recvPkt)
-                        val reply = String(recvPkt.data, 0, recvPkt.length)
-                        val ok = reply == msg
-                        echoResults.add(ok)
-                        addLog("← 收到: $reply ${if (ok) "✓" else "✗ (不匹配)"}")
-                    } catch (e: Exception) {
-                        echoResults.add(false)
-                        addLog("← 超时或错误: ${e.message}")
-                    }
-                    Thread.sleep(500)
-                }
-                socket.close()
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            addLog("❌ Echo 测试异常: ${e.message}")
-            setStep(5, StepStatus.FAILED)
-            return
-        }
-        setStep(5, StepStatus.SUCCESS)
-
-        // ── Step 6: Validate results ───────────────────────────────────────────
-        setStep(6, StepStatus.RUNNING)
-        val passed = echoResults.count { it }
-        val total = echoResults.size
-        addLog("结果: $passed/$total 成功")
-        if (passed == total) {
-            addLog("✅ 所有 Echo 测试通过")
-            setStep(6, StepStatus.SUCCESS)
-        } else {
-            addLog("❌ 部分 Echo 测试失败")
-            dumpLogFile(serverLogFile, "服务端", addLog)
-            dumpLogFile(clientLogFile, "客户端", addLog)
-            setStep(6, StepStatus.FAILED)
-        }
-
-        // ── Step 7: Cleanup ────────────────────────────────────────────────────
-        setStep(7, StepStatus.RUNNING)
-        doCleanup(
-            serverMessenger, serverConn,
-            clientServiceMessenger, clientServiceConn,
-            context, serverBound, clientBound, addLog
-        )
-        cleanedUp = true
-        setStep(7, StepStatus.SUCCESS)
-    } finally {
-        if (!cleanedUp) {
-            doCleanup(
-                serverMessenger, serverConn,
-                clientServiceMessenger, clientServiceConn,
-                context, serverBound, clientBound
-            )
-        }
-    }
-}
-
-private fun dumpLogFile(logFile: File, tag: String, addLog: (String) -> Unit) {
-    if (!logFile.exists()) return
-    try {
-        val content = logFile.readText()
-        if (content.isBlank()) {
-            addLog("【$tag】日志文件为空")
-        } else {
-            addLog("【$tag】--- 日志转储 ---")
-            content.lines().forEach { line ->
-                if (line.isNotBlank()) addLog("【$tag】$line")
-            }
-            addLog("【$tag】--- 日志结束 ---")
-        }
-    } catch (e: Exception) {
-        addLog("【$tag】读取日志失败: ${e.message}")
-    }
-}
-
-private fun doCleanup(
-    serverMessenger: Messenger?,
-    serverConn: ServiceConnection?,
-    clientMessenger: Messenger?,
-    clientConn: ServiceConnection?,
-    context: Context,
-    serverBound: Boolean,
-    clientBound: Boolean,
-    addLog: ((String) -> Unit)? = null,
-) {
-    // Stop client service
-    try {
-        clientMessenger?.send(Message.obtain(null, Udp2RawClientTestService.MSG_STOP))
-    } catch (_: Exception) {}
-    if (clientBound) {
-        try {
-            clientConn?.let { context.unbindService(it) }
-        } catch (_: Exception) {}
-        try {
-            context.stopService(Intent(context, Udp2RawClientTestService::class.java))
-        } catch (_: Exception) {}
-    }
-    // Stop server service
-    try {
-        serverMessenger?.send(Message.obtain(null, Udp2RawTestHelperService.MSG_STOP))
-    } catch (_: Exception) {}
-    if (serverBound) {
-        try {
-            serverConn?.let { context.unbindService(it) }
-        } catch (_: Exception) {}
-        try {
-            context.stopService(Intent(context, Udp2RawTestHelperService::class.java))
-        } catch (_: Exception) {}
-    }
-}
-
-private fun captureNativeCrashLogs(addLog: (String) -> Unit) {
-    try {
-        val process =
-            Runtime.getRuntime().exec(
-                "logcat -d -t 200 -s AndroidRuntime:E DEBUG:V"
-            )
-        val output = process.inputStream.bufferedReader().readText().trim()
-        if (output.isNotBlank()) {
-            addLog("--- 原生日志 (logcat) ---")
-            output.lines().take(50).forEach { line ->
-                if (line.isNotBlank()) addLog(line)
-            }
-            addLog("--- 原生日志结束 ---")
-        } else {
-            addLog("原生日志 (logcat) 为空，无崩溃信息")
-        }
-    } catch (e: Exception) {
-        addLog("捕获原生日志失败: ${e.message}")
     }
 }
