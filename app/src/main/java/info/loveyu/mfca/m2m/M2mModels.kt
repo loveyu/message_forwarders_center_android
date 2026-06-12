@@ -72,6 +72,26 @@ data class M2mTrafficStats(
     val txSpeed: Long = 0,
 )
 
+enum class M2mProviderType { Proxy, Rule }
+
+enum class M2mVehicleType { HTTP, File, Compatible }
+
+data class M2mProviderInfo(
+    val name: String,
+    val type: M2mProviderType,
+    val vehicleType: M2mVehicleType,
+    val updatedAt: String = "",
+    val proxyCount: Int = 0,
+    val ruleCount: Int = 0,
+    val subscriptionUrl: String = "",
+) {
+    fun hasValidUpdatedAt(): Boolean {
+        if (updatedAt.isBlank() || updatedAt == "0") return false
+        if (updatedAt.startsWith("0001")) return false
+        return true
+    }
+}
+
 data class M2mUiState(
     val hasVpnConfig: Boolean = false,
     val isEnabled: Boolean = false,

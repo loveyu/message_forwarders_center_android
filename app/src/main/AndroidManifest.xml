@@ -115,6 +115,11 @@
             android:theme="@style/Theme.FlowGate" />
 
         <activity
+            android:name=".m2m.M2mProvidersActivity"
+            android:exported="false"
+            android:theme="@style/Theme.FlowGate" />
+
+        <activity
             android:name=".m2m.GeoManageActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />

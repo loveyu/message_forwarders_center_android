@@ -213,6 +213,39 @@
     <string name="vpn_total_download">累计下载：%1$s</string>
     <string name="vpn_total_upload">累计上传：%1$s</string>
 
+    <!-- 外部资源管理（Providers） -->
+    <string name="providers_manage_title">外部资源管理</string>
+    <string name="providers_manage_menu">外部资源</string>
+    <string name="providers_type_proxy">代理提供者</string>
+    <string name="providers_type_rule">规则提供者</string>
+    <string name="providers_status_unknown">状态未知</string>
+    <string name="providers_proxy_count">%1$d 个代理</string>
+    <string name="providers_rule_count">%1$d 条规则</string>
+    <string name="providers_updated_at">更新于 %1$s</string>
+    <string name="providers_not_updated">未更新</string>
+    <string name="providers_update">更新</string>
+    <string name="providers_updating">更新中…</string>
+    <string name="providers_update_all">全部更新</string>
+    <string name="providers_update_all_proxies">更新所有代理提供者</string>
+    <string name="providers_update_all_rules">更新所有规则提供者</string>
+    <string name="providers_update_success">%1$s 更新完成</string>
+    <string name="providers_update_failed">%1$s 更新失败：%2$s</string>
+    <string name="providers_update_all_success">全部更新完成</string>
+    <string name="providers_update_all_failed">全部更新失败：%1$s</string>
+    <string name="providers_core_not_running">m2m 核心未运行</string>
+    <string name="providers_empty">暂无外部资源</string>
+    <string name="providers_vehicle_http">HTTP</string>
+    <string name="providers_vehicle_file">文件</string>
+    <string name="providers_vehicle_compatible">兼容</string>
+    <string name="providers_view_detail">查看信息</string>
+    <string name="providers_detail_type">类型</string>
+    <string name="providers_detail_vehicle">来源</string>
+    <string name="providers_detail_proxy_count">代理数量</string>
+    <string name="providers_detail_rule_count">规则数量</string>
+    <string name="providers_detail_updated">更新时间</string>
+    <string name="providers_detail_url">订阅地址</string>
+    <string name="close">关闭</string>
+
     <!-- 测试中心 -->
     <string name="test_hub_title">测试中心</string>
     <string name="test_hub_menu">测试</string>

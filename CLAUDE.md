@@ -150,3 +150,11 @@ protocol://[username:password@]host:port[?param1=value1&param2=value2...]
 
 m2m 模块基于 m2m (Clash.Meta) 实现 Android 透明代理，详细架构文档见 [`docs/vpn-architecture.md`](docs/vpn-architecture.md)。
 
+## 文件大小规范
+
+**UI 文件（Composable/Activity）超过 300 行时**，必须提醒是否需要将 UI 拆分到独立的文件中（如抽取子 Composable、分离 UI 状态逻辑等）。
+
+**非 UI 类文件超过 500 行时**，必须提醒是否需要拆分为多个模块。
+
+新增文件时应注意合理规划文件大小，避免单个文件过于臃肿。
+
