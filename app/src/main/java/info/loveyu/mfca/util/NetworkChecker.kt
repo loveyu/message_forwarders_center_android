@@ -6,7 +6,6 @@ import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import java.net.Inet4Address
 import java.net.NetworkInterface
-import java.net.URLDecoder
 
 /**
  * 网络状态检查器
@@ -30,7 +29,7 @@ object NetworkChecker {
      * 纯事件驱动缓存：仅在 invalidateCache() 调用时失效（网络变更回调触发），
      * 网络稳定期间零系统服务查询。
      */
-    private data class NetworkSnapshot(
+    internal data class NetworkSnapshot(
         val networkType: String?,
         val ssid: String?,
         val bssid: String?,
@@ -144,235 +143,31 @@ object NetworkChecker {
      * 检查链接是否应该启用
      */
     fun shouldEnable(context: Context, whenCondition: String?, denyCondition: String?): Boolean {
-        // First check deny conditions - if any matches, deny immediately
-        if (denyCondition != null && checkCondition(context, denyCondition)) {
-            return false
-        }
-
-        // Then check when conditions - if specified and doesn't match, deny
-        if (whenCondition != null && !checkCondition(context, whenCondition)) {
-            return false
-        }
-
+        if (denyCondition != null && NetworkConditionChecker.checkCondition(context, denyCondition, this::getSnapshot)) return false
+        if (whenCondition != null && !NetworkConditionChecker.checkCondition(context, whenCondition, this::getSnapshot)) return false
         return true
     }
 
-    /**
-     * 获取链接是否应该启用及原因
-     */
     fun getEnableReason(
         context: Context,
         whenCondition: String?,
         denyCondition: String?,
-        forceRefresh: Boolean = false
+        forceRefresh: Boolean = false,
     ): EnableResult {
-        // First check deny conditions
         if (denyCondition != null) {
-            val denyResult = checkConditionWithReason(context, denyCondition, forceRefresh)
-            if (denyResult.matched) {
-                return EnableResult(enabled = false, reason = "Denied by condition: $denyCondition")
-            }
+            val denyResult = NetworkConditionChecker.checkConditionWithReason(context, denyCondition, this::getSnapshot, forceRefresh)
+            if (denyResult.matched) return EnableResult(enabled = false, reason = "Denied by condition: $denyCondition")
         }
 
-        // Then check when conditions
         if (whenCondition != null) {
-            val whenResult = checkConditionWithReason(context, whenCondition, forceRefresh)
-            if (!whenResult.matched) {
-                return EnableResult(enabled = false, reason = "Condition not met: $whenCondition")
-            }
+            val whenResult = NetworkConditionChecker.checkConditionWithReason(context, whenCondition, this::getSnapshot, forceRefresh)
+            if (!whenResult.matched) return EnableResult(enabled = false, reason = "Condition not met: $whenCondition")
         }
 
         return EnableResult(enabled = true, reason = null)
     }
 
     data class EnableResult(val enabled: Boolean, val reason: String?)
-
-    /**
-     * 检查条件是否匹配（使用快照缓存）
-     */
-    private fun checkCondition(context: Context, condition: String, forceRefresh: Boolean = false): Boolean {
-        val params = parseCondition(condition)
-        val snapshot = getSnapshot(context, forceRefresh)
-
-        // Check network type
-        params["network"]?.let { network ->
-            if (!checkNetworkType(snapshot, network)) {
-                return false
-            }
-        }
-
-        // Check IP ranges
-        params["ipRanges"]?.let { ranges ->
-            if (!checkIpRange(snapshot, ranges)) {
-                return false
-            }
-        }
-
-        // Check WiFi SSID
-        params["ssid"]?.let { ssid ->
-            if (!checkWifiSsid(snapshot, ssid)) {
-                return false
-            }
-        }
-
-        // Check WiFi BSSID
-        params["bssid"]?.let { bssid ->
-            if (!checkWifiBssid(snapshot, bssid)) {
-                return false
-            }
-        }
-
-        return true
-    }
-
-    /**
-     * 检查条件是否匹配，返回详细原因（使用快照缓存）
-     */
-    private fun checkConditionWithReason(
-        context: Context,
-        condition: String,
-        forceRefresh: Boolean = false
-    ): ConditionResult {
-        val params = parseCondition(condition)
-        val snapshot = getSnapshot(context, forceRefresh)
-
-        // Check network type
-        params["network"]?.let { network ->
-            if (!checkNetworkType(snapshot, network)) {
-                val currentType = snapshot.networkType ?: "none"
-                return ConditionResult(false, "Network type mismatch: required=$network, current=$currentType")
-            }
-        }
-
-        // Check IP ranges
-        params["ipRanges"]?.let { ranges ->
-            if (!checkIpRange(snapshot, ranges)) {
-                val currentIp = snapshot.ipAddress ?: "unknown"
-                return ConditionResult(false, "IP not in range: ranges=$ranges, current=$currentIp")
-            }
-        }
-
-        // Check WiFi SSID
-        params["ssid"]?.let { ssid ->
-            if (!checkWifiSsid(snapshot, ssid)) {
-                val currentSsid = snapshot.ssid ?: "unknown"
-                return ConditionResult(false, "SSID mismatch: required=$ssid, current=$currentSsid")
-            }
-        }
-
-        // Check WiFi BSSID
-        params["bssid"]?.let { bssid ->
-            if (!checkWifiBssid(snapshot, bssid)) {
-                val currentBssid = snapshot.bssid ?: "unknown"
-                return ConditionResult(false, "BSSID mismatch: required=$bssid, current=$currentBssid")
-            }
-        }
-
-        return ConditionResult(true, null)
-    }
-
-    private data class ConditionResult(val matched: Boolean, val reason: String?)
-
-    /**
-     * 解析条件字符串为 key=value map
-     * 格式 (URI query string): network=wifi&ssid=MyWiFi&ipRanges=192.168.1.0%2F24
-     * 使用 & 分隔参数，值内的逗号不需要编码
-     * 注意: + 号不会被当作空格处理，会作为字面字符保留
-     */
-    private fun parseCondition(condition: String): Map<String, String> {
-        val result = mutableMapOf<String, String>()
-        val pairs = condition.split("&")
-        for (pair in pairs) {
-            val kv = pair.split("=", limit = 2)
-            if (kv.size == 2) {
-                // 先将 + 替换为 %2B，防止 URLDecoder 把 + 当作空格处理
-                val key = URLDecoder.decode(kv[0].trim().replace("+", "%2B"), "UTF-8")
-                val value = URLDecoder.decode(kv[1].trim().replace("+", "%2B"), "UTF-8")
-                result[key] = value
-            }
-        }
-        return result
-    }
-
-    /**
-     * 检查网络类型，支持逗号分隔多值(OR逻辑)
-     */
-    private fun checkNetworkType(snapshot: NetworkSnapshot, type: String): Boolean {
-        val types = type.lowercase().split(",").map { it.trim() }
-
-        // 如果包含 "any"，直接返回 true（无网络时也通过）
-        if (types.contains("any")) return true
-
-        // 无网络时，所有类型都不匹配
-        val currentType = snapshot.networkType ?: return false
-
-        return types.any { t ->
-            when (t) {
-                "wifi" -> currentType == "wifi"
-                "mobile" -> currentType == "mobile"
-                "ethernet" -> currentType == "ethernet"
-                else -> true
-            }
-        }
-    }
-
-    /**
-     * 检查 IP 段
-     */
-    private fun checkIpRange(snapshot: NetworkSnapshot, ipRanges: String): Boolean {
-        val currentIp = snapshot.ipAddress ?: return false
-        val ranges = ipRanges.split(",").map { it.trim() }
-
-        return ranges.any { range ->
-            isIpInRange(currentIp, range)
-        }
-    }
-
-    /**
-     * 检查 WiFi SSID
-     */
-    private fun checkWifiSsid(snapshot: NetworkSnapshot, ssidPattern: String): Boolean {
-        // 非 WiFi 时 SSID 不匹配
-        if (snapshot.networkType != "wifi") return false
-
-        val currentSsid = snapshot.ssid ?: ""
-
-        // 对显式依赖 SSID 的规则，拿不到 SSID 时必须保守失败，避免断网后继续判定为满足条件。
-        if (currentSsid == "<unknown ssid>" || currentSsid.isEmpty()) {
-            LogManager.logDebug("NETWORK", "SSID unavailable, treating SSID check as not matched")
-            return false
-        }
-
-        // ssidPattern can be comma-separated list
-        val patterns = ssidPattern.split(",").map { it.trim() }
-        return patterns.any { pattern ->
-            if (pattern.startsWith("~")) {
-                // Regex pattern
-                Regex(pattern.removePrefix("~")).matches(currentSsid)
-            } else {
-                currentSsid == pattern
-            }
-        }
-    }
-
-    /**
-     * 检查 WiFi BSSID
-     */
-    private fun checkWifiBssid(snapshot: NetworkSnapshot, bssidPattern: String): Boolean {
-        // 非 WiFi 时 BSSID 不匹配
-        if (snapshot.networkType != "wifi") return false
-
-        val currentBssid = snapshot.bssid
-
-        if (currentBssid == null || currentBssid == "02:00:00:00:00:00" || currentBssid.isBlank()) {
-            LogManager.logDebug("NETWORK", "BSSID unavailable, treating BSSID check as not matched")
-            return false
-        }
-
-        // bssidPattern can be comma-separated list
-        val bssids = bssidPattern.split(",").map { it.trim() }
-        return bssids.any { it == currentBssid }
-    }
 
     private fun formatIpAddress(ipAddress: Int): String {
         return "${ipAddress and 0xFF}.${ipAddress shr 8 and 0xFF}.${ipAddress shr 16 and 0xFF}.${ipAddress shr 24 and 0xFF}"
@@ -445,14 +240,14 @@ object NetworkChecker {
 
         // Show when condition evaluation (need fresh check for reason display)
         if (whenCondition != null) {
-            val result = checkConditionWithReason(context, whenCondition, forceRefresh)
+            val result = NetworkConditionChecker.checkConditionWithReason(context, whenCondition, this::getSnapshot, forceRefresh)
             sb.append("\nWhen: $whenCondition -> ${if (result.matched) "MATCHED" else "NOT MATCHED"}")
             if (!result.matched && result.reason != null) {
                 sb.append(" (${result.reason})")
             }
         }
         if (denyCondition != null) {
-            val result = checkConditionWithReason(context, denyCondition, forceRefresh)
+            val result = NetworkConditionChecker.checkConditionWithReason(context, denyCondition, this::getSnapshot, forceRefresh)
             sb.append("\nDeny: $denyCondition -> ${if (result.matched) "MATCHED (denied)" else "not matched"}")
         }
 
