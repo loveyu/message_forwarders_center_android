@@ -5,8 +5,8 @@ import info.loveyu.mfca.config.models.LinkInputConfig
 import info.loveyu.mfca.config.models.ReplayConfig
 import info.loveyu.mfca.config.models.ReplayProvider
 import info.loveyu.mfca.link.LinkManager
-import info.loveyu.mfca.util.GotifyApiConfig
-import info.loveyu.mfca.util.GotifyApiSupport
+import info.loveyu.mfca.util.http.GotifyApiConfig
+import info.loveyu.mfca.util.http.GotifyApiSupport
 import info.loveyu.mfca.util.LogManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

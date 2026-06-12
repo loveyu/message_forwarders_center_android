@@ -36,9 +36,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.R
-import info.loveyu.mfca.m2m.M2mManager
-import info.loveyu.mfca.m2m.M2mRuntimeStatus
-import info.loveyu.mfca.m2m.MfcaM2mService
+import info.loveyu.mfca.m2m.core.M2mManager
+import info.loveyu.mfca.m2m.models.M2mRuntimeStatus
+import info.loveyu.mfca.m2m.service.MfcaM2mService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

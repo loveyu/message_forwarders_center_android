@@ -8,7 +8,7 @@ import info.loveyu.mfca.config.models.LinkOutputConfig
 import info.loveyu.mfca.config.models.LinkType
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.output.OutputManager
-import info.loveyu.mfca.util.NetworkChecker
+import info.loveyu.mfca.util.network.NetworkChecker
 
 internal fun buildHttpOutputStatus(
     context: Context,

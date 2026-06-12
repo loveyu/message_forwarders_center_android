@@ -6,7 +6,7 @@ import android.os.Process
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.ui.theme.ThemeModeManager
-import info.loveyu.mfca.util.HttpDownloader
+import info.loveyu.mfca.util.http.HttpDownloader
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
 

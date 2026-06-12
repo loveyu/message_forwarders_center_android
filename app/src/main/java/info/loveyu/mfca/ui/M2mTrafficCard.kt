@@ -18,7 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.R
-import info.loveyu.mfca.m2m.M2mTrafficStats
+import info.loveyu.mfca.m2m.models.M2mRuntimeStatus
+import info.loveyu.mfca.m2m.models.M2mTrafficStats
 
 @Composable
 fun M2mTrafficCard(trafficStats: M2mTrafficStats?) {
@@ -88,15 +89,15 @@ fun M2mTrafficCard(trafficStats: M2mTrafficStats?) {
     }
 }
 
-fun runtimeStatusLabel(status: info.loveyu.mfca.m2m.M2mRuntimeStatus): String = when (status) {
-    info.loveyu.mfca.m2m.M2mRuntimeStatus.disabled -> "Disabled"
-    info.loveyu.mfca.m2m.M2mRuntimeStatus.idle -> "Idle"
-    info.loveyu.mfca.m2m.M2mRuntimeStatus.preparing -> "Preparing"
-    info.loveyu.mfca.m2m.M2mRuntimeStatus.prepared -> "Prepared"
-    info.loveyu.mfca.m2m.M2mRuntimeStatus.starting -> "Starting"
-    info.loveyu.mfca.m2m.M2mRuntimeStatus.running -> "Running"
-    info.loveyu.mfca.m2m.M2mRuntimeStatus.stopping -> "Stopping"
-    info.loveyu.mfca.m2m.M2mRuntimeStatus.error -> "Error"
+fun runtimeStatusLabel(status: M2mRuntimeStatus): String = when (status) {
+    M2mRuntimeStatus.disabled -> "Disabled"
+    M2mRuntimeStatus.idle -> "Idle"
+    M2mRuntimeStatus.preparing -> "Preparing"
+    M2mRuntimeStatus.prepared -> "Prepared"
+    M2mRuntimeStatus.starting -> "Starting"
+    M2mRuntimeStatus.running -> "Running"
+    M2mRuntimeStatus.stopping -> "Stopping"
+    M2mRuntimeStatus.error -> "Error"
 }
 
 fun formatSpeed(bytesPerSec: Long): String {

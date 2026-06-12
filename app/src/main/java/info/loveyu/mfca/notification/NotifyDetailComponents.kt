@@ -29,7 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.notification.NotifyRecord
-import info.loveyu.mfca.util.IconCacheManager
+import info.loveyu.mfca.util.cache.IconCacheManager
 
 @Composable
 fun NotifyIcon(record: NotifyRecord, size: Dp) {

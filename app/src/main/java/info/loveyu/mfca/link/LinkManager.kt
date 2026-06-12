@@ -7,7 +7,7 @@ import info.loveyu.mfca.config.models.LinkConfig
 import info.loveyu.mfca.config.models.LinkType
 import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.util.LogManager
-import info.loveyu.mfca.util.NetworkChecker
+import info.loveyu.mfca.util.network.NetworkChecker
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -148,7 +148,7 @@ object LinkManager {
             val config = configs[link.id] ?: return@forEach
 
             // Check network conditions (when/deny)
-            if (!info.loveyu.mfca.util.NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
+            if (!info.loveyu.mfca.util.network.NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
                 if (link.isConnected()) {
                     LogManager.logDebug("LINK", "Disconnecting ${link.id}: network conditions not met")
                     link.disconnect()
@@ -209,7 +209,7 @@ object LinkManager {
             val config = configs[link.id] ?: return@forEach
 
             // Check if link should be enabled based on when/deny conditions
-            if (!info.loveyu.mfca.util.NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
+            if (!info.loveyu.mfca.util.network.NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
                 LogManager.logDebug("LINK", "Skipping ${link.id}: network conditions not met")
                 return@forEach
             }
@@ -244,7 +244,7 @@ object LinkManager {
             if (!link.shouldAutoReconnect()) return@forEach
 
             // Check network conditions (when/deny)
-            if (!info.loveyu.mfca.util.NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
+            if (!info.loveyu.mfca.util.network.NetworkChecker.shouldEnable(ctx, config.whenCondition, config.deny)) {
                 LogManager.logDebug("LINK", "Skipping ${link.id}: network conditions not met")
                 return@forEach
             }

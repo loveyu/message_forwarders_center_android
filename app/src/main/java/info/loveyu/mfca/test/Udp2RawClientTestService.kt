@@ -8,7 +8,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.Message
 import android.os.Messenger
-import info.loveyu.mfca.plugin.Udp2RawPluginCore
+import info.loveyu.mfca.input.udp2raw.Udp2RawPluginCore
 import java.io.File
 import java.io.RandomAccessFile
 

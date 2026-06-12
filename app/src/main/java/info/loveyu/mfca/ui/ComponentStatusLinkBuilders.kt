@@ -6,7 +6,7 @@ import info.loveyu.mfca.config.models.LinkType
 import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.service.ForwardService
-import info.loveyu.mfca.util.NetworkChecker
+import info.loveyu.mfca.util.network.NetworkChecker
 
 internal fun getConfiguredLinkStatuses(context: Context): List<ComponentStatus> {
     val configuredLinks = linkedMapOf<String, LinkConfig>()

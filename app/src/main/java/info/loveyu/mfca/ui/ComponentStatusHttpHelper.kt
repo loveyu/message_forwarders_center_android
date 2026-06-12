@@ -4,7 +4,7 @@ import info.loveyu.mfca.config.models.HttpInputConfig
 import info.loveyu.mfca.config.HttpInputDsnParser
 import info.loveyu.mfca.config.models.HttpInputParsedConfig
 import info.loveyu.mfca.config.models.LinkConfig
-import info.loveyu.mfca.util.NetworkChecker
+import info.loveyu.mfca.util.network.NetworkChecker
 import java.net.URI
 
 internal fun getLinkTypeString(config: LinkConfig): String {

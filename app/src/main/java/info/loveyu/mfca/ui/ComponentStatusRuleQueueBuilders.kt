@@ -6,7 +6,7 @@ import info.loveyu.mfca.config.models.RuleConfig
 import info.loveyu.mfca.queue.Queue
 import info.loveyu.mfca.queue.QueueType
 import info.loveyu.mfca.service.ForwardService
-import info.loveyu.mfca.util.NetworkChecker
+import info.loveyu.mfca.util.network.NetworkChecker
 
 internal fun formatPipelineStep(step: PipelineStep): String {
     val lines = mutableListOf<String>()

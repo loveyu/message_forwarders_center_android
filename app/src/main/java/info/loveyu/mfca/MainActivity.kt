@@ -36,7 +36,12 @@ import info.loveyu.mfca.ui.theme.MfcaTheme
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
 import info.loveyu.mfca.config.ConfigActivity
-import info.loveyu.mfca.m2m.M2mManager
+import info.loveyu.mfca.m2m.core.M2mManager
+import info.loveyu.mfca.m2m.models.M2mUiState
+import info.loveyu.mfca.ui.main.BottomTab
+import info.loveyu.mfca.ui.main.MainBottomBar
+import info.loveyu.mfca.ui.main.ensureServiceRunning
+import info.loveyu.mfca.ui.main.promptBatteryOptimization
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {

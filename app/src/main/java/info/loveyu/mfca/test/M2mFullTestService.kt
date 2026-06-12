@@ -17,10 +17,10 @@ import info.loveyu.mfca.R
 import info.loveyu.mfca.config.models.M2mInputConfig
 import info.loveyu.mfca.plugin.M2mPluginCore
 import info.loveyu.mfca.util.LogManager
-import info.loveyu.mfca.m2m.MfcaM2mService
-import info.loveyu.mfca.m2m.M2mProcessManager
-import info.loveyu.mfca.m2m.PreparedM2mArtifacts
-import info.loveyu.mfca.m2m.M2mBridgeProcessManager
+import info.loveyu.mfca.m2m.service.MfcaM2mService
+import info.loveyu.mfca.m2m.process.M2mProcessManager
+import info.loveyu.mfca.m2m.models.PreparedM2mArtifacts
+import info.loveyu.mfca.m2m.core.M2mBridgeProcessManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

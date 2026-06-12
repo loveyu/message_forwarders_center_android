@@ -4,7 +4,7 @@ import android.content.Context
 import info.loveyu.mfca.config.models.Udp2RawInputConfig
 import info.loveyu.mfca.plugin.PluginCore
 import info.loveyu.mfca.plugin.PluginManager
-import info.loveyu.mfca.plugin.Udp2RawPluginCore
+import info.loveyu.mfca.input.udp2raw.Udp2RawPluginCore
 import info.loveyu.mfca.util.LogManager
 import java.io.File
 import java.net.InetAddress

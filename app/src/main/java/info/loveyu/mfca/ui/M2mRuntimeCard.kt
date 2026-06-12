@@ -41,21 +41,22 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.R
-import info.loveyu.mfca.m2m.GeoManageActivity
-import info.loveyu.mfca.m2m.M2mAppSelectActivity
-import info.loveyu.mfca.m2m.M2mCandidateSettingsActivity
-import info.loveyu.mfca.m2m.M2mLogActivity
-import info.loveyu.mfca.m2m.M2mManager
-import info.loveyu.mfca.m2m.M2mProvidersActivity
-import info.loveyu.mfca.m2m.M2mRuntimeStatus
-import info.loveyu.mfca.m2m.MfcaM2mService
+import info.loveyu.mfca.m2m.geo.GeoManageActivity
+import info.loveyu.mfca.m2m.ui.M2mAppSelectActivity
+import info.loveyu.mfca.m2m.ui.M2mCandidateSettingsActivity
+import info.loveyu.mfca.m2m.ui.M2mLogActivity
+import info.loveyu.mfca.m2m.core.M2mManager
+import info.loveyu.mfca.m2m.models.M2mRuntimeStatus
+import info.loveyu.mfca.m2m.models.M2mUiState
+import info.loveyu.mfca.m2m.service.MfcaM2mService
+import info.loveyu.mfca.m2m.ui.M2mProvidersActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
 fun M2mRuntimeCard(
-    uiState: info.loveyu.mfca.m2m.M2mUiState,
+    uiState: M2mUiState,
     coreActionWorking: Boolean,
     coreActionError: String?,
     vpnPermissionLauncher: androidx.activity.result.ActivityResultLauncher<android.content.Intent>,

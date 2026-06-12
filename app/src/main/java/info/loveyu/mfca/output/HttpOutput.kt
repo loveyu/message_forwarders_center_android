@@ -5,7 +5,7 @@ import info.loveyu.mfca.config.models.HttpOutputConfig
 import info.loveyu.mfca.queue.QueueItem
 import info.loveyu.mfca.queue.QueueManager
 import info.loveyu.mfca.util.LogManager
-import info.loveyu.mfca.util.NetworkChecker
+import info.loveyu.mfca.util.network.NetworkChecker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

@@ -48,7 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.notification.NotifyRecord
-import info.loveyu.mfca.util.IconCacheManager
+import info.loveyu.mfca.util.cache.IconCacheManager
 
 @Composable
 fun NotifyRecordCard(

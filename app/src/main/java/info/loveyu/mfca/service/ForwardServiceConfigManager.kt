@@ -6,13 +6,13 @@ import info.loveyu.mfca.deadletter.DeadLetterHandler
 import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.output.OutputManager
-import info.loveyu.mfca.pipeline.RuleEngine
+import info.loveyu.mfca.pipeline.core.RuleEngine
 import info.loveyu.mfca.queue.QueueManager
 import info.loveyu.mfca.server.HttpServer
 import info.loveyu.mfca.server.MessageForwarder
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
-import info.loveyu.mfca.m2m.M2mManager
+import info.loveyu.mfca.m2m.core.M2mManager
 import java.util.concurrent.ScheduledExecutorService
 
 internal class ForwardServiceConfigManager(

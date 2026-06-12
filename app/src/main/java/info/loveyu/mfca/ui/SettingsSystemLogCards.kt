@@ -40,7 +40,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.R
-import info.loveyu.mfca.util.HttpDownloader
+import info.loveyu.mfca.util.http.HttpDownloader
 import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
 

@@ -3,6 +3,7 @@ package info.loveyu.mfca.util
 import android.content.Context
 import android.util.Base64
 import info.loveyu.mfca.config.models.TlsConfig
+import info.loveyu.mfca.util.http.HttpDownloader
 import java.io.File
 import java.io.FileOutputStream
 import java.security.KeyFactory

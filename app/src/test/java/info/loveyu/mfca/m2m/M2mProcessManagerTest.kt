@@ -1,5 +1,6 @@
 package info.loveyu.mfca.m2m
 
+import info.loveyu.mfca.m2m.process.M2mProcessManager
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.File

@@ -9,7 +9,7 @@ import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.service.refreshStats
 import info.loveyu.mfca.util.LogManager
-import info.loveyu.mfca.util.NetworkChecker
+import info.loveyu.mfca.util.network.NetworkChecker
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

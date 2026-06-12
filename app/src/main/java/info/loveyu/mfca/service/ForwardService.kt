@@ -8,7 +8,7 @@ import android.os.Build
 import android.os.IBinder
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.config.models.AppConfig
-import info.loveyu.mfca.pipeline.RuleEngine
+import info.loveyu.mfca.pipeline.core.RuleEngine
 import info.loveyu.mfca.deadletter.DeadLetterHandler
 import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.link.LinkManager
@@ -17,7 +17,7 @@ import info.loveyu.mfca.queue.QueueManager
 import info.loveyu.mfca.receiver.ServiceWatchdogJob
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
-import info.loveyu.mfca.m2m.M2mManager
+import info.loveyu.mfca.m2m.core.M2mManager
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 

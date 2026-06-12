@@ -5,9 +5,9 @@ import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.util.LogManager
-import info.loveyu.mfca.util.NetworkChecker
-import info.loveyu.mfca.m2m.M2mManager
-import info.loveyu.mfca.m2m.M2mRuntimeStatus
+import info.loveyu.mfca.util.network.NetworkChecker
+import info.loveyu.mfca.m2m.core.M2mManager
+import info.loveyu.mfca.m2m.models.M2mRuntimeStatus
 
 fun ForwardService.Companion.buildNotificationText(): String {
     val m2mState = M2mManager.state.value

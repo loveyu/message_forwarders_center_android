@@ -3,7 +3,7 @@ package info.loveyu.mfca.test
 import android.content.Context
 import info.loveyu.mfca.plugin.M2mPluginCore
 import info.loveyu.mfca.plugin.PluginManager
-import info.loveyu.mfca.util.HttpDownloader
+import info.loveyu.mfca.util.http.HttpDownloader
 import info.loveyu.mfca.util.StoragePathResolver
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers

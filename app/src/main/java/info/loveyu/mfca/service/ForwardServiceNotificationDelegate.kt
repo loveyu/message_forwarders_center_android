@@ -11,8 +11,8 @@ import android.graphics.drawable.Icon
 import info.loveyu.mfca.MainActivity
 import info.loveyu.mfca.R
 import info.loveyu.mfca.service.buildNotificationText
-import info.loveyu.mfca.ui.InputMethodFloatingActivity
-import info.loveyu.mfca.ui.StatusFloatingActivity
+import info.loveyu.mfca.ui.floating.InputMethodFloatingActivity
+import info.loveyu.mfca.ui.floating.StatusFloatingActivity
 
 internal class ForwardServiceNotificationDelegate(
     private val service: ForwardService

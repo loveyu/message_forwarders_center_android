@@ -10,7 +10,7 @@ import info.loveyu.mfca.config.models.BearerAuth
 import info.loveyu.mfca.config.models.HttpInputParsedConfig
 import info.loveyu.mfca.config.models.QueryAuth
 import info.loveyu.mfca.util.LogManager
-import info.loveyu.mfca.util.NetworkChecker
+import info.loveyu.mfca.util.network.NetworkChecker
 import org.json.JSONObject
 import java.net.BindException
 

@@ -9,7 +9,7 @@ import info.loveyu.mfca.config.models.LinkType
 import info.loveyu.mfca.config.models.Udp2RawInputConfig
 import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.util.LogManager
-import info.loveyu.mfca.util.NetworkChecker
+import info.loveyu.mfca.util.network.NetworkChecker
 
 /**
  * 输入源管理器 - Service 常驻架构

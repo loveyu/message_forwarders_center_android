@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
 import info.loveyu.mfca.plugin.PluginManager
-import info.loveyu.mfca.util.HttpDownloader
+import info.loveyu.mfca.util.http.HttpDownloader
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers

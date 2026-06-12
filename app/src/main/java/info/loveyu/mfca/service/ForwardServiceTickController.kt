@@ -5,9 +5,9 @@ import info.loveyu.mfca.link.LinkManager
 import info.loveyu.mfca.output.OutputManager
 import info.loveyu.mfca.queue.QueueManager
 import info.loveyu.mfca.util.LogManager
-import info.loveyu.mfca.m2m.M2mManager
-import info.loveyu.mfca.m2m.M2mRuntimeStatus
-import info.loveyu.mfca.m2m.MfcaM2mService
+import info.loveyu.mfca.m2m.core.M2mManager
+import info.loveyu.mfca.m2m.models.M2mRuntimeStatus
+import info.loveyu.mfca.m2m.service.MfcaM2mService
 import androidx.core.content.ContextCompat
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture

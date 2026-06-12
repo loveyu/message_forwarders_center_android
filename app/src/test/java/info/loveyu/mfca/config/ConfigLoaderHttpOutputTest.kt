@@ -2,8 +2,7 @@ package info.loveyu.mfca.config
 
 import info.loveyu.mfca.config.models.HttpOutputConfig
 import info.loveyu.mfca.config.models.OutputFormatStep
-import info.loveyu.mfca.pipeline.ExpressionEngine
-import info.loveyu.mfca.pipeline.applyFormatSteps
+import info.loveyu.mfca.pipeline.expression.*
 import info.loveyu.mfca.util.LogManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull

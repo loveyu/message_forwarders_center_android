@@ -9,7 +9,7 @@ import info.loveyu.mfca.input.HttpInput
 import info.loveyu.mfca.input.HttpVirtualInput
 import info.loveyu.mfca.input.InputManager
 import info.loveyu.mfca.link.LinkManager
-import info.loveyu.mfca.util.NetworkChecker
+import info.loveyu.mfca.util.network.NetworkChecker
 
 internal fun buildHttpInputStatus(
     context: Context,

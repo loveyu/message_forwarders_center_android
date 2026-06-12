@@ -41,13 +41,13 @@ import info.loveyu.mfca.ui.ComponentStatus
 import info.loveyu.mfca.ui.theme.MfcaTheme
 import info.loveyu.mfca.ui.theme.ThemeModeManager
 import info.loveyu.mfca.util.AppStatusManager
-import info.loveyu.mfca.util.ConfigBackupManager
-import info.loveyu.mfca.util.IconCacheManager
+import info.loveyu.mfca.util.config.ConfigBackupManager
+import info.loveyu.mfca.util.cache.IconCacheManager
 import info.loveyu.mfca.util.LogLevel
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
 import info.loveyu.mfca.util.exportAppDataToZip
-import info.loveyu.mfca.util.HttpDownloader
+import info.loveyu.mfca.util.http.HttpDownloader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

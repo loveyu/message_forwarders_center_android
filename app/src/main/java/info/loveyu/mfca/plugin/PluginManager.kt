@@ -2,7 +2,7 @@ package info.loveyu.mfca.plugin
 
 import android.content.Context
 import android.os.Build
-import info.loveyu.mfca.util.HttpDownloader
+import info.loveyu.mfca.util.http.HttpDownloader
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.StoragePathResolver
 import java.io.File

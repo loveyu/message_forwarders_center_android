@@ -100,27 +100,27 @@
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".m2m.M2mAppSelectActivity"
+            android:name=".m2m.ui.M2mAppSelectActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".m2m.M2mCandidateSettingsActivity"
+            android:name=".m2m.ui.M2mCandidateSettingsActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".m2m.M2mLogActivity"
+            android:name=".m2m.ui.M2mLogActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".m2m.M2mProvidersActivity"
+            android:name=".m2m.ui.M2mProvidersActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".m2m.GeoManageActivity"
+            android:name=".m2m.geo.GeoManageActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
@@ -178,7 +178,7 @@
             android:foregroundServiceType="remoteMessaging" />
 
         <service
-            android:name=".m2m.MfcaM2mService"
+            android:name=".m2m.service.MfcaM2mService"
             android:exported="false"
             android:foregroundServiceType="specialUse"
             android:permission="android.permission.BIND_VPN_SERVICE">
@@ -192,7 +192,7 @@
 
         <!-- 输入法切换浮动Activity -->
         <activity
-            android:name=".ui.InputMethodFloatingActivity"
+            android:name=".ui.floating.InputMethodFloatingActivity"
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
@@ -202,7 +202,7 @@
 
         <!-- 状态控制浮动Activity -->
         <activity
-            android:name=".ui.StatusFloatingActivity"
+            android:name=".ui.floating.StatusFloatingActivity"
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"

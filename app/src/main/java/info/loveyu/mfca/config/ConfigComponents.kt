@@ -24,7 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.R
-import info.loveyu.mfca.util.ConfigBackupManager
+import info.loveyu.mfca.util.config.ConfigBackupManager
 
 @Composable
 fun ConfigBackupDialog(

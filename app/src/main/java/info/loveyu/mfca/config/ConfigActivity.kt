@@ -31,8 +31,8 @@ import androidx.compose.ui.unit.dp
 import info.loveyu.mfca.R
 import info.loveyu.mfca.service.ForwardService
 import info.loveyu.mfca.ui.theme.MfcaTheme
-import info.loveyu.mfca.util.ConfigBackupManager
-import info.loveyu.mfca.util.ConfigDownloader
+import info.loveyu.mfca.util.config.ConfigBackupManager
+import info.loveyu.mfca.util.config.ConfigDownloader
 import info.loveyu.mfca.util.LogManager
 import info.loveyu.mfca.util.Preferences
 import java.io.File

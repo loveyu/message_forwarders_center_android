@@ -1,5 +1,6 @@
 package info.loveyu.mfca.m2m
 
+import info.loveyu.mfca.m2m.config.M2mProfileManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
