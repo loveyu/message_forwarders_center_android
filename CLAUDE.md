@@ -1,160 +1,60 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## 项目概述
-
-FlowGate - Android 消息转发中心，基于 Android Foreground Service 的常驻架构，支持 MQTT、WebSocket、TCP 等多种链接协议。
+FlowGate - Android 消息转发中心，基于 Foreground Service 常驻架构，支持 MQTT/WebSocket/TCP 链接。
 
 ## 常用命令
 
 ```bash
-./gradlew spotlessApply        # 格式化所有 Kotlin 代码
-./gradlew spotlessCheck        # 检查代码风格违规
+./gradlew spotlessApply        # 格式化 Kotlin
+./gradlew spotlessCheck        # 检查风格违规
 ./gradlew assembleDebug        # 调试构建
-./gradlew assembleRelease      # 发布构建（需配置 keystore.properties）
-./gradlew clean                # 清理构建产物
-./gradlew build                # 完整构建
-./gradlew generateConfigDoc    # 生成配置 Schema 文档到 app/src/main/assets/config_schema.md
+./gradlew testDebugUnitTest    # 运行单元测试
+./gradlew generateConfigDoc    # 更新配置 Schema 文档
+adb install -r app/build/outputs/apk/debug/app-debug.apk  # 安装 APK
 ```
+
+## 必守规则
+
+1. **提交前**：`spotlessApply` → `assembleDebug` → `testDebugUnitTest` 全部通过
+2. **涉及 Schema 修改**：额外执行 `generateConfigDoc`
+3. **涉及 UI/功能变更**：额外用 `adb install` 实机验证，确认无崩溃
+4. **禁止**提交 ktlint/ktfmt 违规或测试失败的代码
+5. **禁止**在 commit 中添加 `Co-Authored-By`
+6. **samples/ 文件变更后**：同步更新 `HelpActivity.kt` 的 `loadSampleFiles` 列表
+7. **文件大小**：UI >300 行、非 UI >500 行时提醒是否拆分
 
 ## 代码风格
 
-项目使用 Spotless + ktfmt 规范 Kotlin 代码风格（kotlinlangStyle）。
+Spotless + ktfmt（kotlinlangStyle），详细规范见 `.editorconfig` 和 `app/build.gradle.kts` 中的 spotless 配置。
 
-**提交前必须执行**：
-1. `./gradlew spotlessApply` — 格式化所有 Kotlin 文件
-2. `./gradlew assembleDebug` — 验证编译通过
-3. `./gradlew testDebugUnitTest` — 运行单元测试，确保全部通过
-4. `./gradlew generateConfigDoc` — 更新配置 Schema 文档（修改 Schema 后需执行）
+### 注释
 
-**每次修改完成后必须确保本地编译通过**：运行 `./gradlew assembleDebug` 验证，编译失败则不可结束任务。
+- **公开 API** 使用 KDoc（`/** ... */`），中文描述
+- **章节分隔** 用 `// ──` 标注（如 `// ── Public API ──`、`// ── helpers ──`）
+- 无文件级许可证头或文件头注释
 
-禁止提交存在 ktlint/ktfmt 违规的代码，或单元测试失败的代码。CI 会拒绝违规的 PR。
+### 类与包
 
-详细规范见 `.editorconfig` 和 `app/build.gradle.kts` 中的 spotless 配置。
+- **类** PascalCase，**接口** 无 `I` 前缀，**枚举值** UPPER_SNAKE_CASE
+- **可见性**：默认 `internal`，仅在测试或其他模块明确需要时用 `public`
+- **文件组织**：一个文件一个主类，紧密相关的辅助类型（数据类/枚举/顶层函数）可共存
+- **包命名** 扁平单数名词（`config.models`, `pipeline.core`, `ui.main`）
 
-## 架构概览
+## 配置命名
 
-```
-┌───────────────────────────────────────────────────────────────┐
-│                      ForwardService                            │
-│               (Android Foreground Service)                     │
-│  ┌─────────── 统一 Ticker (appScheduler) ──────────────┐      │
-│  │  周期 tick (30s) + 事件触发 (网络/屏幕/充放电/前后台)   │      │
-│  └──────────────────────────────────────────────────────┘      │
-├───────────────────────────────────────────────────────────────┤
-│  LinkManager  │  InputManager  │  OutputManager  │  QueueManager │
-│   (onTick)    │   (onTick)     │                 │   (onTick)    │
-├───────────────────────────────────────────────────────────────┤
-│                    RuleEngine (Pipeline)                        │
-├───────────────────────────────────────────────────────────────┤
-│                     UI Layer (Jetpack Compose)                  │
-└───────────────────────────────────────────────────────────────┘
-```
+全部使用 camelCase（如 `linkId`, `batchSize`），不支持下划线。
 
-## 核心模块
+## 快速索引
 
-| 模块 | 路径 | 说明 |
-|------|------|------|
-| 服务入口 | `service/ForwardService.kt` | Foreground Service，统一 Ticker 调度 |
-| 链接层 | `link/` | MQTT (Paho)、WebSocket (OkHttp)、TCP (Socket) |
-| 输入层 | `input/` | HTTP Server (NanoHTTPD)、Link 订阅 |
-| 输出层 | `output/` | HTTP、Link 发布、Internal (Clipboard/File/Broadcast/Notify) |
-| 队列层 | `queue/` | MemoryQueue (Channel 驱动)、SqliteQueue (tick 驱动) |
-| 规则引擎 | `pipeline/` | GJSON 提取、表达式过滤、类型检测、格式化、富化 |
-| 死信队列 | `deadletter/DeadLetterHandler.kt` | 消息重试失败后的死信处理 |
-| 配置 | `config/` | YAML 配置加载器 |
-| HTTP 服务器 | `server/` | NanoHTTPD 实现 |
-
-## 配置文件规范
-
-**所有配置字段名称必须使用驼峰命名（camelCase），不支持下划线命名（snake_case）。**
-
-例如：
-- ✅ `linkId`, `clientId`, `batchSize`, `retryInterval`, `maxRetry`, `maxAge`
-- ❌ `link_id`, `client_id`, `batch_size`, `retry_interval`, `max_retry`, `max_age`
-
-例外：队列名称、ID 值、路径协议（`data://`, `sdcard://`）以及 YAML 注释不受此限制。
-
-## 配置文件协议
-
-路径配置使用协议前缀：
-- `data://` → 应用私有目录
-- `sdcard://` → 外部存储
-- `file://` → 文件系统绝对路径
-- `cache://` → 应用缓存目录
-
-## 链接 URL 格式
-
-```
-protocol://[username:password@]host:port[?param1=value1&param2=value2...]
-```
-
-- MQTT: `mqtt[s]://` 开头的 `broker` 字段
-- WebSocket: `ws[s]://` 开头的 `url` 字段
-- TCP: `tcp[s]://` 开头的 `broker` 字段
-
-## 网络条件控制
-
-`when`/`deny` 字段支持：
-- `network=wifi|mobile|ethernet|any`（逗号分隔多值表示 OR，如 `network=wifi,mobile`）
-- `ssid=WiFi名称`（支持正则，前缀 `~`）
-- `bssid=MAC地址`
-- `ipRanges=192.168.1.0/24`（CIDR 格式）
-
-## 规则引擎语法
-
-执行顺序：`decode → detect → enrich → filter → extract → format → output`
-
-- decode: 管道解码（`"base64Decode|jsonDecode"`, `"gzDecode|jsonDecode"`），执行顺序在 detect 之前
-- detect: 类型检测（`image`, `json`, `text`）
-- enrich: 数据富化（`"gotifyIcon:<linkId>"`）
-- filter: 表达式过滤（`"len(data.items) > 0"`, `"path == value"`, `"startsWith"`, `"$headers.X"`）
-- extract: GJSON 路径提取（`"data.temperature"`, `"$raw"`, `"base64Decode(content)"`）
-- format: 模板格式化（`"{headers}\n{data}"`, `"{data.field}"`）、字段删除（`$delete: ["field"]`）
-- breakOnReject: 过滤拒绝时是否中断整个管道（默认 `false`）
-- onError: 错误处理管道（每条规则可选）
-
-## 提交规范
-
-提交时请勿添加 AI 签名（如 Co-Authored-By）。
-
-## 文档同步
-
-- **权限列表**：`AndroidManifest.xml` 中权限变更后，必须同步更新 `README.md` 和 `README_CN.md` 的 Permissions/权限需求 章节。
-
-## 技术栈
-
-| 组件 | 技术 |
-|------|------|
-| UI | Jetpack Compose + Material 3 |
-| HTTP Server | NanoHTTPD 2.3.1 |
-| MQTT | Eclipse Paho 1.2.5 |
-| WebSocket | OkHttp 4.12.0 |
-| YAML | SnakeYAML Engine 2.9 |
-| Min SDK | 33 (Android 13) |
-| Target SDK | 36 |
-
-## 示例配置
-
-示例配置与演示文件位于 `app/src/main/assets/samples/`，详见该目录下的 README.md（仓库内）。
-
-## 示例配置文件列表维护
-
-**每次新增或调整 `app/src/main/assets/samples/` 下的文件后，必须同步更新 `HelpActivity.kt` 中的 `loadSampleFiles` 函数列表。**
-
-列表位于：`app/src/main/java/info/loveyu/mfca/HelpActivity.kt` → `private fun loadSampleFiles()` → `sampleList`
-
-## m2m 模块
-
-m2m 模块基于 m2m (Clash.Meta) 实现 Android 透明代理，详细架构文档见 [`docs/vpn-architecture.md`](docs/vpn-architecture.md)。
-
-## 文件大小规范
-
-**UI 文件（Composable/Activity）超过 300 行时**，必须提醒是否需要将 UI 拆分到独立的文件中（如抽取子 Composable、分离 UI 状态逻辑等）。
-
-**非 UI 类文件超过 500 行时**，必须提醒是否需要拆分为多个模块。
-
-新增文件时应注意合理规划文件大小，避免单个文件过于臃肿。
-
+| 如果需要 | 请查阅 |
+|---------|--------|
+| 包结构总览 | `find app/src/main/java -type d` 或 `docs/agents-architecture.md` |
+| 插件系统设计 | `docs/agents-plugin-system.md` + `docs/http-input-plugin-design.md` |
+| VPN/透明代理 | `docs/agents-vpn-m2m.md` + `docs/vpn-architecture.md` |
+| 规则引擎 Pipeline | `pipeline/core/RuleEngine.kt` + `pipeline/expression/` + `pipeline/enrich/` |
+| 配置模型 | `config/models/`（按 Link/Input/Queue/Output/Rule 分 6 文件） |
+| 配置 Schema DSL | `config/schema/nodes/`（8 文件，每根节点一个 object） |
+| 链接 URL / 网络条件 / 规则语法 | `docs/agents-config-syntax.md` |
+| 技术栈 | `docs/agents-tech-stack.md` |
+| Go/Rust 插件示例 | `plugin-examples/{input,output}/{go,rust}/` |
+| 插件测试界面 | `test/input_plugin/InputPluginTestActivity.kt` / `test/output_plugin/OutputPluginTestActivity.kt` |
