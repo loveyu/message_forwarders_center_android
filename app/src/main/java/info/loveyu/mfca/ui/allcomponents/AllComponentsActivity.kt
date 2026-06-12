@@ -1,10 +1,9 @@
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.allcomponents
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import info.loveyu.mfca.ui.AllComponentsScreen
 import info.loveyu.mfca.ui.theme.MfcaTheme
 
 class AllComponentsActivity : ComponentActivity() {

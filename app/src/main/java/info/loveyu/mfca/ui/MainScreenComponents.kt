@@ -48,6 +48,7 @@ import info.loveyu.mfca.R
 import info.loveyu.mfca.ui.component.ComponentStatus
 import info.loveyu.mfca.ui.component.ComponentType
 import info.loveyu.mfca.ui.config.ConfigActivity
+import info.loveyu.mfca.ui.settings.SettingsActivity
 import info.loveyu.mfca.test.TestHubActivity
 import info.loveyu.mfca.ui.theme.BadgeDisabledDark
 import info.loveyu.mfca.ui.theme.BadgeDisabledLight

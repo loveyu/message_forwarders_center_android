@@ -1,4 +1,4 @@
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.allcomponents
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background

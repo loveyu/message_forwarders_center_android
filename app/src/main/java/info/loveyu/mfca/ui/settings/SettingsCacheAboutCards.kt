@@ -1,4 +1,4 @@
-package info.loveyu.mfca.ui
+package info.loveyu.mfca.ui.settings
 
 import android.content.Intent
 import android.net.Uri

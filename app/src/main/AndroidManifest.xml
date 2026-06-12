@@ -70,12 +70,12 @@
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".ui.SettingsActivity"
+            android:name=".ui.settings.SettingsActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
         <activity
-            android:name=".ui.AllComponentsActivity"
+            android:name=".ui.allcomponents.AllComponentsActivity"
             android:exported="false"
             android:theme="@style/Theme.FlowGate" />
 
